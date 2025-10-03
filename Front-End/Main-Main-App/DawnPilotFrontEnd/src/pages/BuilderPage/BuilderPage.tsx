@@ -4,6 +4,9 @@ import 'aframe-particle-system-component';
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
 import React, { useEffect, useState } from 'react';
+// Front-End\Main-App\src\pages\BuilderPage\BuilderPage.module.css
+// Front-End\Main-App\src\pages\BuilderPage\BuilderPage.tsx
+import styles from './BuilderPage.module.css';
 
 interface Cube {
   id: string;
@@ -91,12 +94,8 @@ const BuilderPage: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column',
-      height: '100vh', 
-      width: '100vw',
-      backgroundColor: '#000'
+    <div className={styles.BuilderPageContainer} style={{ 
+     
     }}>
       {/* Top bar - controls */}
       <div style={{ 
@@ -168,7 +167,7 @@ const BuilderPage: React.FC = () => {
           {/* Camera */}
           <Entity
             primitive="a-camera"
-            position="0 1.6 0"
+            position="0 10 5"
             look-controls="enabled: true"
           >
             <Entity
