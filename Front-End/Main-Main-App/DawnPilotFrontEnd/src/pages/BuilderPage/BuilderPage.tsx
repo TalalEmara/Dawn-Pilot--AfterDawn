@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 // Front-End\Main-App\src\pages\BuilderPage\BuilderPage.module.css
 // Front-End\Main-App\src\pages\BuilderPage\BuilderPage.tsx
 import styles from './BuilderPage.module.css';
+import BuilderSidePanel from '../../components/level-1/BuilderSidePanel/BuilderSidePanel';
 
 interface Cube {
   id: string;
@@ -97,8 +98,10 @@ const BuilderPage: React.FC = () => {
     <div className={styles.BuilderPageContainer} style={{ 
      
     }}>
+
+      <BuilderSidePanel />
       {/* Top bar - controls */}
-      <div style={{ 
+      {/* <div style={{ 
         padding: '10px',
         backgroundColor: '#1a1a1a',
         color: 'white',
@@ -131,7 +134,7 @@ const BuilderPage: React.FC = () => {
             {loading ? '⏳' : '🔄 Reload'}
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* Full screen AFrame scene */}
       <div style={{ flex: 1 }}>

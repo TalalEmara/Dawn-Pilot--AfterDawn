@@ -1,0 +1,6 @@
+:root {
+  --primary-color: light-dark(  #3498db, #0b3049);
+  --secondary-color: #2ecc71;
+  --text-color: light-dark(#333, #f0f0f0);
+  --background-color: light-dark( #fff, #150414);
+}
