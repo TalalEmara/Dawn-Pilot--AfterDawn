@@ -1,26 +1,21 @@
 .panel{
-    z-index: 1000;
     color-scheme: dark;
     background-color: var(--background-color);
     color: var(--text-color);
-    
-    /* padding: 2vw ; */
-
+    flex: 0 0 25vw; 
     display: flex;
     flex-direction: row;
-    width: clamp(30vw, 20%, 50vw);
+    height: 100vh;
 
 }
 .sideIconBar{
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    align-items: top;
+    align-items: flex-start;
 
-/* neeed color dynamic */
-    color: black;
+
     background-color: var(--text-color);
-    height: 100vh;
     width: 2vw;
 }
 .sideContent{
@@ -31,7 +26,8 @@
 }
 .heading{
     color: var(--text-color);
-    font-size: 3rem;
+    font-size: 3em;
+    font-weight: bold;
     padding-left: 2vw;
     margin-bottom: 1vh;
     margin-top: 0;
@@ -39,17 +35,12 @@
 }
 .modelList{
     display: grid;
-     justify-content: space-evenly;
-     row-gap: 2vh;
-    grid-template-columns: auto auto; 
+    justify-content: space-evenly;
+    gap: 1vh;
+    grid-template-columns: repeat(2,minmax(90px,1fr)); 
     overflow-y: auto;
 }
 .modelCard{
-    min-width: 12vw;
-    aspect-ratio: 1;
-    background-color: #77381b;
-    color: #e9e0e0;
-    font-size: clamp(24px, 4vw, 50px);
     display: flex;
     align-items: center;
     justify-content: center;

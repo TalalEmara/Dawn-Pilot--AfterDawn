@@ -100,41 +100,6 @@ const BuilderPage: React.FC = () => {
     }}>
 
       <BuilderSidePanel />
-      {/* Top bar - controls */}
-      {/* <div style={{ 
-        padding: '10px',
-        backgroundColor: '#1a1a1a',
-        color: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        zIndex: 1000
-      }}>
-        <div>
-          <h3 style={{ margin: '0', fontSize: '45px' }}>🎮 Testing Developer Mode</h3>
-          <small style={{ fontSize: '12px' }}>
-            Cubes: {worldState.cubes.length} | Last update: {lastUpdate}
-          </small>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={addCube} disabled={loading}
-            style={{ padding: '6px 12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
-            ➕ Add Cube
-          </button>
-          <button onClick={removeCube} disabled={loading}
-            style={{ padding: '6px 12px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
-            🗑️ Remove
-          </button>
-          <button onClick={saveWorld} disabled={loading}
-            style={{ padding: '6px 12px', backgroundColor: '#ffc107', color: 'black', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
-            💾 Save
-          </button>
-          <button onClick={loadWorld} disabled={loading}
-            style={{ padding: '6px 12px', backgroundColor: '#4CC3D9', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
-            {loading ? '⏳' : '🔄 Reload'}
-          </button>
-        </div>
-      </div> */}
 
       {/* Full screen AFrame scene */}
       <div style={{ flex: 1 }}>
@@ -181,24 +146,6 @@ const BuilderPage: React.FC = () => {
         </Scene>
       </div>
 
-      {/* Instructions overlay */}
-      {worldState.cubes.length === 0 && !loading && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          textAlign: 'center',
-          maxWidth: '300px'
-        }}>
-          <h2>No World Loaded</h2>
-          <p>Build a world on desktop first, then reload here.</p>
-        </div>
-      )}
     </div>
   );
 };
