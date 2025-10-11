@@ -78,3 +78,20 @@ export function reloadWorld(): void {
     world = JSON.parse(data);
   }
 }
+
+// Add to Scenario-Builder/world_Manager.ts
+
+export function updateCube(cubeId: string, position: any, rotation: any, color: string) {
+  const worldState = getWorld(); // Get the current world state
+  const cube = worldState.cubes.find(c => c.id === cubeId);
+  
+  if (cube) {
+    cube.position = position;
+    cube.rotation = rotation;
+    cube.color = color;
+    saveWorld(); // Auto-save on update
+    return worldState;
+  }
+  
+  return null;
+}
