@@ -12,6 +12,7 @@ interface Cube {
   id: string;
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
   color: string;
 }
 
@@ -33,7 +34,7 @@ const BuilderPage: React.FC = () => {
   // Debounced update function to avoid too many API calls
   const updateTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
-  const debouncedUpdate = useCallback((index: number, box: Element) => {
+  const debouncedUpdate = useCallback((index: number, entity: Element) => {
     const cubeId = worldState.cubes[index]?.id;
     if (!cubeId) return;
 
@@ -44,9 +45,10 @@ const BuilderPage: React.FC = () => {
 
     // Set new timeout
     updateTimeoutRef.current[cubeId] = setTimeout(async () => {
-      const pos = box.getAttribute('position') as { x: number; y: number; z: number };
-      const rot = box.getAttribute('rotation') as { x: number; y: number; z: number };
-      const color = box.getAttribute('color') as string;
+      const pos = entity.getAttribute('position') as { x: number; y: number; z: number };
+      const rot = entity.getAttribute('rotation') as { x: number; y: number; z: number };
+      const scale = entity.getAttribute('scale') as { x: number; y: number; z: number };
+      const color = entity.getAttribute('color') as string;
 
       try {
         await fetch(`${API_BASE_URL}/world/cube/${cubeId}`, {
@@ -57,6 +59,7 @@ const BuilderPage: React.FC = () => {
           body: JSON.stringify({
             position: { x: pos.x, y: pos.y, z: pos.z },
             rotation: { x: rot.x, y: rot.y, z: rot.z },
+            scale: scale ? { x: scale.x, y: scale.y, z: scale.z } : { x: 1, y: 1, z: 1 },
             color: color
           })
         });
@@ -79,21 +82,22 @@ const BuilderPage: React.FC = () => {
     }
 
     const setupListeners = () => {
-      const boxes = document.querySelectorAll('a-box');
-      console.log('Found boxes:', boxes.length);
+      // Find all entities with gltf-model attribute
+      const entities = document.querySelectorAll('[gltf-model]');
+      console.log('Found entities:', entities.length);
       
-      boxes.forEach((box, index) => {
+      entities.forEach((entity, index) => {
         function handleComponentChange(evt: any) {
-          console.log('Component changed:', evt.detail.name, 'on box', index);
-          if (['position', 'rotation', 'color'].includes(evt.detail.name)) {
+          console.log('Component changed:', evt.detail.name, 'on entity', index);
+          if (['position', 'rotation', 'scale', 'color'].includes(evt.detail.name)) {
             console.log('Triggering debounced update');
-            debouncedUpdate(index, box);
+            debouncedUpdate(index, entity);
           }
         }
         
         // Store the handler so we can remove it later
-        (box as any)._handleComponentChange = handleComponentChange;
-        box.addEventListener('componentchanged', handleComponentChange);
+        (entity as any)._handleComponentChange = handleComponentChange;
+        entity.addEventListener('componentchanged', handleComponentChange);
       });
     };
 
@@ -112,10 +116,10 @@ const BuilderPage: React.FC = () => {
     return () => {
       console.log('Cleaning up listeners');
       // Cleanup
-      const boxes = document.querySelectorAll('a-box');
-      boxes.forEach(box => {
-        if ((box as any)._handleComponentChange) {
-          box.removeEventListener('componentchanged', (box as any)._handleComponentChange);
+      const entities = document.querySelectorAll('[gltf-model]');
+      entities.forEach(entity => {
+        if ((entity as any)._handleComponentChange) {
+          entity.removeEventListener('componentchanged', (entity as any)._handleComponentChange);
         }
       });
       // Cleanup timeouts on unmount
@@ -141,13 +145,15 @@ const BuilderPage: React.FC = () => {
   const addCube = async (cubeData?: {
     position?: { x: number; y: number; z: number };
     rotation?: { x: number; y: number; z: number };
+    scale?: { x: number; y: number; z: number };
     color?: string;
   }) => {
     try {
       setLoading(true);
       const defaultCube = {
-        position: { x: worldState.cubes.length * 2, y: 0.5, z: -4 },
+        position: { x: worldState.cubes.length * 5, y: 1.5, z: -4 },
         rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 0.06, y: 0.06, z: 0.06 },
         color: '#4CC3D9'
       };
 
@@ -159,6 +165,7 @@ const BuilderPage: React.FC = () => {
         body: JSON.stringify({
           position: cubeData?.position || defaultCube.position,
           rotation: cubeData?.rotation || defaultCube.rotation,
+          scale: cubeData?.scale || defaultCube.scale,
           color: cubeData?.color || defaultCube.color
         })
       });
@@ -213,6 +220,7 @@ const BuilderPage: React.FC = () => {
       removeCube, 
       saveWorld 
     }}>
+      <button style={{position:'fixed', bottom: 0}} onClick={removeCube}>remove</button>
       <div className={styles.BuilderPageContainer}>
         <BuilderSidePanel />
 
@@ -240,9 +248,10 @@ const BuilderPage: React.FC = () => {
             {worldState.cubes.map((cube, index) => (
               <Entity
                 key={cube.id}
-                primitive="a-box"
-                position={`${index * 2} ${cube.position.y} ${cube.position.z}`}
+                gltf-model="/car.glb"
+                position={`${index * 5} ${cube.position.y} ${cube.position.z}`}
                 rotation={`${cube.rotation.x} ${cube.rotation.y} ${cube.rotation.z}`}
+                scale={cube.scale ? `${cube.scale.x} ${cube.scale.y} ${cube.scale.z}` : "0.06 0.06 0.06"}
                 color={cube.color}
               />
             ))}
