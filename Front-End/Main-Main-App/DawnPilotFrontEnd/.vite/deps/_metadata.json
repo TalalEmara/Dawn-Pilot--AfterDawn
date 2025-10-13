@@ -1,0 +1,58 @@
+{
+  "hash": "6ddfc1cb",
+  "configHash": "ea3bf0ba",
+  "lockfileHash": "749e10f7",
+  "browserHash": "32bba30d",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/.pnpm/react@19.2.0/node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "19ecfbae",
+      "needsInterop": true
+    },
+    "aframe": {
+      "src": "../../../node_modules/.pnpm/aframe@1.7.1/node_modules/aframe/dist/aframe-master.module.min.js",
+      "file": "aframe.js",
+      "fileHash": "cf9856a3",
+      "needsInterop": false
+    },
+    "aframe-particle-system-component": {
+      "src": "../../../node_modules/.pnpm/aframe-particle-system-component@1.1.3/node_modules/aframe-particle-system-component/index.js",
+      "file": "aframe-particle-system-component.js",
+      "fileHash": "f317b1b1",
+      "needsInterop": true
+    },
+    "aframe-react": {
+      "src": "../../node_modules/.pnpm/aframe-react@4.4.0/node_modules/aframe-react/dist/index.js",
+      "file": "aframe-react.js",
+      "fileHash": "bd566d24",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/.pnpm/react@19.2.0/node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "76828508",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/.pnpm/react-dom@19.2.0_react@19.2.0/node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "ad6c31c5",
+      "needsInterop": true
+    },
+    "gsap": {
+      "src": "../../node_modules/.pnpm/gsap@3.13.0/node_modules/gsap/index.js",
+      "file": "gsap.js",
+      "fileHash": "42e570b5",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-G7I6TFJU": {
+      "file": "chunk-G7I6TFJU.js"
+    },
+    "chunk-HKJ2B2AA": {
+      "file": "chunk-HKJ2B2AA.js"
+    }
+  }
+}
