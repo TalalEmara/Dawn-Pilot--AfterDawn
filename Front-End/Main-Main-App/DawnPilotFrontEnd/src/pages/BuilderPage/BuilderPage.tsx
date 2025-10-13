@@ -210,7 +210,7 @@ const BuilderPage: React.FC = () => {
       setLoading(false);
     }
   };
-
+  
   return (
     <WorldContext.Provider value={{ 
       worldState, 
@@ -220,13 +220,17 @@ const BuilderPage: React.FC = () => {
       removeCube, 
       saveWorld 
     }}>
-      <button style={{position:'fixed', bottom: 0}} onClick={removeCube}>remove</button>
+      {/* <button style={{position:'fixed', bottom: 0}} onClick={removeCube}>remove</button> */}
       <div className={styles.BuilderPageContainer}>
         <BuilderSidePanel />
 
         {/* Full screen AFrame scene */}
         <div style={{ flex: 1 }}>
+          <div className={styles.overlayText}>
+      ctrl + i to open inspector
+      </div>
           <Scene 
+            
             embedded 
             vr-mode-ui="enabled: true"
             style={{ width: '100%', height: '100%' }}
@@ -237,7 +241,7 @@ const BuilderPage: React.FC = () => {
             {/* Ground plane */}
             <Entity
               primitive="a-plane"
-              position="0 0 -4"
+              position="0 -1 -4"
               rotation="-90 0 0"
               width="20"
               height="20"

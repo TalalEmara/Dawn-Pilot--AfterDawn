@@ -2,9 +2,10 @@ import PixelTransitionWrapper from '../../level-0/PixelTransition/PixelTransitio
 import styles from './BuilderSidePanel.module.css';
 import CarImg from '../../../assets/modelsImages/Car.jpg';
 import { useWorld } from '../../../contexts/WorldContext';
+import DawnButton from '../../level-0/DawnButton/DawnButton';
 
 function BuilderSidePanel() {
-  const { addCube } = useWorld();
+  const { addCube , saveWorld } = useWorld();
 
   const handleAddCar = () => {
     // You can customize the cube properties for the car model
@@ -18,9 +19,10 @@ function BuilderSidePanel() {
   return (
     <aside className={styles.panel}>
       {/* another component to be build */}
-      <div className={styles.sideIconBar}>sss</div>
+      {/* <div className={styles.sideIconBar}>sss</div> */}
 
       <div className={styles.sideContent}>
+        <p className={styles.logo}>DawnPilot</p>
         <p className={styles.heading}>Models</p>
         <div className={styles.modelList}>
           <PixelTransitionWrapper 
@@ -28,6 +30,19 @@ function BuilderSidePanel() {
             className={styles.modelCard}
             onClick={handleAddCar}
           />
+          <PixelTransitionWrapper 
+            image={CarImg} 
+            className={styles.modelCard}
+            onClick={handleAddCar}
+          />
+          <PixelTransitionWrapper 
+            image={CarImg} 
+            className={styles.modelCard}
+            onClick={handleAddCar}
+          />
+        </div>
+        <div className={styles.buttonFooter}>
+        <DawnButton label='Save World' onClick={saveWorld} />
         </div>
       </div>
     </aside>

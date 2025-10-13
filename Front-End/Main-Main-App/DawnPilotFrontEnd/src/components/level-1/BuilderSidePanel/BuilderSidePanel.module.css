@@ -6,6 +6,7 @@
     display: flex;
     flex-direction: row;
     height: 100vh;
+    border-right: 1px solid var(--text-color);
 
 }
 .sideIconBar{
@@ -24,14 +25,39 @@
     flex-direction: column;
     padding: 1vw;
 }
-.heading{
-    color: var(--text-color);
-    font-size: 3em;
+.logo{
+    width: 100%;
+    margin-top: 20px;
+    font-size: 2em;
     font-weight: bold;
-    padding-left: 2vw;
     margin-bottom: 1vh;
     margin-top: 0;
-    border-bottom: 2px solid var(--text-color);
+    /* for graident text */
+    background: var(--gradient);
+    background-size: 200%;
+    background-clip: text;
+    color: transparent;
+    position: relative;
+}
+.logo::before{
+    content: 'AfterDawn';
+  font-size: 0.5em;
+  position: absolute;
+  top: -9px;
+  left: 0;
+  color: white;
+}
+.heading{
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 1vh;
+    margin-top: 0;
+    border-bottom: 2px solid var(--secondary-color);
+    /* for graident text */
+    background: var(--gradient);
+    background-size: 200%;
+    background-clip: text;
+    color: transparent;
 }
 .modelList{
     display: grid;
@@ -43,5 +69,12 @@
 .modelCard{
     display: flex;
     align-items: center;
+    justify-content: center;
+}
+.buttonFooter{
+    margin-top: auto;
+    padding-top: 1vh;
+    border-top: 2px solid var(--secondary-color);
+    display: flex;
     justify-content: center;
 }

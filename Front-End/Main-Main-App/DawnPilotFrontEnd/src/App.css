@@ -1,6 +1,7 @@
 :root {
-  --primary-color: light-dark(  #3498db, #0b3049);
-  --secondary-color: #2ecc71;
-  --text-color: light-dark(#333, #f0f0f0);
-  --background-color: light-dark( #fff, #150414);
+  --primary-color: light-dark(  #5465FF, #5465FF);
+  --secondary-color: #FB8500;
+  --text-color: light-dark(#06080E, #FAFDF6);
+  --background-color: light-dark( #f5f5f5, #06080E);
+  --gradient : linear-gradient(to right, #f88a0c, #ff0303);
 }

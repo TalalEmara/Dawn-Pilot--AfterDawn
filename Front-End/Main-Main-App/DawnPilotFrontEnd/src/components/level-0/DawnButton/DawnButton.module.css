@@ -1,0 +1,14 @@
+.dawnButton{
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border: 2px solid var(--text-color);
+     border-radius: 9999px;
+
+    font-size: .7rem;
+}
+.dawnButton:hover{
+    background-color: var(--secondary-color);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;      
+    cursor: pointer;
+}

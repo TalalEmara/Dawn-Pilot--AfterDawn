@@ -25,7 +25,7 @@ function PixelTransitionWrapper({ image, className, onClick }: PixelTransitionWr
               height: "100%",
               display: "grid",
               placeItems: "center",
-              backgroundColor: "#111",
+              backgroundColor: "var(--secondary-color, #fff)",
               color: "#fff",
               fontSize: "2rem",
               fontWeight: "bold",
@@ -35,7 +35,7 @@ function PixelTransitionWrapper({ image, className, onClick }: PixelTransitionWr
           </div>
         }
         gridSize={12}
-        pixelColor='#ffffff'
+        pixelColor='#FAFDF6'
         animationStepDuration={0.4}
         className={className}
       />

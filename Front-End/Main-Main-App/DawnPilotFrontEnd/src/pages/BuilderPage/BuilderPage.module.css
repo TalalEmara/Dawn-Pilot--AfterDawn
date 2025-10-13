@@ -5,3 +5,13 @@
   width: 100vw;
   background-color: #000;
 }
+.overlayText {
+  color-scheme: dark;
+  position: absolute;
+  top: 20px;
+  right: 10px;
+  color: var(--text-color);
+  font-size: 12px;
+  z-index: 10;
+  pointer-events: none; 
+}
