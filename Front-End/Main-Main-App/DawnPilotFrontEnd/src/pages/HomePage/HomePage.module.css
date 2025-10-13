@@ -1,0 +1,50 @@
+.homePage{
+    color-scheme: dark;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-self: start;
+    height: 100vh;
+    width: 100vw;
+    background-color: var(--background-color);
+    color: var(--secondary-color);
+    position: relative;
+}
+.heading{
+    position: absolute;
+    top: 150px;
+    left: 50%;
+    translate: -50%;
+    z-index: 10;
+}
+.subHeading{
+    position: absolute;
+    bottom: 175px;
+    left: 50%;
+    translate: -50%;
+    z-index: 10;
+    font-size: 1.2rem;
+    color: var(--text-color);
+    text-align: center;
+}
+.ResearcherButton{
+    position: absolute;
+    bottom: 100px;
+    left: 55%;
+    translate: -50%;
+    z-index: 10;
+    border: 1px solid whitesmoke;
+    color: whitesmoke;
+    background-color: transparent;
+}
+.SubjectButton{
+    position: absolute;
+    bottom: 100px;
+    left: 45%;
+    translate: -50%;
+    z-index: 10;
+    border: 1px solid var(--secondary-color);
+    color: var(--secondary-color);
+    background-color: transparent;
+    margin-left: 10px;
+}
