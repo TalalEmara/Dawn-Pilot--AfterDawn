@@ -1,13 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { addCube, removeCube, getWorld, saveWorld, reloadWorld, updateCube } from './Scenario-Builder/world_Manager';
+import { scenarioRouter } from './routes/scenarioRouter';
+import { addCube, removeCube, getWorld, saveWorld, reloadWorld, updateCube } from './world_Manager';
 
 const app = express();
 const PORT = 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
+
+app.use('/scenario',scenarioRouter);
 
 // === Endpoints ===
 
