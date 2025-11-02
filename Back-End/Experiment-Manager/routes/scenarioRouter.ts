@@ -96,7 +96,7 @@ scenarioRouter.post('/entities/from-model', (req, res) => {
     }
     
     const entity = createEntityFromModel(modelName, overrides);
-    
+    console.log(`Entity created from model "${modelName}":`, entity);
     res.status(201).json({ 
       message: `Entity created from model "${modelName}"!`,
       entity 

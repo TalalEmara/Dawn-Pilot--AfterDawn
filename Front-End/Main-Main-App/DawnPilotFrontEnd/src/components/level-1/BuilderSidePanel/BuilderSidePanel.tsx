@@ -1,29 +1,37 @@
 import PixelTransitionWrapper from '../../level-0/PixelTransition/PixelTransitionWrapper';
 import styles from './BuilderSidePanel.module.css';
 import CarImg from '../../../assets/modelsImages/Car.jpg';
-import { useWorld } from '../../../contexts/WorldContext';
+import { useScenario } from '../../../contexts/ScenarioContext';
 import DawnButton from '../../level-0/DawnButton/DawnButton';
 
 function BuilderSidePanel() {
-  const { addCube , saveWorld } = useWorld();
+  const { addEntity, models, loading } = useScenario();
 
-  const handleAddCar = () => {
-    // You can customize the cube properties for the car model
-    addCube({
-      position: { x: 0, y: 0.5, z: -4 },
-      rotation: { x: 0, y: 0, z: 0 },
-      color: '#FF6B6B' // Red color for car
+  const handleAddCar = async () => {
+    await addEntity('Car', {
+      Position: { x: 0, y: 0.5, z: -4 },
+      Scale: { x: 0.06, y: 0.06, z: 0.06 }
     });
   };
- 
+
+  const handleAddBuilding = async () => {
+    await addEntity('Cube', {
+      Position: { x: 10, y: 0, z: -10 }
+    });
+  };
+
+  const handleAddTree = async () => {
+    await addEntity('Sphere', {
+      Position: { x: -5, y: 0, z: -5 }
+    });
+  };
+
   return (
     <aside className={styles.panel}>
-      {/* another component to be build */}
-      {/* <div className={styles.sideIconBar}>sss</div> */}
-
       <div className={styles.sideContent}>
         <p className={styles.logo}>DawnPilot</p>
-        <p className={styles.heading}>Models</p>
+        <p className={styles.heading}>Models ({models.length})</p>
+        
         <div className={styles.modelList}>
           <PixelTransitionWrapper 
             image={CarImg} 
@@ -33,16 +41,33 @@ function BuilderSidePanel() {
           <PixelTransitionWrapper 
             image={CarImg} 
             className={styles.modelCard}
-            onClick={handleAddCar}
+            onClick={handleAddBuilding}
           />
           <PixelTransitionWrapper 
             image={CarImg} 
             className={styles.modelCard}
-            onClick={handleAddCar}
+            onClick={handleAddTree}
           />
         </div>
+
+        <div className={styles.modelInfo}>
+          <p>Available Models:</p>
+          <ul>
+            {models.map(model => (
+              <li key={model.name}>
+                <strong>{model.name}</strong>
+                {model.description && <span> - {model.description}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+
         <div className={styles.buttonFooter}>
-        <DawnButton label='Save World' onClick={saveWorld} />
+          <DawnButton 
+            label={loading ? 'Loading...' : 'Refresh World'} 
+            onClick={() => window.location.reload()} 
+            disabled={loading}
+          />
         </div>
       </div>
     </aside>
