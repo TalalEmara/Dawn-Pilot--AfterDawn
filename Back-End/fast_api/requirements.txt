@@ -1,0 +1,23 @@
+# Phosphene Vision API Dependencies
+
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+
+# Image processing
+opencv-python==4.8.1.78
+numpy==1.24.3
+Pillow==10.1.0
+
+# YOLO detection
+ultralytics==8.0.196
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Visualization (for translator)
+matplotlib==3.8.0
+
+# Utilities
+python-dateutil==2.8.2

@@ -135,3 +135,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 /Data-Models/3D Models
+
+Back-End/fast_api/venv
+Back-End/fast_api/__pycache__
+Back-End/fast_api/api_output
