@@ -1,0 +1,318 @@
+{
+  "info": {
+    "name": "Dawn Pilot - Experiment Manager API",
+    "description": "API endpoints for managing 3D world cubes in Dawn Pilot experiment manager",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "World Operations",
+      "item": [
+        {
+          "name": "Get Current World",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/world",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world"]
+            },
+            "description": "Retrieve the current state of the world including all cubes"
+          },
+          "response": []
+        },
+        {
+          "name": "Save World",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/world/save",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "save"]
+            },
+            "description": "Manually save the current world state to file"
+          },
+          "response": []
+        },
+        {
+          "name": "Reload World",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/world/reload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "reload"]
+            },
+            "description": "Reload world state from the saved file"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cube Operations",
+      "item": [
+        {
+          "name": "Add Cube - Red Center",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"rotation\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"color\": \"#FF0000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Add a red cube at the center of the world"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Blue Left",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": -5, \"y\": 0, \"z\": 0 },\n  \"rotation\": { \"x\": 0, \"y\": 45, \"z\": 0 },\n  \"color\": \"#0000FF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Add a blue cube to the left, rotated 45 degrees"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Green Right",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 5, \"y\": 0, \"z\": 0 },\n  \"rotation\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"color\": \"#00FF00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Add a green cube to the right"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Yellow Above",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 0, \"y\": 3, \"z\": 0 },\n  \"rotation\": { \"x\": 30, \"y\": 30, \"z\": 30 },\n  \"color\": \"#FFFF00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Add a yellow cube above center with complex rotation"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Purple Forward",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 0, \"y\": 0, \"z\": -5 },\n  \"rotation\": { \"x\": 0, \"y\": 90, \"z\": 0 },\n  \"color\": \"#800080\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Add a purple cube forward in Z axis"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Cube",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 2, \"y\": 2, \"z\": 2 },\n  \"rotation\": { \"x\": 45, \"y\": 45, \"z\": 45 },\n  \"color\": \"#FFA500\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube/:cube_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube", ":cube_id"],
+              "variable": [
+                {
+                  "key": "cube_id",
+                  "value": "cube_1",
+                  "description": "Replace with actual cube ID from GET /api/world"
+                }
+              ]
+            },
+            "description": "Update an existing cube's position, rotation, and color. Replace :cube_id with actual ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Cube",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "cube_1",
+                  "description": "Replace with actual cube ID to delete"
+                }
+              ]
+            },
+            "description": "Remove a cube from the world by its ID"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Test Scenarios",
+      "item": [
+        {
+          "name": "Create Grid Pattern",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": -10, \"y\": 0, \"z\": -10 },\n  \"rotation\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"color\": \"#FF6B6B\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Part of creating a grid pattern - corner piece"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Extreme Position",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 100, \"y\": 50, \"z\": -75 },\n  \"rotation\": { \"x\": 90, \"y\": 180, \"z\": 270 },\n  \"color\": \"#00FFFF\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Test with extreme position and rotation values"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Cube - Invalid Color (Should Handle)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"rotation\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n  \"color\": \"not-a-color\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/world/cube",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "world", "cube"]
+            },
+            "description": "Test error handling with invalid color format"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

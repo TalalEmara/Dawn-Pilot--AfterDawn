@@ -1,0 +1,24 @@
+{
+  "weights": {
+    "dist": 0.4,
+    "sem": 0.3,
+    "vel": 0.1,
+    "conf": 0.1,
+    "hazard": 0.5
+  },
+  "semantic_priority": {
+    "person": 1.0,
+    "car": 0.8,
+    "bicycle": 0.7,
+    "pole": 0.4,
+    "stairs": 0.9,
+    "curb": 0.9,
+    "doorway": 0.6,
+    "free-path": 1.0,
+    "hazard": 1.2
+  },
+  "K_min": 3,
+  "K_max": 6,
+  "T_min": 0.3,
+  "canvas_size": [540, 960]
+}

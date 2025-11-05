@@ -1,0 +1,87 @@
+{
+  "frame_id": "frame_0001",
+  "timestamp": 1739550000,
+  "camera_intrinsics": {
+    "fx": 1050.0,
+    "fy": 1050.0,
+    "cx": 960.0,
+    "cy": 540.0
+  },
+  "obstacles": [
+    {
+      "id": 1,
+      "class": "person",
+      "shape": "vertical_oval",
+      "bbox": [628, 311, 142, 407],
+      "distance_m": 6.2,
+      "mask_path": "mask_obj_1.png",
+      "velocity": 0.0,
+      "hazard": true
+    },
+    {
+      "id": 2,
+      "class": "person",
+      "shape": "vertical_oval",
+      "bbox": [1771, 352, 100, 319],
+      "distance_m": 8.5,
+      "mask_path": "mask_obj_2.png",
+      "velocity": 0.0,
+      "hazard": false
+    },
+    {
+      "id": 3,
+      "class": "car",
+      "shape": "box",
+      "bbox": [4, 354, 546, 438],
+      "distance_m": 4.5,
+      "mask_path": "mask_obj_3.png",
+      "velocity": 0.0,
+      "hazard": false
+    },
+    {
+      "id": 4,
+      "class": "car",
+      "shape": "box",
+      "bbox": [927, 401, 199, 160],
+      "distance_m": 7.2,
+      "mask_path": "mask_obj_4.png",
+      "velocity": 0.0,
+      "hazard": false
+    },
+    {
+      "id": 5,
+      "class": "pole",
+      "shape": "thin_rectangle",
+      "bbox": [1751, 22, 32, 754],
+      "distance_m": 7.5,
+      "mask_path": "mask_obj_5.png",
+      "velocity": 0.0,
+      "hazard": false
+    },
+    {
+      "id": 6,
+      "class": "bicycle",
+      "shape": "box",
+      "bbox": [1863, 456, 164, 203],
+      "distance_m": 7.8,
+      "mask_path": "mask_obj_6.png",
+      "velocity": 0.0,
+      "hazard": false
+    }
+  ],
+  "free_path": {
+    "shape": "disk",
+    "center": [1146,733],
+    "radius": 150,
+    "mask_path": "free_path_mask.png",
+    "distance_m": 5.0
+  },
+  "metadata": {
+    "source_image": "c597fa4f-c629-4bcd-bb58-8e25d5501bc9.png",
+    "segmentation_combined": "combined_mask.png",
+    "generator": "translator_dummy_output_v1",
+    "note": "Dummy depth estimated via bbox height heuristic",
+    "image_width": 2048,
+    "image_height": 1024
+  }
+}
