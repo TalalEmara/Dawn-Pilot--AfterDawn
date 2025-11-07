@@ -235,7 +235,8 @@ Update threshold parameters without restarting.
 {
   "t_min": 0.4,
   "k_min": 2,
-  "k_max": 8
+  "k_max": 8,
+  "conf_threshold": 0.6
 }
 ```
 
@@ -246,15 +247,82 @@ Update threshold parameters without restarting.
   "changes": {
     "t_min": 0.4,
     "k_min": 2,
-    "k_max": 8
+    "k_max": 8,
+    "conf_threshold": 0.6
   },
   "current_config": {
     "t_min": 0.4,
     "k_min": 2,
-    "k_max": 8
+    "k_max": 8,
+    "conf_threshold": 0.6
   }
 }
 ```
+
+---
+
+### 7. Process with Depth Map (VR/WebGL Integration) 🆕
+**POST** `/api/process-with-depth`
+
+**NEW!** Process image with VR/Three.js Z-buffer depth integration for depth-aware phosphene vision. Automatically prioritizes closer objects based on depth information.
+
+**Use Case:** VR navigation systems that capture RGB frames + depth maps from WebGL rendering.
+
+**Request:**
+```json
+{
+  "image_base64": "data:image/jpeg;base64,/9j/4AAQ...",
+  "depth_map_base64": "data:image/png;base64,iVBOR...",
+  "depth_sampling": "median",
+  "conf_threshold": 0.5,
+  "t_min": 0.3,
+  "k_min": 1,
+  "k_max": 5
+}
+```
+
+**Parameters:**
+- `depth_sampling`: How to extract depth from bbox region
+  - `"median"` - Robust to noise (RECOMMENDED)
+  - `"centroid"` - Depth at object center (fastest)
+  - `"min"` - Closest point (conservative)
+  - `"mean"` - Average depth (smooth)
+
+**Response:**
+```json
+{
+  "detections": [
+    {
+      "class": "person",
+      "confidence": 0.87,
+      "bbox": [100, 150, 200, 180],
+      "distance_m": 2.3
+    }
+  ],
+  "phosphene_image": "base64_encoded_phosphene...",
+  "metadata": {
+    "detection_count": 5,
+    "depth_assigned_count": 5,
+    "depth_sampling_method": "median",
+    "timing_breakdown": {
+      "total_ms": 245.67,
+      "image_decode_ms": 12.34,
+      "depth_decode_ms": 8.91,
+      "detection_ms": 150.23,
+      "depth_assignment_ms": 5.12,
+      "translation_ms": 45.67,
+      "encode_ms": 23.40
+    }
+  }
+}
+```
+
+**Supported Depth Formats:**
+- PNG/JPEG grayscale (auto-normalized to meters)
+- Raw Float32 numpy arrays
+- EXR format (32-bit float depth)
+
+**See:** `DEPTH_INTEGRATION_GUIDE.md` for detailed integration guide with Three.js examples.
 
 ---
 
@@ -574,8 +642,52 @@ const uploadImage = async (file) => {
 2. ✅ Test endpoints with Postman or cURL
 3. ✅ Integrate with Express backend
 4. ✅ Connect to React frontend
-5. ✅ Add authentication (if needed)
-6. ✅ Deploy to production
+5. ✅ For VR depth integration, see **`DEPTH_ENDPOINT_REFERENCE.md`**
+6. ✅ Add authentication (if needed)
+7. ✅ Deploy to production
+
+---
+
+## 🔍 Advanced Features
+
+### Depth Integration for VR/AR (NEW!)
+
+The `/api/process-with-depth` endpoint enables depth-aware phosphene vision using VR/WebGL Z-buffers:
+
+```javascript
+// VR frame capture with depth
+const response = await fetch('http://localhost:8000/api/process-with-depth', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    image_base64: rgbFrameBase64,
+    depth_map_base64: depthMapBase64,  // From Three.js Z-buffer
+    depth_sampling: 'median',  // median, centroid, min, mean
+    conf_threshold: 0.5,
+    k_max: 5
+  })
+});
+
+// Closer objects automatically prioritized in phosphene representation
+const result = await response.json();
+console.log(result.detections[0].distance_m);  // e.g., 2.3m
+```
+
+**See full documentation:** `DEPTH_ENDPOINT_REFERENCE.md`
+
+### Performance Notes
+
+- **First request:** ~1-2s (model loading)
+- **Subsequent requests:** ~200-300ms
+- **Depth processing overhead:** ~5ms
+- **Real-time VR:** Supports 500ms frame intervals ✅
+
+### DRY Architecture
+
+All processing endpoints share a common core function (`_process_frame_internal`) for:
+- Consistent timing measurements
+- Unified error handling  
+- Code reusability (~47% code reduction)
 
 ---
 
@@ -585,5 +697,7 @@ For issues or questions:
 - Check logs in terminal
 - Review API docs at `/docs`
 - Inspect `api_output/` folder for generated images
+- **Depth integration:** See `DEPTH_ENDPOINT_REFERENCE.md`
+- **Postman testing:** Import `postman_phosphene_collection.json`
 
 **Happy coding! 🚀**

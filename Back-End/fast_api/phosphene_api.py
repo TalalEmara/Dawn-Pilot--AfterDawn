@@ -110,6 +110,17 @@ class ConfigUpdateRequest(BaseModel):
     conf_threshold: Optional[float] = Field(None, ge=0.0, le=1.0, description="YOLO detection confidence threshold")
 
 
+class ProcessWithDepthRequest(BaseModel):
+    """Request for processing with depth map from VR/3D scene"""
+    image_base64: str = Field(..., description="Base64 encoded RGB image")
+    depth_map_base64: str = Field(..., description="Base64 encoded depth/Z-buffer")
+    depth_sampling: Optional[str] = Field("median", description="How to sample depth: centroid|median|min|mean")
+    conf_threshold: Optional[float] = Field(0.5, ge=0.0, le=1.0)
+    t_min: Optional[float] = Field(0.3, ge=0.0, le=1.0)
+    k_min: Optional[int] = Field(1, ge=0)
+    k_max: Optional[int] = Field(5, ge=1)
+
+
 class HealthResponse(BaseModel):
     """Health check response"""
     status: str
@@ -455,6 +466,149 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+
+
+def decode_depth_map(depth_base64: str) -> np.ndarray:
+    """
+    Decode depth map from base64
+    
+    Supports multiple formats:
+    - PNG/JPEG image (grayscale, will be normalized to meters)
+    - Raw numpy array (float32 or uint16)
+    - EXR format (32-bit float depth)
+    
+    Args:
+        depth_base64: Base64 encoded depth data
+        
+    Returns:
+        2D numpy array of depth values in meters
+    """
+    try:
+        # Remove data URL prefix if present
+        if ',' in depth_base64:
+            depth_base64 = depth_base64.split(',')[1]
+        
+        depth_data = base64.b64decode(depth_base64)
+        
+        # Try to decode as image first (PNG, JPEG, EXR)
+        nparr = np.frombuffer(depth_data, np.uint8)
+        depth_map = cv2.imdecode(nparr, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_GRAYSCALE)
+        
+        if depth_map is not None:
+            # Convert to float32
+            depth_map = depth_map.astype(np.float32)
+            
+            # If image is 8-bit or 16-bit, normalize to reasonable depth range
+            if depth_map.max() > 100:  # Likely pixel values, not meters
+                depth_map = depth_map / depth_map.max() * 10.0  # Normalize to 0-10m range
+            
+            return depth_map
+        
+        # Try as raw numpy array (float32)
+        try:
+            depth_array = np.frombuffer(depth_data, dtype=np.float32)
+            # This will be a 1D array, caller must reshape if needed
+            logger.info(f"Decoded raw depth array: {depth_array.shape}")
+            return depth_array
+        except:
+            pass
+        
+        raise ValueError("Could not decode depth map as image or numpy array")
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid depth map data: {str(e)}")
+
+
+def assign_depth_to_detections(
+    detections: List[Dict[str, Any]],
+    depth_map: np.ndarray,
+    method: str = "median"
+) -> List[Dict[str, Any]]:
+    """
+    Assign depth values to YOLO detections by sampling from Z-buffer
+    
+    Your translator already handles depth in scoring! This function extracts
+    depth from the Z-buffer and assigns it to each detection so the translator
+    can prioritize closer objects.
+    
+    Args:
+        detections: List of YOLO detections with bbox [x, y, w, h]
+        depth_map: 2D array of depth values (same size as image)
+        method: How to sample depth from bbox region
+            - "centroid": Depth at object center point
+            - "median": Median depth in bbox (robust to outliers/noise)
+            - "min": Closest point in bbox (most conservative)
+            - "mean": Average depth in bbox
+    
+    Returns:
+        Detections enriched with 'distance_m' field (used by translator scoring)
+    """
+    # Handle 1D depth array (reshape to 2D if needed)
+    if len(depth_map.shape) == 1:
+        # Assume square or infer from image - this is a fallback
+        size = int(np.sqrt(depth_map.shape[0]))
+        depth_map = depth_map[:size*size].reshape(size, size)
+        logger.warning(f"Reshaped 1D depth array to {size}x{size}")
+    
+    h, w = depth_map.shape
+    
+    for det in detections:
+        bbox = det.get('bbox', [0, 0, 0, 0])  # [x, y, w, h]
+        x, y, bw, bh = bbox
+        
+        # Clamp bbox to image boundaries
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(w, int(x + bw))
+        y2 = min(h, int(y + bh))
+        
+        # Ensure valid bbox
+        if x2 <= x1 or y2 <= y1:
+            det['distance_m'] = None
+            continue
+        
+        # Extract depth values in bounding box region
+        depth_roi = depth_map[y1:y2, x1:x2]
+        
+        if depth_roi.size == 0:
+            det['distance_m'] = None
+            continue
+        
+        # Sample depth based on method
+        try:
+            if method == "centroid":
+                # Depth at object center
+                cy, cx = depth_roi.shape[0] // 2, depth_roi.shape[1] // 2
+                depth = float(depth_roi[cy, cx])
+            
+            elif method == "median":
+                # Median depth (robust to noise/outliers)
+                valid_depths = depth_roi[depth_roi > 0]  # Ignore 0 (invalid/sky)
+                depth = float(np.median(valid_depths)) if valid_depths.size > 0 else 0.0
+            
+            elif method == "min":
+                # Closest point (conservative - closest obstacle)
+                valid_depths = depth_roi[depth_roi > 0]
+                depth = float(np.min(valid_depths)) if valid_depths.size > 0 else 0.0
+            
+            elif method == "mean":
+                # Average depth
+                valid_depths = depth_roi[depth_roi > 0]
+                depth = float(np.mean(valid_depths)) if valid_depths.size > 0 else 0.0
+            
+            else:
+                logger.warning(f"Unknown depth sampling method: {method}, using median")
+                valid_depths = depth_roi[depth_roi > 0]
+                depth = float(np.median(valid_depths)) if valid_depths.size > 0 else 0.0
+            
+            # Assign depth (translator uses distance_m, depth, or depth_z)
+            det['distance_m'] = depth if depth > 0 else None
+            
+        except Exception as e:
+            logger.error(f"Error sampling depth for detection: {e}")
+            det['distance_m'] = None
+    
+    return detections
 
 
 def cleanup_old_files(directory: str, max_age_seconds: int = 3600):
@@ -926,6 +1080,194 @@ async def process_from_url(
     except Exception as e:
         logger.error(f"URL processing error: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+
+
+@app.post("/api/process-with-depth")
+async def process_with_depth(
+    request: ProcessWithDepthRequest,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Process image with VR/WebGL Z-buffer depth map integration
+    
+    This endpoint combines YOLO object detection with depth information from
+    a VR/Three.js scene to enable depth-aware phosphene translation. The depth
+    values are assigned to each detected object, and the translator automatically
+    prioritizes closer objects in the phosphene representation.
+    
+    **Depth Sampling Methods:**
+    - `centroid`: Depth at object center point (fast, works for centered objects)
+    - `median`: Median depth in bbox (robust to noise/outliers) - **RECOMMENDED**
+    - `min`: Closest point in bbox (conservative, good for obstacle avoidance)
+    - `mean`: Average depth in bbox (smooth but sensitive to outliers)
+    
+    **Depth Map Formats Supported:**
+    - PNG/JPEG grayscale (8-bit or 16-bit, will be normalized to meters)
+    - Raw numpy float32 array (base64 encoded)
+    - EXR format (32-bit float depth from rendering engines)
+    
+    **How it works:**
+    1. Decode image and depth map from base64
+    2. Run YOLO detection on RGB image
+    3. For each detection, sample depth from Z-buffer using bbox coordinates
+    4. Assign depth as 'distance_m' field (used by translator scoring)
+    5. Translator automatically prioritizes closer objects (higher scores)
+    
+    **Use Case Example:**
+    VR headset captures 500ms frame intervals. For each frame:
+    - Capture RGB image from camera
+    - Render Three.js scene to get Z-buffer/depth map
+    - Send both to this endpoint
+    - Receive phosphene representation with depth-aware prioritization
+    
+    Args:
+        request: ProcessWithDepthRequest containing:
+            - image_base64: RGB camera frame
+            - depth_map_base64: Z-buffer from VR/WebGL scene
+            - depth_sampling: Method to extract depth ("median" recommended)
+            - conf_threshold: YOLO detection confidence (0.0-1.0)
+            - t_min, k_min, k_max: Translator selection parameters
+    
+    Returns:
+        ProcessResponse with:
+            - detections: YOLO results enriched with 'distance_m' field
+            - phosphene_image: Base64 phosphene representation (depth-prioritized)
+            - metadata: Timing breakdown and detection count
+    
+    Example Request:
+        POST /api/process-with-depth
+        {
+            "image_base64": "data:image/jpeg;base64,/9j/4AAQ...",
+            "depth_map_base64": "data:image/png;base64,iVBOR...",
+            "depth_sampling": "median",
+            "conf_threshold": 0.5,
+            "t_min": 0.3,
+            "k_min": 1,
+            "k_max": 5
+        }
+    """
+    try:
+        total_start = time.time()
+        
+        # Decode RGB image
+        decode_start = time.time()
+        frame = decode_base64_image(request.image_base64)
+        image_decode_time = (time.time() - decode_start) * 1000
+        
+        # Decode depth map
+        depth_decode_start = time.time()
+        depth_map = decode_depth_map(request.depth_map_base64)
+        depth_decode_time = (time.time() - depth_decode_start) * 1000
+        
+        # Ensure depth map matches image dimensions
+        if len(depth_map.shape) == 1:
+            # Reshape 1D to match image dimensions
+            h, w = frame.shape[:2]
+            if depth_map.size == h * w:
+                depth_map = depth_map.reshape(h, w)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Depth map size ({depth_map.size}) doesn't match image ({h}x{w}={h*w})"
+                )
+        
+        # Validate depth map dimensions match image
+        if depth_map.shape[:2] != frame.shape[:2]:
+            # Try resizing depth map to match image
+            logger.warning(
+                f"Depth map size {depth_map.shape} != image size {frame.shape[:2]}, resizing..."
+            )
+            depth_map = cv2.resize(depth_map, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
+        
+        # Run YOLO detection
+        detect_start = time.time()
+        if not detector_service.is_ready():
+            raise HTTPException(status_code=503, detail="Detector not initialized")
+        
+        detections = detector_service.detect(frame, conf_threshold=request.conf_threshold)
+        detection_time = (time.time() - detect_start) * 1000
+        
+        # Assign depth to detections
+        depth_assign_start = time.time()
+        detections_with_depth = assign_depth_to_detections(
+            detections,
+            depth_map,
+            method=request.depth_sampling
+        )
+        depth_assign_time = (time.time() - depth_assign_start) * 1000
+        
+        logger.info(
+            f"Depth assignment: {len(detections_with_depth)} detections, "
+            f"method={request.depth_sampling}, time={depth_assign_time:.2f}ms"
+        )
+        
+        # Log depth statistics
+        depths = [d.get('distance_m') for d in detections_with_depth if d.get('distance_m') is not None]
+        if depths:
+            logger.info(
+                f"Depth stats: min={min(depths):.2f}m, max={max(depths):.2f}m, "
+                f"mean={np.mean(depths):.2f}m, median={np.median(depths):.2f}m"
+            )
+        
+        # Translate to phosphene representation
+        # The translator will automatically prioritize closer objects based on distance_m
+        translate_start = time.time()
+        if not translator_service.is_ready():
+            raise HTTPException(status_code=503, detail="Translator not initialized")
+        
+        phosphene_path = translator_service.translate(
+            detections_with_depth,
+            t_min=request.t_min,
+            k_min=request.k_min,
+            k_max=request.k_max
+        )
+        translation_time = (time.time() - translate_start) * 1000
+        
+        # Encode phosphene image
+        encode_start = time.time()
+        with open(phosphene_path, 'rb') as f:
+            phosphene_b64 = base64.b64encode(f.read()).decode('utf-8')
+        encode_time = (time.time() - encode_start) * 1000
+        
+        total_time = (time.time() - total_start) * 1000
+        
+        # Build response with detailed timing
+        result = {
+            "detections": detections_with_depth,
+            "phosphene_image": phosphene_b64,
+            "metadata": {
+                "detection_count": len(detections_with_depth),
+                "depth_assigned_count": len([d for d in detections_with_depth if d.get('distance_m') is not None]),
+                "depth_sampling_method": request.depth_sampling,
+                "timing_breakdown": {
+                    "total_ms": round(total_time, 2),
+                    "image_decode_ms": round(image_decode_time, 2),
+                    "depth_decode_ms": round(depth_decode_time, 2),
+                    "detection_ms": round(detection_time, 2),
+                    "depth_assignment_ms": round(depth_assign_time, 2),
+                    "translation_ms": round(translation_time, 2),
+                    "encode_ms": round(encode_time, 2)
+                }
+            }
+        }
+        
+        # Schedule cleanup
+        if background_tasks:
+            background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
+        
+        logger.info(
+            f"Depth processing complete: {len(detections_with_depth)} detections "
+            f"({result['metadata']['depth_assigned_count']} with depth), "
+            f"total={total_time:.2f}ms"
+        )
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Depth processing error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Depth processing failed: {str(e)}")
 
 
 # ============================================================================
