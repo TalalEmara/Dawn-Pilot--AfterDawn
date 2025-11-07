@@ -14,6 +14,7 @@ export interface ModelDefinition {
     [componentName: string]: any;
   };
   description?: string;
+  name: string;
 }
 
 export const ModelDefinitions: Record<string, ModelDefinition> = {
@@ -21,12 +22,13 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // ========================================
   // Basic Cube
   // ========================================
-  Cube: {
+  Box: {
+    name: "box",
     description: "A simple colored cube",
     components: {
       Position: { x: 0, y: 0, z: 0 },
       Rotation: { x: 0, y: 0, z: 0 },
-      Scale: { x: 1, y: 1, z: 1 },
+      Scale: { x: 50, y: 50, z: 5 },
       Color: { value: "#ffffff" },
       Model: { url: "Aframe" }
     }
@@ -36,6 +38,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Sphere
   // ========================================
   Sphere: {
+    name: "Sphere",
     description: "A spherical object",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -50,6 +53,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Light Source
   // ========================================
   Light: {
+    name: "Light",
     description: "A light source (no model, just position and color)",
     components: {
       Position: { x: 0, y: 10, z: 0 },
@@ -61,6 +65,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Player Character
   // ========================================
   Car: {
+    name: "Car",
     description: "Player character with full transform",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -74,6 +79,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Obstacle
   // ========================================
   Obstacle: {
+    name: "Obstacle",
     description: "An obstacle in the scene",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -88,6 +94,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Collectible Item
   // ========================================
   Collectible: {
+    name: "Collectible",
     description: "A collectible item",
     components: {
       Position: { x: 0, y: 1, z: 0 },
@@ -102,6 +109,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Building
   // ========================================
   Building: {
+    name: "Building",
     description: "A large building structure",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -116,6 +124,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Vehicle
   // ========================================
   Vehicle: {
+    name: "Vehicle",
     description: "A vehicle (car, truck, etc.)",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -130,6 +139,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Tree
   // ========================================
   Tree: {
+    name: "Tree",
     description: "A tree for environment",
     components: {
       Position: { x: 0, y: 0, z: 0 },
@@ -143,6 +153,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Camera Point
   // ========================================
   CameraPoint: {
+    name: "Camera Point",
     description: "A camera position marker (no visible model)",
     components: {
       Position: { x: 0, y: 5, z: 10 },
@@ -154,6 +165,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
   // Spawn Point
   // ========================================
   SpawnPoint: {
+    name: "Spawn Point",
     description: "A spawn point marker",
     components: {
       Position: { x: 0, y: 0, z: 0 },

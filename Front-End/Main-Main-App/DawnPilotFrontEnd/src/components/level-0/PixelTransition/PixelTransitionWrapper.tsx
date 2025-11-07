@@ -4,19 +4,23 @@ interface PixelTransitionWrapperProps {
   image: string;
   className?: string;
   onClick?: () => void;
+  children?: React.ReactNode;
 }
 
-function PixelTransitionWrapper({ image, className, onClick }: PixelTransitionWrapperProps) {
+function PixelTransitionWrapper({ image, className, onClick, children }: PixelTransitionWrapperProps) {
   
   return (
     <div onClick={onClick}>
       <PixelTransition
         firstContent={
-          <img
-            src={image}
-            alt={image.split('/').pop()?.split('.')[0] || 'add model'}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
+          <>
+            <img
+              src={image}
+              alt={image.split('/').pop()?.split('.')[0] || 'add model'}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+            {children}
+          </>
         }
         secondContent={
           <div

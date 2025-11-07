@@ -9,6 +9,7 @@ const entityManager = new EntityManager();
 
 // Map: object-id -> entity
 const objectMap = new Map<string, Entity>();
+const metadataMap = new Map<string, { name?: string }>();
 
 // === Component Registry ===
 // Map component names to their constructors for dynamic instantiation
@@ -98,9 +99,14 @@ export function createEntityFromModel(
       components[compName] = { ...components[compName], ...compData };
     }
   }
+ const entityObj = createEntity(components);
 
-  return createEntity(components);
-}
+  // ✅ Add metadata name to the returned object
+  entityObj.name = modelName;
+  metadataMap.set(entityObj.id, { name: modelName });
+
+  console.log(`Created entity from model "${modelName}":`, entityObj);
+  return entityObj;}
 
 /**
  * Create a new entity with optional initial components
@@ -232,9 +238,12 @@ export function getScenarioWorld(): any {
   const entities: any[] = [];
 
   for (const [objectId, entity] of objectMap.entries()) {
-    const obj = entityToObject(objectId, entity);
-    entities.push(obj);
-  }
+  const obj = entityToObject(objectId, entity);
+  const meta = metadataMap.get(objectId);
+  if (meta) Object.assign(obj, meta);
+  entities.push(obj);
+}
+
 
   return { entities };
 }

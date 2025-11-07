@@ -153,7 +153,7 @@ const BuilderPage: React.FC = () => {
             />
 
 {/* Render entities from backend */}
-{Object.entries(world.entities).map(([name, e]) => {
+{world.entities.map((e) => {
   const pos = e.Position || { x: 0, y: 0, z: 0 };
   const rot = e.Rotation || { x: 0, y: 0, z: 0 };
   const scl = e.Scale || { x: 1, y: 1, z: 1 };
@@ -161,9 +161,11 @@ const BuilderPage: React.FC = () => {
   const url = e.Model?.url;
 
   console.log('Rendering entity:', e);
+  console.log('Rendering url:', url);
 
   if (url === 'Aframe') {
-    const tag = `a-${name.toLowerCase()}`; // e.g. Sphere -> a-sphere
+    const tag = `a-${e.name.toLowerCase()}`; // e.g. Sphere -> a-sphere
+    console.log('Rendering primitive tag:', tag);
     return (<Entity
       key={e.id}
       primitive={tag}
@@ -188,16 +190,13 @@ const BuilderPage: React.FC = () => {
 
 
             {/* Camera */}
-            <Entity
-              primitive="a-camera"
-              position="0 7 10"
-              look-controls="enabled: true"
-            >
-              <Entity
-                primitive="a-cursor"
-                animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1"
-              />
-            </Entity>
+           <Entity
+            primitive="a-camera"
+            position="0 2 4"
+            rotation="20 0 0"
+            look-controls="enabled: true"
+          />
+
           </Scene>
         </div>
       </div>
