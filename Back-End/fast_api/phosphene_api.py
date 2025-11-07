@@ -21,6 +21,7 @@ import base64
 import json
 import os
 import time
+import requests
 from datetime import datetime
 import logging
 from io import BytesIO
@@ -103,9 +104,10 @@ class ProcessResponse(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     """Request to update configuration"""
-    t_min: Optional[float] = Field(None, ge=0.0, le=1.0)
-    k_min: Optional[int] = Field(None, ge=0)
-    k_max: Optional[int] = Field(None, ge=1)
+    t_min: Optional[float] = Field(None, ge=0.0, le=1.0, description="Minimum score threshold for translation")
+    k_min: Optional[int] = Field(None, ge=0, description="Minimum objects to select")
+    k_max: Optional[int] = Field(None, ge=1, description="Maximum objects to select")
+    conf_threshold: Optional[float] = Field(None, ge=0.0, le=1.0, description="YOLO detection confidence threshold")
 
 
 class HealthResponse(BaseModel):
@@ -179,6 +181,34 @@ class DetectorService:
             raise HTTPException(status_code=503, detail="Detector not loaded")
         
         return self.detector.detect(frame)
+    
+    def update_conf_threshold(self, conf_threshold: float) -> bool:
+        """
+        Update detection confidence threshold
+        
+        Args:
+            conf_threshold: New confidence threshold (0.0 to 1.0)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if self.detector and hasattr(self.detector, 'conf_threshold'):
+                self.detector.conf_threshold = conf_threshold
+                logger.info(f"Updated detector confidence threshold to {conf_threshold}")
+                return True
+            else:
+                logger.warning("Detector does not support confidence threshold updates")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update confidence threshold: {e}")
+            return False
+    
+    def get_conf_threshold(self) -> Optional[float]:
+        """Get current detection confidence threshold"""
+        if self.detector and hasattr(self.detector, 'conf_threshold'):
+            return self.detector.conf_threshold
+        return None
     
     def is_ready(self) -> bool:
         """Check if detector is ready"""
@@ -443,6 +473,87 @@ def cleanup_old_files(directory: str, max_age_seconds: int = 3600):
 
 
 # ============================================================================
+# Core Processing Logic (DRY - shared by all routes)
+# ============================================================================
+
+def _process_frame_internal(
+    frame: np.ndarray,
+    conf_threshold: float = 0.5,
+    t_min: float = 0.3,
+    k_min: int = 1,
+    k_max: int = 5,
+    include_timing: bool = False
+) -> Dict[str, Any]:
+    """
+    Core image processing logic - shared by all endpoints
+    
+    This is the single source of truth for detection + translation.
+    Works on decoded numpy array (no format coupling).
+    
+    Args:
+        frame: OpenCV image (numpy array)
+        conf_threshold: Detection confidence threshold (not currently used, reserved for future)
+        t_min: Minimum score threshold for translation
+        k_min: Minimum objects to select
+        k_max: Maximum objects to select
+        include_timing: Whether to include detailed timing breakdown
+        
+    Returns:
+        Dictionary with detections, phosphene image, and metadata
+    """
+    timings = {} if include_timing else None
+    total_start = time.time()
+    
+    h, w = frame.shape[:2]
+    
+    # Step 1: Detection
+    if include_timing:
+        detect_start = time.time()
+    
+    detections = detector_service.detect(frame)
+    
+    if include_timing:
+        timings["detection_ms"] = round((time.time() - detect_start) * 1000, 2)
+    
+    # Step 2: Translation
+    if include_timing:
+        translate_start = time.time()
+    
+    phosphene_base64, selected_objects, metadata = translator_service.translate(
+        objects=detections,
+        image_width=w,
+        image_height=h,
+        t_min=t_min,
+        k_min=k_min,
+        k_max=k_max
+    )
+    
+    if include_timing:
+        timings["translation_ms"] = round((time.time() - translate_start) * 1000, 2)
+        timings["total_ms"] = round((time.time() - total_start) * 1000, 2)
+        metadata["timing_breakdown"] = timings
+    
+    # Format detections for response
+    detection_objects = [
+        DetectionObject(
+            class_name=det.get("class", "unknown"),
+            confidence=det.get("confidence", 0.0),
+            bbox=det.get("bbox", [0, 0, 0, 0]),
+            centroid_px=det.get("centroid_px", [0, 0]),
+            distance_m=det.get("distance_m")
+        )
+        for det in detections
+    ]
+    
+    return {
+        "detections": detection_objects,
+        "phosphene_image_base64": phosphene_base64,
+        "selected_objects": selected_objects,
+        "metadata": metadata
+    }
+
+
+# ============================================================================
 # API Endpoints
 # ============================================================================
 
@@ -552,76 +663,68 @@ async def process_image(request: ProcessRequest, background_tasks: BackgroundTas
     """
     End-to-end processing: detect objects and translate to phosphene
     
+    Accepts: JSON with base64 encoded image
+    Best for: JSON-only clients, small images, simple integrations
+    Note: Base64 encoding adds ~33% overhead compared to /api/upload-image
+    
     Args:
         request: ProcessRequest with image and parameters
         
     Returns:
         ProcessResponse with detections and phosphene image
     """
-    start_time = time.time()
+    try:
+        # Decode base64 to numpy array
+        frame = decode_base64_image(request.image_base64)
+        
+        # Process using shared core logic
+        result = _process_frame_internal(
+            frame,
+            conf_threshold=request.conf_threshold,
+            t_min=request.t_min,
+            k_min=request.k_min,
+            k_max=request.k_max,
+            include_timing=True  # Include timing for debugging
+        )
+        
+        # Add total detection count to metadata
+        result["metadata"]["detection_count"] = len(result["detections"])
+        
+        # Schedule cleanup
+        background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
+        
+        # Return as Pydantic model
+        return ProcessResponse(**result)
     
-    # Step 1: Detect objects
-    frame = decode_base64_image(request.image_base64)
-    h, w = frame.shape[:2]
-    
-    detections = detector_service.detect(frame)
-    
-    # Format detections for response
-    detection_objects = []
-    for det in detections:
-        detection_objects.append(DetectionObject(
-            class_name=det.get("class", "unknown"),
-            confidence=det.get("confidence", 0.0),
-            bbox=det.get("bbox", [0, 0, 0, 0]),
-            centroid_px=det.get("centroid_px", [0, 0]),
-            distance_m=det.get("distance_m")
-        ))
-    
-    # Step 2: Translate to phosphene
-    phosphene_base64, selected_objects, translation_metadata = translator_service.translate(
-        objects=detections,
-        image_width=w,
-        image_height=h,
-        t_min=request.t_min,
-        k_min=request.k_min,
-        k_max=request.k_max
-    )
-    
-    total_time = (time.time() - start_time) * 1000
-    
-    metadata = {
-        **translation_metadata,
-        "total_processing_time_ms": round(total_time, 2),
-        "detection_count": len(detections)
-    }
-    
-    # Schedule cleanup
-    background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
-    
-    return ProcessResponse(
-        detections=detection_objects,
-        phosphene_image_base64=phosphene_base64,
-        selected_objects=selected_objects,
-        metadata=metadata
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Base64 processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 @app.post("/api/configure")
 async def update_configuration(request: ConfigUpdateRequest):
     """
-    Update translator configuration parameters
+    Update translator and detector configuration parameters
+    
+    Allows runtime configuration of:
+    - Translation thresholds (t_min, k_min, k_max)
+    - YOLO detection confidence threshold (conf_threshold)
     
     Args:
         request: ConfigUpdateRequest with threshold parameters
         
     Returns:
-        Updated configuration
+        Updated configuration and status
     """
     if not translator_service.translator:
         raise HTTPException(status_code=503, detail="Translator not initialized")
     
     updates = {}
+    warnings = []
     
+    # Update translator parameters
     if request.t_min is not None:
         translator_service.translator.params['T_min'] = request.t_min
         updates['t_min'] = request.t_min
@@ -634,34 +737,63 @@ async def update_configuration(request: ConfigUpdateRequest):
         translator_service.translator.params['K_max'] = request.k_max
         updates['k_max'] = request.k_max
     
-    return {
-        "status": "updated",
+    # Update detector confidence threshold
+    if request.conf_threshold is not None:
+        success = detector_service.update_conf_threshold(request.conf_threshold)
+        if success:
+            updates['conf_threshold'] = request.conf_threshold
+        else:
+            warnings.append("Failed to update detector confidence threshold (detector may not support it)")
+    
+    response = {
+        "status": "updated" if updates else "no_changes",
         "changes": updates,
         "current_config": {
             "t_min": translator_service.translator.params.get('T_min'),
             "k_min": translator_service.translator.params.get('K_min'),
-            "k_max": translator_service.translator.params.get('K_max')
+            "k_max": translator_service.translator.params.get('K_max'),
+            "conf_threshold": detector_service.get_conf_threshold()
         }
     }
+    
+    if warnings:
+        response["warnings"] = warnings
+    
+    return response
 
 
 @app.post("/api/upload-image")
-async def upload_image_file(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_image_file(
+    file: UploadFile = File(...),
+    conf_threshold: float = 0.5,
+    t_min: float = 0.3,
+    k_min: int = 1,
+    k_max: int = 5,
+    background_tasks: BackgroundTasks = None
+):
     """
-    Upload image file for processing (alternative to base64)
+    Upload image file for processing (RECOMMENDED - most efficient)
     
-    Args:
-        file: Uploaded image file
+    Accepts: multipart/form-data with 'file' field
+    Best for: Production use, large images, mobile apps, real-time processing
+    Advantage: No base64 overhead (~33% smaller payload than /api/process)
+    
+    Query parameters:
+        conf_threshold: Detection confidence (default: 0.5)
+        t_min: Minimum score threshold (default: 0.3)
+        k_min: Minimum objects to select (default: 1)
+        k_max: Maximum objects to select (default: 5)
         
     Returns:
-        ProcessResponse with detections and phosphene image
+        ProcessResponse with detections, phosphene image, and detailed timing
     """
     try:
-        start_time = time.time()
+        total_start = time.time()
         
         # Read file
+        read_start = time.time()
         contents = await file.read()
-        read_time = (time.time() - start_time) * 1000
+        read_time = (time.time() - read_start) * 1000
         
         # Convert to OpenCV format
         decode_start = time.time()
@@ -672,48 +804,128 @@ async def upload_image_file(file: UploadFile = File(...), background_tasks: Back
         if frame is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
         
-        h, w = frame.shape[:2]
-        
-        # Detect objects
-        detect_start = time.time()
-        detections = detector_service.detect(frame)
-        detect_time = (time.time() - detect_start) * 1000
-        
-        # Translate
-        translate_start = time.time()
-        phosphene_base64, selected_objects, metadata = translator_service.translate(
-            objects=detections,
-            image_width=w,
-            image_height=h
+        # Process using shared core logic
+        result = _process_frame_internal(
+            frame,
+            conf_threshold=conf_threshold,
+            t_min=t_min,
+            k_min=k_min,
+            k_max=k_max,
+            include_timing=True
         )
-        translate_time = (time.time() - translate_start) * 1000
         
-        total_time = (time.time() - start_time) * 1000
+        # Add file-specific timings to existing breakdown
+        if "timing_breakdown" in result["metadata"]:
+            result["metadata"]["timing_breakdown"]["file_read_ms"] = round(read_time, 2)
+            result["metadata"]["timing_breakdown"]["decode_ms"] = round(decode_time, 2)
+            # Recalculate total to include file I/O
+            result["metadata"]["timing_breakdown"]["total_ms"] = round((time.time() - total_start) * 1000, 2)
         
-        # Add timing breakdown to metadata
-        metadata["timing_breakdown"] = {
-            "file_read_ms": round(read_time, 2),
-            "decode_ms": round(decode_time, 2),
-            "detection_ms": round(detect_time, 2),
-            "translation_ms": round(translate_time, 2),
-            "total_ms": round(total_time, 2)
-        }
+        # Add detection count
+        result["metadata"]["detection_count"] = len(result["detections"])
         
         # Schedule cleanup
         if background_tasks:
             background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
         
-        logger.info(f"Upload processing: total={total_time:.2f}ms (read={read_time:.2f}ms, decode={decode_time:.2f}ms, detect={detect_time:.2f}ms, translate={translate_time:.2f}ms)")
+        logger.info(
+            f"Upload processing: total={result['metadata']['timing_breakdown']['total_ms']:.2f}ms "
+            f"(read={read_time:.2f}ms, decode={decode_time:.2f}ms, "
+            f"detect={result['metadata']['timing_breakdown']['detection_ms']:.2f}ms, "
+            f"translate={result['metadata']['timing_breakdown']['translation_ms']:.2f}ms)"
+        )
         
-        return {
-            "detections": detections,
-            "phosphene_image_base64": phosphene_base64,
-            "selected_objects": selected_objects,
-            "metadata": metadata
-        }
+        return result
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload processing failed: {str(e)}")
+
+
+@app.post("/api/process-url")
+async def process_from_url(
+    image_url: str,
+    conf_threshold: float = 0.5,
+    t_min: float = 0.3,
+    k_min: int = 1,
+    k_max: int = 5,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Fetch and process image from URL (useful for testing and webhooks)
+    
+    Accepts: URL as query parameter
+    Best for: Testing with public images, automated pipelines, webhooks
+    
+    Example:
+        POST /api/process-url?image_url=https://example.com/image.jpg&t_min=0.4
+        
+    Query parameters:
+        image_url: URL of the image to process (required)
+        conf_threshold: Detection confidence (default: 0.5)
+        t_min: Minimum score threshold (default: 0.3)
+        k_min: Minimum objects to select (default: 1)
+        k_max: Maximum objects to select (default: 5)
+        
+    Returns:
+        ProcessResponse with detections, phosphene image, and timing
+    """
+    try:
+        import requests
+        
+        fetch_start = time.time()
+        
+        # Fetch image from URL
+        response = requests.get(image_url, timeout=10)
+        response.raise_for_status()
+        fetch_time = (time.time() - fetch_start) * 1000
+        
+        # Decode image
+        decode_start = time.time()
+        nparr = np.frombuffer(response.content, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        decode_time = (time.time() - decode_start) * 1000
+        
+        if frame is None:
+            raise HTTPException(status_code=400, detail="Could not decode image from URL")
+        
+        # Process using shared core logic
+        result = _process_frame_internal(
+            frame,
+            conf_threshold=conf_threshold,
+            t_min=t_min,
+            k_min=k_min,
+            k_max=k_max,
+            include_timing=True
+        )
+        
+        # Add URL-specific timings
+        if "timing_breakdown" in result["metadata"]:
+            result["metadata"]["timing_breakdown"]["url_fetch_ms"] = round(fetch_time, 2)
+            result["metadata"]["timing_breakdown"]["decode_ms"] = round(decode_time, 2)
+        
+        # Add detection count and source URL
+        result["metadata"]["detection_count"] = len(result["detections"])
+        result["metadata"]["source_url"] = image_url
+        
+        # Schedule cleanup
+        if background_tasks:
+            background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
+        
+        logger.info(f"URL processing: {image_url} - {result['metadata']['timing_breakdown']['total_ms']:.2f}ms")
+        
+        return result
+    
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch image from URL: {image_url} - {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch image: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"URL processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # ============================================================================
