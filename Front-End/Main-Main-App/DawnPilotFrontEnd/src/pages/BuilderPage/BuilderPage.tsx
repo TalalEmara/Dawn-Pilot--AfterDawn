@@ -11,7 +11,8 @@ import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useEntityManager } from '../../hooks/useEntityManager';
 import { useComponentManager } from '../../hooks/useComponentManager';
 import { useModelLibrary } from '../../hooks/useModelLibrary';
-import { useAFrameSync } from '../../hooks/useAframeSync';
+import PropertiesPanel from '../../components/level-1/PropertiesPanel/PropertiesPanel';
+// import { useAFrameSync } from '../../hooks/useAframeSync';
 
 const BuilderPage: React.FC = () => {
   // World management
@@ -125,6 +126,7 @@ const BuilderPage: React.FC = () => {
       deleteEntity,
       queryEntities
     }}>
+        {/* <PropertiesPanel /> */}
       <div className={styles.BuilderPageContainer}>
         <BuilderSidePanel />
 
