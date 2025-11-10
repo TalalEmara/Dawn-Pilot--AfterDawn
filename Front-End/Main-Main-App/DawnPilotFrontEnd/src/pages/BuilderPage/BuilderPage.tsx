@@ -12,9 +12,16 @@ import { useEntityManager } from '../../hooks/useEntityManager';
 import { useComponentManager } from '../../hooks/useComponentManager';
 import { useModelLibrary } from '../../hooks/useModelLibrary';
 import PropertiesPanel from '../../components/level-1/PropertiesPanel/PropertiesPanel';
+import { useDebugAFrameBuffersDev } from '../../hooks/useDebugAFrameBuffers';
 // import { useAFrameSync } from '../../hooks/useAframeSync';
 
 const BuilderPage: React.FC = () => {
+  // Enable buffer debugging (only in development, no ref needed!)
+  // useDebugAFrameBuffersDev({
+  //   logInterval: 30,      // Log every 3 seconds
+  //   logPixelData: false     // Set to true to sample center pixel
+  // });
+
   // World management
   const {
     world,
@@ -154,50 +161,49 @@ const BuilderPage: React.FC = () => {
               color="#222222"
             />
 
-{/* Render entities from backend */}
-{world.entities.map((e) => {
-  const pos = e.Position || { x: 0, y: 0, z: 0 };
-  const rot = e.Rotation || { x: 0, y: 0, z: 0 };
-  const scl = e.Scale || { x: 1, y: 1, z: 1 };
-  const color = e.Color?.value || '#fff';
-  const url = e.Model?.url;
+            {/* Render entities from backend */}
+            {world.entities.map((e) => {
+              const pos = e.Position || { x: 0, y: 0, z: 0 };
+              const rot = e.Rotation || { x: 0, y: 0, z: 0 };
+              const scl = e.Scale || { x: 1, y: 1, z: 1 };
+              const color = e.Color?.value || '#fff';
+              const url = e.Model?.url;
 
-  console.log('Rendering entity:', e);
-  console.log('Rendering url:', url);
+              console.log('Rendering entity:', e);
+              console.log('Rendering url:', url);
 
-  if (url === 'Aframe') {
-    const tag = `a-${e.name.toLowerCase()}`; // e.g. Sphere -> a-sphere
-    console.log('Rendering primitive tag:', tag);
-    return (<Entity
-      key={e.id}
-      primitive={tag}
-      position={`${pos.x} ${pos.y} ${pos.z}`}
-      rotation={`${rot.x} ${rot.y} ${rot.z}`}
-      scale={`${scl.x} ${scl.y} ${scl.z}`}
-      material={`color: ${color}`}
-    />);
-  }
+              if (url === 'Aframe') {
+                const tag = `a-${e.name.toLowerCase()}`; // e.g. Sphere -> a-sphere
+                console.log('Rendering primitive tag:', tag);
+                return (<Entity
+                  key={e.id}
+                  primitive={tag}
+                  position={`${pos.x} ${pos.y} ${pos.z}`}
+                  rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                  scale={`${scl.x} ${scl.y} ${scl.z}`}
+                  material={`color: ${color}`}
+                />);
+              }
 
-  return (
-    <Entity
-      key={e.id}
-      gltfModel={url}
-      position={`${pos.x} ${pos.y} ${pos.z}`}
-      rotation={`${rot.x} ${rot.y} ${rot.z}`}
-      scale={`${scl.x} ${scl.y} ${scl.z}`}
-      material={`color: ${color}`}
-    />
-  );
-})}
-
+              return (
+                <Entity
+                  key={e.id}
+                  gltfModel={url}
+                  position={`${pos.x} ${pos.y} ${pos.z}`}
+                  rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                  scale={`${scl.x} ${scl.y} ${scl.z}`}
+                  material={`color: ${color}`}
+                />
+              );
+            })}
 
             {/* Camera */}
-           <Entity
-            primitive="a-camera"
-            position="0 2 4"
-            rotation="20 0 0"
-            look-controls="enabled: true"
-          />
+            <Entity
+              primitive="a-camera"
+              position="0 2 4"
+              rotation="20 0 0"
+              look-controls="enabled: true"
+            />
 
           </Scene>
         </div>
