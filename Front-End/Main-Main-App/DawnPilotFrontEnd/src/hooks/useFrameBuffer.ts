@@ -214,6 +214,7 @@ function downsamplePixels(
 
 // Read depth buffer using a shader-based approach
 // Read depth buffer using a shader-based approach
+// Read depth buffer using a shader-based approach
 function readDepthBuffer(
   gl: WebGLRenderingContext | WebGL2RenderingContext,
   renderer: any,
@@ -237,28 +238,32 @@ function readDepthBuffer(
       return null;
     }
 
-    // CRITICAL: Force complete matrix update BEFORE we check positions
+    // CRITICAL: Force complete matrix update
     scene.updateMatrixWorld(true);
     camera.updateMatrixWorld(true);
     
-    // Force camera to recalculate projection matrix
     if (camera.updateProjectionMatrix) {
       camera.updateProjectionMatrix();
     }
 
-    // Debug camera settings
+    // Use camera's actual near/far, but override far for better depth visualization
     const near = (camera as any).near || 0.1;
-    const far = (camera as any).far || 1000;
+    const originalFar = (camera as any).far || 1000;
+    
+    // CRITICAL FIX: Use a reasonable far plane for depth visualization
+    // Instead of 10000, use something closer to actual scene scale (e.g., 50)
+    const visualizationFar = 50; // Adjust this based on your scene size
+    
     const cameraWorldPos = new THREE.Vector3();
     camera.getWorldPosition(cameraWorldPos);
     const cameraWorldDir = new THREE.Vector3();
     camera.getWorldDirection(cameraWorldDir);
     
-    console.log(`📷 Camera near: ${near}, far: ${far}`);
+    console.log(`📷 Camera near: ${near}, original far: ${originalFar}, visualization far: ${visualizationFar}`);
     console.log(`📷 Camera world position:`, cameraWorldPos);
     console.log(`📷 Camera world direction:`, cameraWorldDir);
 
-    // Create a custom shader material to visualize depth
+    // Create depth shader with better normalization
     const depthMaterial = new THREE.ShaderMaterial({
       vertexShader: `
         varying float vDepth;
@@ -277,12 +282,16 @@ function readDepthBuffer(
           // Normalize depth to 0-1 range
           float depth = (vDepth - near) / (far - near);
           depth = clamp(depth, 0.0, 1.0);
+          
+          // Invert so closer = brighter (optional, but often more intuitive)
+          depth = 1.0 - depth;
+          
           gl_FragColor = vec4(vec3(depth), 1.0);
         }
       `,
       uniforms: {
         near: { value: near },
-        far: { value: far }
+        far: { value: visualizationFar } // Use the shorter range
       },
       side: THREE.DoubleSide,
       depthTest: true,
@@ -292,35 +301,39 @@ function readDepthBuffer(
     // Store original materials
     const originalMaterials = new Map();
     let meshCount = 0;
+    let minDist = Infinity, maxDist = 0;
     
     scene.traverse((obj: any) => {
       if (obj.isMesh) {
-        // Force update this mesh's world matrix
         obj.updateMatrixWorld(true);
-        
         originalMaterials.set(obj, obj.material);
         
-        // Debug mesh properties
         const worldPos = new THREE.Vector3();
         obj.getWorldPosition(worldPos);
         
-        // Calculate if object is in front of camera
         const toObject = worldPos.clone().sub(cameraWorldPos);
         const dotProduct = toObject.dot(cameraWorldDir);
         const distance = worldPos.distanceTo(cameraWorldPos);
         
+        if (distance < minDist) minDist = distance;
+        if (distance > maxDist) maxDist = distance;
+        
         console.log(`  - Mesh: ${obj.name || 'unnamed'}, geometry: ${obj.geometry?.type}`);
         console.log(`    world position:`, worldPos);
         console.log(`    distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`);
-        console.log(`    vertices: ${obj.geometry?.attributes?.position?.count || 0}`);
         
-        // Apply depth material
         obj.material = depthMaterial;
         obj.material.needsUpdate = true;
         meshCount++;
       }
     });
+    
     console.log(`🎯 Processing ${meshCount} meshes for depth`);
+    console.log(`📏 Distance range: ${minDist.toFixed(2)} - ${maxDist.toFixed(2)}`);
+    
+    if (maxDist > visualizationFar) {
+      console.warn(`⚠️  Objects are farther (${maxDist.toFixed(2)}) than visualization far (${visualizationFar}). Consider increasing visualizationFar.`);
+    }
 
     // Create render target
     const depthTarget = new THREE.WebGLRenderTarget(width, height, {
@@ -339,14 +352,11 @@ function readDepthBuffer(
     renderer.setClearColor(0x000000, 1);
     renderer.clear(true, true, true);
     
-    // Ensure matrices are still valid before render
     camera.updateMatrixWorld(true);
     scene.updateMatrixWorld(true);
     
-    // Render the scene
     renderer.render(scene, camera);
     
-    // Restore renderer state
     renderer.setRenderTarget(originalTarget);
     renderer.autoClear = originalAutoClear;
 
@@ -360,7 +370,7 @@ function readDepthBuffer(
     const depthPixels = new Uint8Array(width * height * 4);
     renderer.readRenderTargetPixels(depthTarget, 0, 0, width, height, depthPixels);
 
-    // Check depth data with diagnostics
+    // Check depth data
     let minVal = 255, maxVal = 0, nonZeroCount = 0;
     let sampleValues: number[] = [];
     
@@ -378,12 +388,9 @@ function readDepthBuffer(
     console.log(`📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height} (${(nonZeroCount/(width*height)*100).toFixed(2)}%)`);
     
     if (sampleValues.length > 0) {
-      console.log(`📊 Sample depth values:`, sampleValues);
+      console.log(`📊 Sample depth values (0-255):`, sampleValues);
     } else {
       console.warn(`⚠️ WARNING: No depth data captured!`);
-      console.warn(`⚠️ This usually means objects are behind the camera or outside frustum`);
-      
-      // Sample center pixel
       const centerX = Math.floor(width / 2);
       const centerY = Math.floor(height / 2);
       const centerIdx = (centerY * width + centerX) * 4;
@@ -426,7 +433,6 @@ function readDepthBuffer(
     return null;
   }
 }
-
 let frameCounter = 0;
 
 function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {

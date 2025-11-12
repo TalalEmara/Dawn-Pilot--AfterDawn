@@ -11,7 +11,7 @@ import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 function MobileView() {
   // Enable buffer debugging (only in development)
   useFrameBuffer({
-    logInterval: 3000,      // Log every 3 seconds
+    logInterval: 1000,      // Log every 3 seconds
     logPixelData: true,
     downsamplePercentage: 50     // Set to true to sample center pixel color
   });
