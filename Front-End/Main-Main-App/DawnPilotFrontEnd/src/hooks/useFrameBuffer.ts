@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react';
-import 'aframe';
-import type { THREE } from 'aframe';
+import { useEffect, useRef } from "react";
+import "aframe";
+import type { THREE } from "aframe";
 
-// Define type for A-Frame Scene element
 type ASceneEl = HTMLElement & {
   renderer?: THREE.WebGLRenderer;
   hasLoaded?: boolean;
@@ -10,27 +9,17 @@ type ASceneEl = HTMLElement & {
   object3D?: THREE.Scene;
 };
 
-/**
- * Logs A-Frame / Three.js WebGL buffer info when the scene is ready.
- * Works with aframe-react by querying the DOM for the a-scene element.
- *
- * ⚠️ Logs every 2 seconds – use only for debugging (not production).
- * 
- * @param options - Configuration options
- */
-export const useFrameBuffer = (
-  options?: {
-    enabled?: boolean;
-    logInterval?: number;
-    logPixelData?: boolean;
-  }
-) => {
+export const useFrameBuffer = (options?: {
+  enabled?: boolean;
+  logInterval?: number;
+  logPixelData?: boolean;
+  downsamplePercentage?: number;
+}) => {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
   const cleanupFnsRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
-    // Skip if disabled
     if (options?.enabled === false) return;
 
     const LOG_INTERVAL = options?.logInterval ?? 2000;
@@ -38,106 +27,138 @@ export const useFrameBuffer = (
 
     const setupDebug = () => {
       if (isInitializedRef.current) {
-        console.log('[A-Frame Debug] Already initialized, skipping');
+        console.log("[A-Frame Debug] Already initialized, skipping");
         return;
       }
 
-      // Query for a-scene element (aframe-react creates this)
-      const sceneEl = document.querySelector('a-scene') as ASceneEl;
-      
+      const sceneEl = document.querySelector("a-scene") as ASceneEl;
+
       if (!sceneEl) {
-        console.warn('[A-Frame Debug] a-scene element not found, retrying in 200ms...');
+        console.warn(
+          "[A-Frame Debug] a-scene element not found, retrying in 200ms..."
+        );
         setTimeout(setupDebug, 200);
         return;
       }
 
-      console.log('[A-Frame Debug] Found a-scene element');
+      console.log("[A-Frame Debug] Found a-scene element");
 
-      // Check for renderer
       const checkRenderer = () => {
         const renderer = (sceneEl as any).renderer;
-        
+
         if (!renderer) {
-          console.warn('[A-Frame Debug] Renderer not ready, retrying in 200ms...');
+          console.warn(
+            "[A-Frame Debug] Renderer not ready, retrying in 200ms..."
+          );
           setTimeout(checkRenderer, 200);
           return;
         }
 
         const gl = renderer.getContext() as WebGLRenderingContext;
         if (!gl) {
-          console.error('[A-Frame Debug] WebGL context not available');
+          console.error("[A-Frame Debug] WebGL context not available");
           return;
         }
 
         isInitializedRef.current = true;
-        console.log('[A-Frame Debug] ✓ Buffer monitoring started');
+        console.log("[A-Frame Debug] ✓ Buffer monitoring started");
 
         let lastLog = 0;
 
         const loop = () => {
           const now = performance.now();
-          
+
           if (now - lastLog > LOG_INTERVAL) {
             lastLog = now;
-            
+
             try {
-              // Buffer configuration
-              const r = gl.getParameter(gl.RED_BITS);
-              const g = gl.getParameter(gl.GREEN_BITS);
-              const b = gl.getParameter(gl.BLUE_BITS);
-              const a = gl.getParameter(gl.ALPHA_BITS);
-              const depth = gl.getParameter(gl.DEPTH_BITS);
-              const stencil = gl.getParameter(gl.STENCIL_BITS);
-              
-              // Viewport and canvas info
-              const viewport = gl.getParameter(gl.VIEWPORT);
-              const width = renderer.domElement.width;
-              const height = renderer.domElement.height;
-              const pixelRatio = window.devicePixelRatio || 1;
-              
-              console.group('[A-Frame Debug] 🎨 Buffer Info');
-              console.log(`📊 Color Buffer: R:${r} G:${g} B:${b} A:${a} bits`);
-              console.log(`📏 Depth Buffer: ${depth} bits`);
-              console.log(`🎯 Stencil Buffer: ${stencil} bits`);
-              console.log(`📐 Viewport: ${viewport[2]}x${viewport[3]}`);
-              console.log(`🖼️  Canvas: ${width}x${height} (ratio: ${pixelRatio})`);
-              
-              // Optional: Sample pixel data from center of screen
-              if (LOG_PIXEL_DATA) {
-                const centerX = Math.floor(width / 2);
-                const centerY = Math.floor(height / 2);
-                const pixel = new Uint8Array(4);
-                
-                gl.readPixels(centerX, centerY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-                console.log(`🎨 Center pixel RGBA: [${pixel[0]}, ${pixel[1]}, ${pixel[2]}, ${pixel[3]}]`);
-              }
-              
-              // Memory info (if available)
               const debugInfo = renderer.info;
               if (debugInfo) {
-                console.log(`🔢 Geometries: ${debugInfo.memory.geometries}`);
-                console.log(`🖼️  Textures: ${debugInfo.memory.textures}`);
-                console.log(`📦 Draw Calls: ${debugInfo.render.calls}`);
                 console.log(`🔺 Triangles: ${debugInfo.render.triangles}`);
               }
-              
+
+              if (LOG_PIXEL_DATA) {
+                // IMPORTANT: Read pixels AFTER the frame is rendered
+                // Use renderer.render() callback or read on next tick
+                requestAnimationFrame(() => {
+                  try {
+                    const width = renderer.domElement.width;
+                    const height = renderer.domElement.height;
+                    
+                    console.log(`📸 Capturing frame: ${width}x${height}`);
+                    
+                    const pixelData = new Uint8Array(width * height * 4);
+                    
+                    // Read the entire framebuffer
+                    gl.readPixels(
+                      0,
+                      0,
+                      width,
+                      height,
+                      gl.RGBA,
+                      gl.UNSIGNED_BYTE,
+                      pixelData
+                    );
+
+                    // Check if we got any non-black pixels
+                    let hasColor = false;
+                    for (let i = 0; i < pixelData.length; i += 4) {
+                      if (pixelData[i] > 0 || pixelData[i + 1] > 0 || pixelData[i + 2] > 0) {
+                        hasColor = true;
+                        break;
+                      }
+                    }
+                    console.log(`🎨 Has visible pixels: ${hasColor}`);
+                    
+                    // Downsample
+                    const percentage = options?.downsamplePercentage ?? 50;
+                    const rgbData = downsamplePixels(
+                      pixelData,
+                      width,
+                      height,
+                      percentage
+                    );
+                    
+                    // Read depth buffer
+                    const depthData = readDepthBuffer(
+                      gl,
+                      renderer,
+                      sceneEl,
+                      width,
+                      height,
+                      percentage
+                    );
+                    if (!depthData) {
+                    console.log(`Depth not captured`);
+                    }else{
+                    console.log(`Depth captured`);
+                    }
+                    // Save as PNG
+                    saveFrameDataJSON(rgbData, depthData, Math.floor(now));
+                  } catch (err) {
+                    console.error("[A-Frame Debug] Error capturing pixels:", err);
+                  }
+                });
+              }
+
               console.groupEnd();
             } catch (err) {
-              console.error('[A-Frame Debug] ❌ Error reading buffer info:', err);
+              console.error(
+                "[A-Frame Debug] ❌ Error reading buffer info:",
+                err
+              );
             }
           }
-          
+
           frameIdRef.current = requestAnimationFrame(loop);
         };
 
         frameIdRef.current = requestAnimationFrame(loop);
       };
 
-      // Start checking for renderer
       checkRenderer();
     };
 
-    // Start setup with a small delay to let aframe-react mount
     const timeoutId = setTimeout(setupDebug, 100);
     cleanupFnsRef.current.push(() => clearTimeout(timeoutId));
 
@@ -147,186 +168,383 @@ export const useFrameBuffer = (
         frameIdRef.current = null;
       }
       isInitializedRef.current = false;
-      
-      // Run all cleanup functions
-      cleanupFnsRef.current.forEach(fn => fn());
+
+      cleanupFnsRef.current.forEach((fn) => fn());
       cleanupFnsRef.current = [];
-      
-      console.log('[A-Frame Debug] ⏹️  Buffer monitoring stopped');
+
+      console.log("[A-Frame Debug] ℹ️  Buffer monitoring stopped");
     };
-  }, [options?.enabled, options?.logInterval, options?.logPixelData]);
+  }, [options?.enabled, options?.logInterval, options?.logPixelData, options?.downsamplePercentage]);
 };
 
-// ============================================
-// ALTERNATIVE: With manual scene query
-// ============================================
+// Fixed downsample function
+function downsamplePixels(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  percentage: number
+) {
+  const step = Math.max(1, Math.floor(100 / percentage));
+  const newWidth = Math.ceil(width / step);
+  const newHeight = Math.ceil(height / step);
+  
+  // Create flat array for downsampled data (RGBA format)
+  const downsampled = new Uint8Array(newWidth * newHeight * 4);
+  let writeIdx = 0;
 
-/**
- * Version that lets you pass a custom scene selector
- */
+  // Sample pixels with step
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const readIdx = (y * width + x) * 4;
+      downsampled[writeIdx++] = pixels[readIdx];     // R
+      downsampled[writeIdx++] = pixels[readIdx + 1]; // G
+      downsampled[writeIdx++] = pixels[readIdx + 2]; // B
+      downsampled[writeIdx++] = pixels[readIdx + 3]; // A
+    }
+  }
+
+  console.log(`🔽 Downsampled: ${width}x${height} -> ${newWidth}x${newHeight}`);
+
+  return { 
+    data: downsampled, 
+    width: newWidth, 
+    height: newHeight 
+  };
+}
+
+// Read depth buffer using a shader-based approach
+// Read depth buffer using a shader-based approach
+function readDepthBuffer(
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
+  renderer: any,
+  sceneEl: ASceneEl,
+  width: number,
+  height: number,
+  percentage: number
+) {
+  try {
+    const camera = sceneEl.camera;
+    const scene = sceneEl.object3D;
+    
+    if (!camera || !scene) {
+      console.warn("Camera or scene not available for depth reading");
+      return null;
+    }
+
+    const THREE = (window as any).THREE;
+    if (!THREE) {
+      console.warn("THREE.js not available on window");
+      return null;
+    }
+
+    // CRITICAL: Force complete matrix update BEFORE we check positions
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    
+    // Force camera to recalculate projection matrix
+    if (camera.updateProjectionMatrix) {
+      camera.updateProjectionMatrix();
+    }
+
+    // Debug camera settings
+    const near = (camera as any).near || 0.1;
+    const far = (camera as any).far || 1000;
+    const cameraWorldPos = new THREE.Vector3();
+    camera.getWorldPosition(cameraWorldPos);
+    const cameraWorldDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraWorldDir);
+    
+    console.log(`📷 Camera near: ${near}, far: ${far}`);
+    console.log(`📷 Camera world position:`, cameraWorldPos);
+    console.log(`📷 Camera world direction:`, cameraWorldDir);
+
+    // Create a custom shader material to visualize depth
+    const depthMaterial = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying float vDepth;
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vDepth = -mvPosition.z;
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying float vDepth;
+        uniform float near;
+        uniform float far;
+        
+        void main() {
+          // Normalize depth to 0-1 range
+          float depth = (vDepth - near) / (far - near);
+          depth = clamp(depth, 0.0, 1.0);
+          gl_FragColor = vec4(vec3(depth), 1.0);
+        }
+      `,
+      uniforms: {
+        near: { value: near },
+        far: { value: far }
+      },
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true
+    });
+    
+    // Store original materials
+    const originalMaterials = new Map();
+    let meshCount = 0;
+    
+    scene.traverse((obj: any) => {
+      if (obj.isMesh) {
+        // Force update this mesh's world matrix
+        obj.updateMatrixWorld(true);
+        
+        originalMaterials.set(obj, obj.material);
+        
+        // Debug mesh properties
+        const worldPos = new THREE.Vector3();
+        obj.getWorldPosition(worldPos);
+        
+        // Calculate if object is in front of camera
+        const toObject = worldPos.clone().sub(cameraWorldPos);
+        const dotProduct = toObject.dot(cameraWorldDir);
+        const distance = worldPos.distanceTo(cameraWorldPos);
+        
+        console.log(`  - Mesh: ${obj.name || 'unnamed'}, geometry: ${obj.geometry?.type}`);
+        console.log(`    world position:`, worldPos);
+        console.log(`    distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`);
+        console.log(`    vertices: ${obj.geometry?.attributes?.position?.count || 0}`);
+        
+        // Apply depth material
+        obj.material = depthMaterial;
+        obj.material.needsUpdate = true;
+        meshCount++;
+      }
+    });
+    console.log(`🎯 Processing ${meshCount} meshes for depth`);
+
+    // Create render target
+    const depthTarget = new THREE.WebGLRenderTarget(width, height, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      format: THREE.RGBAFormat,
+      type: THREE.UnsignedByteType
+    });
+
+    // Render with depth shader
+    const originalTarget = renderer.getRenderTarget();
+    const originalAutoClear = renderer.autoClear;
+    
+    renderer.autoClear = false;
+    renderer.setRenderTarget(depthTarget);
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear(true, true, true);
+    
+    // Ensure matrices are still valid before render
+    camera.updateMatrixWorld(true);
+    scene.updateMatrixWorld(true);
+    
+    // Render the scene
+    renderer.render(scene, camera);
+    
+    // Restore renderer state
+    renderer.setRenderTarget(originalTarget);
+    renderer.autoClear = originalAutoClear;
+
+    // Restore materials
+    originalMaterials.forEach((material, obj) => {
+      obj.material = material;
+      obj.material.needsUpdate = true;
+    });
+
+    // Read pixels
+    const depthPixels = new Uint8Array(width * height * 4);
+    renderer.readRenderTargetPixels(depthTarget, 0, 0, width, height, depthPixels);
+
+    // Check depth data with diagnostics
+    let minVal = 255, maxVal = 0, nonZeroCount = 0;
+    let sampleValues: number[] = [];
+    
+    for (let i = 0; i < depthPixels.length; i += 4) {
+      const val = depthPixels[i];
+      if (val > 0) nonZeroCount++;
+      if (val < minVal) minVal = val;
+      if (val > maxVal) maxVal = val;
+      
+      if (sampleValues.length < 10 && val > 0) {
+        sampleValues.push(val);
+      }
+    }
+    
+    console.log(`📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height} (${(nonZeroCount/(width*height)*100).toFixed(2)}%)`);
+    
+    if (sampleValues.length > 0) {
+      console.log(`📊 Sample depth values:`, sampleValues);
+    } else {
+      console.warn(`⚠️ WARNING: No depth data captured!`);
+      console.warn(`⚠️ This usually means objects are behind the camera or outside frustum`);
+      
+      // Sample center pixel
+      const centerX = Math.floor(width / 2);
+      const centerY = Math.floor(height / 2);
+      const centerIdx = (centerY * width + centerX) * 4;
+      console.log(`📊 Center pixel RGBA:`, [
+        depthPixels[centerIdx],
+        depthPixels[centerIdx + 1],
+        depthPixels[centerIdx + 2],
+        depthPixels[centerIdx + 3]
+      ]);
+    }
+
+    // Clean up
+    depthTarget.dispose();
+    depthMaterial.dispose();
+
+    // Downsample
+    const step = Math.max(1, Math.floor(100 / percentage));
+    const newWidth = Math.ceil(width / step);
+    const newHeight = Math.ceil(height / step);
+    const grayscaleDepth = new Uint8Array(newWidth * newHeight);
+    
+    let writeIdx = 0;
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const idx = (y * width + x) * 4;
+        grayscaleDepth[writeIdx++] = depthPixels[idx];
+      }
+    }
+
+    console.log(`🔍 Depth buffer captured: ${newWidth}x${newHeight}`);
+    
+    return {
+      data: grayscaleDepth,
+      width: newWidth,
+      height: newHeight
+    };
+
+  } catch (err) {
+    console.error("Error reading depth buffer:", err);
+    return null;
+  }
+}
+
+let frameCounter = 0;
+
+function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
+  frameCounter++;
+  
+  // Save only every 20th frame
+  if (frameCounter % 10 !== 0) return;
+
+  const savedCount = Math.floor(frameCounter / 20);
+  console.log(`✅ [Saving] Frame #${savedCount} (total processed: ${frameCounter})`);
+  
+  saveRGBImage(rgbData, frameIndex, savedCount);
+  if (depthData) {
+    saveDepthImage(depthData, frameIndex, savedCount);
+  }
+}
+
+// Fixed RGB image saving with Y-flip
+function saveRGBImage(rgbData: any, frameIndex: number, savedCount: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = rgbData.width;
+  canvas.height = rgbData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const imgData = ctx.createImageData(canvas.width, canvas.height);
+  
+  // CRITICAL FIX: Flip Y-axis while copying data
+  // WebGL has origin at bottom-left, canvas at top-left
+  for (let y = 0; y < rgbData.height; y++) {
+    for (let x = 0; x < rgbData.width; x++) {
+      // Source index (from WebGL, bottom-up)
+      const srcIdx = (y * rgbData.width + x) * 4;
+      
+      // Destination index (for canvas, top-down) - flip Y
+      const dstY = rgbData.height - 1 - y;
+      const dstIdx = (dstY * rgbData.width + x) * 4;
+      
+      imgData.data[dstIdx] = rgbData.data[srcIdx];         // R
+      imgData.data[dstIdx + 1] = rgbData.data[srcIdx + 1]; // G
+      imgData.data[dstIdx + 2] = rgbData.data[srcIdx + 2]; // B
+      imgData.data[dstIdx + 3] = rgbData.data[srcIdx + 3]; // A
+    }
+  }
+  
+  ctx.putImageData(imgData, 0, 0);
+  
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `frame_${savedCount}_${frameIndex}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      console.log(`✅ RGB image saved: frame_${savedCount}_${frameIndex}.png`);
+    }
+  });
+}
+
+// Save depth data as grayscale PNG
+function saveDepthImage(depthData: any, frameIndex: number, savedCount: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = depthData.width;
+  canvas.height = depthData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const imgData = ctx.createImageData(canvas.width, canvas.height);
+  
+  for (let y = 0; y < depthData.height; y++) {
+    for (let x = 0; x < depthData.width; x++) {
+      const srcIdx = y * depthData.width + x;
+      const dstY = depthData.height - 1 - y;
+      const dstIdx = (dstY * depthData.width + x) * 4;
+      
+      const depth = depthData.data[srcIdx];
+      imgData.data[dstIdx] = depth;
+      imgData.data[dstIdx + 1] = depth;
+      imgData.data[dstIdx + 2] = depth;
+      imgData.data[dstIdx + 3] = 255;
+    }
+  }
+  
+  ctx.putImageData(imgData, 0, 0);
+  
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `frame_${savedCount}_${frameIndex}_depth.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      console.log(`✅ Depth image saved: frame_${savedCount}_${frameIndex}_depth.png`);
+    }
+  });
+}
+
+// Export other versions for compatibility
 export const useFrameBufferWithSelector = (
-  selector: string = 'a-scene',
+  selector: string = "a-scene",
   options?: {
     enabled?: boolean;
     logInterval?: number;
     logPixelData?: boolean;
   }
 ) => {
-  const frameIdRef = useRef<number | null>(null);
-  const isInitializedRef = useRef(false);
-
-  useEffect(() => {
-    if (options?.enabled === false) return;
-
-    const LOG_INTERVAL = options?.logInterval ?? 2000;
-    const LOG_PIXEL_DATA = options?.logPixelData ?? false;
-
-    const setupDebug = () => {
-      if (isInitializedRef.current) return;
-
-      const sceneEl = document.querySelector(selector) as ASceneEl;
-      
-      if (!sceneEl) {
-        console.warn(`[A-Frame Debug] Scene element "${selector}" not found, retrying...`);
-        setTimeout(setupDebug, 200);
-        return;
-      }
-
-      const checkRenderer = () => {
-        const renderer = (sceneEl as any).renderer;
-        
-        if (!renderer) {
-          setTimeout(checkRenderer, 200);
-          return;
-        }
-
-        const gl = renderer.getContext() as WebGLRenderingContext;
-        if (!gl) {
-          console.error('[A-Frame Debug] WebGL context not available');
-          return;
-        }
-
-        isInitializedRef.current = true;
-        console.log(`[A-Frame Debug] ✓ Monitoring "${selector}"`);
-
-        let lastLog = 0;
-
-        const loop = () => {
-          const now = performance.now();
-          
-          if (now - lastLog > LOG_INTERVAL) {
-            lastLog = now;
-            
-            try {
-              const r = gl.getParameter(gl.RED_BITS);
-              const g = gl.getParameter(gl.GREEN_BITS);
-              const b = gl.getParameter(gl.BLUE_BITS);
-              const a = gl.getParameter(gl.ALPHA_BITS);
-              const depth = gl.getParameter(gl.DEPTH_BITS);
-              
-              const width = renderer.domElement.width;
-              const height = renderer.domElement.height;
-              
-              console.group('[A-Frame Debug] 🎨 Buffer Info');
-              console.log(`Color: R:${r} G:${g} B:${b} A:${a} | Depth: ${depth} bits`);
-              console.log(`Canvas: ${width}x${height}`);
-              
-              if (LOG_PIXEL_DATA) {
-                const centerX = Math.floor(width / 2);
-                const centerY = Math.floor(height / 2);
-                const pixel = new Uint8Array(4);
-                gl.readPixels(centerX, centerY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-                console.log(`Center pixel: [${Array.from(pixel).join(', ')}]`);
-              }
-              
-              console.groupEnd();
-            } catch (err) {
-              console.error('[A-Frame Debug] Error:', err);
-            }
-          }
-          
-          frameIdRef.current = requestAnimationFrame(loop);
-        };
-
-        frameIdRef.current = requestAnimationFrame(loop);
-      };
-
-      checkRenderer();
-    };
-
-    const timeoutId = setTimeout(setupDebug, 100);
-
-    return () => {
-      if (frameIdRef.current !== null) {
-        cancelAnimationFrame(frameIdRef.current);
-        frameIdRef.current = null;
-      }
-      clearTimeout(timeoutId);
-      isInitializedRef.current = false;
-    };
-  }, [selector, options?.enabled, options?.logInterval, options?.logPixelData]);
+  useFrameBuffer({ ...options });
 };
 
-// ============================================
-// DEVELOPMENT-ONLY VERSION
-// ============================================
-
-/**
- * Only enables buffer debugging in development mode.
- * Safe to leave in production code.
- */
-export const useFrameBufferDev = (
-  options?: {
-    logInterval?: number;
-    logPixelData?: boolean;
-  }
-) => {
-  const isDev = process.env.NODE_ENV === 'development';
-  
+export const useFrameBufferDev = (options?: {
+  logInterval?: number;
+  logPixelData?: boolean;
+}) => {
+  const isDev = process.env.NODE_ENV === "development";
   useFrameBuffer({
     ...options,
-    enabled: isDev
+    enabled: isDev,
   });
 };
-
-// ============================================
-// USAGE EXAMPLES
-// ============================================
-
-/*
-// Example 1: Simple usage (no ref needed!)
-import { useFrameBuffer } from './useFrameBuffer';
-
-function BuilderPage() {
-  useFrameBuffer();
-  
-  return (
-    <Scene embedded>
-      <Entity primitive="a-box" />
-    </Scene>
-  );
-}
-
-// Example 2: Development only (recommended)
-import { useFrameBufferDev } from './useFrameBuffer';
-
-function BuilderPage() {
-  useFrameBufferDev({
-    logInterval: 3000,
-    logPixelData: true
-  });
-  
-  return <Scene embedded>...</Scene>;
-}
-
-// Example 3: Custom selector
-import { useFrameBufferWithSelector } from './useFrameBuffer';
-
-function BuilderPage() {
-  useFrameBufferWithSelector('#my-scene', {
-    enabled: true
-  });
-  
-  return <Scene id="my-scene">...</Scene>;
-}
-*/

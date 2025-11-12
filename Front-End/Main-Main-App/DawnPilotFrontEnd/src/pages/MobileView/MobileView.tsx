@@ -12,7 +12,8 @@ function MobileView() {
   // Enable buffer debugging (only in development)
   useFrameBuffer({
     logInterval: 3000,      // Log every 3 seconds
-    logPixelData: false     // Set to true to sample center pixel color
+    logPixelData: true,
+    downsamplePercentage: 50     // Set to true to sample center pixel color
   });
 
   const {
