@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import os from 'os';
 import bodyParser from 'body-parser';
 import { scenarioRouter } from './routes/scenarioRouter';
 import { addCube, removeCube, getWorld, saveWorld, reloadWorld, updateCube } from './world_Manager';
@@ -60,6 +61,26 @@ app.post('/api/world/reload', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`✅ Backend running at http://localhost:${PORT}`);
+// app.listen(PORT, () => {
+//   console.log(`✅ Backend running at http://localhost:${PORT}`);
+// });
+
+app.listen(PORT, '0.0.0.0', () => {
+  // Get local IPs
+  const nets = os.networkInterfaces();
+  const results: string[] = [];
+
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]!) {
+      // Only IPv4 and non-internal (not localhost)
+      if (net.family === 'IPv4' && !net.internal) {
+        results.push(net.address);
+      }
+    }
+  }
+
+  // Log all available local IPs
+  results.forEach(ip => {
+    console.log(`✅ Backend running at http://${ip}:${PORT}`);
+  });
 });

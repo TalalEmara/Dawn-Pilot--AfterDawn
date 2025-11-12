@@ -252,7 +252,7 @@ function readDepthBuffer(
     
     // CRITICAL FIX: Use a reasonable far plane for depth visualization
     // Instead of 10000, use something closer to actual scene scale (e.g., 50)
-    const visualizationFar = 50; // Adjust this based on your scene size
+    const visualizationFar = 10; // Adjust this based on your scene size
     
     const cameraWorldPos = new THREE.Vector3();
     camera.getWorldPosition(cameraWorldPos);
@@ -526,6 +526,7 @@ function saveDepthImage(depthData: any, frameIndex: number, savedCount: number) 
       link.href = url;
       link.download = `frame_${savedCount}_${frameIndex}_depth.png`;
       link.click();
+      console.log(`Depth image download link prepared`);
       URL.revokeObjectURL(url);
       console.log(`✅ Depth image saved: frame_${savedCount}_${frameIndex}_depth.png`);
     }
