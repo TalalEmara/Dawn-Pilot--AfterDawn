@@ -8,6 +8,20 @@ type ASceneEl = HTMLElement & {
   camera?: THREE.Camera;
   object3D?: THREE.Scene;
 };
+let folderHandle: FileSystemDirectoryHandle | null = null;
+
+async function getFolderHandle() {
+  if (folderHandle) return folderHandle;
+
+  try {
+    folderHandle = await (window as any).showDirectoryPicker();
+    console.log("✅ Folder selected:", folderHandle.name);
+  } catch (err) {
+    console.warn("⚠️ Folder not selected or access denied", err);
+    folderHandle = null;
+  }
+  return folderHandle;
+}
 
 export const useFrameBuffer = (options?: {
   enabled?: boolean;
@@ -451,7 +465,7 @@ function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
 }
 
 // Fixed RGB image saving with Y-flip
-function saveRGBImage(rgbData: any, frameIndex: number, savedCount: number) {
+async function saveRGBImage(rgbData: any, frameIndex: number, savedCount: number) {
   const canvas = document.createElement("canvas");
   canvas.width = rgbData.width;
   canvas.height = rgbData.height;
@@ -480,21 +494,23 @@ function saveRGBImage(rgbData: any, frameIndex: number, savedCount: number) {
   
   ctx.putImageData(imgData, 0, 0);
   
-  canvas.toBlob((blob) => {
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `frame_${savedCount}_${frameIndex}.png`;
-      link.click();
-      URL.revokeObjectURL(url);
-      console.log(`✅ RGB image saved: frame_${savedCount}_${frameIndex}.png`);
-    }
-  });
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b))
+  );
+  if (!blob) return;
+
+  const folder = await getFolderHandle();
+  if (!folder) return;
+
+  const fileHandle = await folder.getFileHandle(`frame_${savedCount}_${frameIndex}.png`, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  console.log(`✅ RGB image saved to folder: frame_${savedCount}_${frameIndex}.png`);
 }
 
 // Save depth data as grayscale PNG
-function saveDepthImage(depthData: any, frameIndex: number, savedCount: number) {
+async function saveDepthImage(depthData: any, frameIndex: number, savedCount: number) {
   const canvas = document.createElement("canvas");
   canvas.width = depthData.width;
   canvas.height = depthData.height;
@@ -519,18 +535,19 @@ function saveDepthImage(depthData: any, frameIndex: number, savedCount: number) 
   
   ctx.putImageData(imgData, 0, 0);
   
-  canvas.toBlob((blob) => {
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `frame_${savedCount}_${frameIndex}_depth.png`;
-      link.click();
-      console.log(`Depth image download link prepared`);
-      URL.revokeObjectURL(url);
-      console.log(`✅ Depth image saved: frame_${savedCount}_${frameIndex}_depth.png`);
-    }
-  });
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b))
+  );
+  if (!blob) return;
+
+  const folder = await getFolderHandle();
+  if (!folder) return;
+
+  const fileHandle = await folder.getFileHandle(`frame_${savedCount}_${frameIndex}_depth.png`, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  console.log(`✅ Depth image saved to folder: frame_${savedCount}_${frameIndex}_depth.png`);
 }
 
 // Export other versions for compatibility

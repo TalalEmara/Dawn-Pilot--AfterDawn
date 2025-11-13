@@ -11,7 +11,7 @@ import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 function MobileView() {
   // Enable buffer debugging (only in development)
   useFrameBuffer({
-    logInterval: 1000,      // Log every 3 seconds
+    logInterval: 50,      // Log every 3 seconds
     logPixelData: true,
     downsamplePercentage: 50     // Set to true to sample center pixel color
   });
@@ -37,8 +37,20 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
 
+    function getFolderHandle() {
+        throw new Error('Function not implemented.');
+    }
+
   return (
+    
     <div style={{ background: "Black", width: "100vw", height: "100vh" }}>
+      <button
+            onClick={async () => {
+                await getFolderHandle();
+            }}
+            >
+            Select Folder to Save Frames
+            </button>
       <Scene
         embedded
         vr-mode-ui="enabled: true"
