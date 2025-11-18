@@ -1,0 +1,241 @@
+{
+  "info": {
+    "name": "AfterDawn",
+    "description": "AfterDawn API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "test",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/test",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "test"
+          ]
+        }
+      }
+    },
+    {
+      "name": "All models",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/models",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "models"
+          ]
+        }
+      }
+    },
+    {
+      "name": "new scenario",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/scenario-worlds",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "scenario-worlds"
+          ]
+        }
+      }
+    },
+    {
+      "name": "current scenario",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/scenario-world",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "scenario-world"
+          ]
+        }
+      }
+    },
+    {
+      "name": "create entity from model",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"modelName\": \"Box\",\n  \"overrides\": {\n    \"Position\": { \"x\": 0, \"y\": 2, \"z\": -6},\n    \"Scale\": {\"x\":2, \"y\": 5, \"z\": 3},\n    \"Color\": { \"value\": \"#FF0000\" }\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/scenario/entities/from-model",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "entities",
+            "from-model"
+          ]
+        }
+      }
+    },
+    {
+      "name": "create object",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"cube\",\n  \"position\": { \"x\": 1, \"y\": 2, \"z\": 3 },\n  \"rotation\": { \"x\": 2, \"y\": 90, \"z\": 0 },\n  \"color\": \"#00FF00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/scenario/objects",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "objects"
+          ]
+        }
+      }
+    },
+    {
+      "name": "get all objects",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/objects",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "objects"
+          ]
+        }
+      }
+    },
+    {
+      "name": "create entity",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"components\": {\n    \"Position\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n    \"Rotation\": { \"x\": 0, \"y\": 0, \"z\": 0 },\n    \"Color\": { \"value\": \"#00FF00\" }\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/scenario/entities",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "entities"
+          ]
+        }
+      }
+    },
+    {
+      "name": "get entity by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/entities/entity-1762009873024-66z0enqpb?entityId=\"entity-1762009873024-66z0enqpb\"",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "entities",
+            "entity-1762009873024-66z0enqpb"
+          ],
+          "query": [
+            {
+              "key": "entityId",
+              "value": "\"entity-1762009873024-66z0enqpb\""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "delete entity by ID",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/scenario/entities/entity-1762009873024-66z0enqpb?entityId=\"entity-1762009873024-66z0enqpb\"",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "scenario",
+            "entities",
+            "entity-1762009873024-66z0enqpb"
+          ],
+          "query": [
+            {
+              "key": "entityId",
+              "value": "\"entity-1762009873024-66z0enqpb\""
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

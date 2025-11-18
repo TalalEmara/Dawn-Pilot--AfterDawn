@@ -147,7 +147,8 @@ export const useFrameBuffer = (options?: {
                     }else{
                     console.log(`Depth captured`);
                     }
-                    // Save as PNG
+                    // Save as PNG and send to FastAPI
+                    console.log(`📦 Processing frame #${frameCounter + 1}`);
                     saveFrameDataJSON(rgbData, depthData, Math.floor(now));
                   } catch (err) {
                     console.error("[A-Frame Debug] Error capturing pixels:", err);
@@ -449,15 +450,122 @@ function readDepthBuffer(
 }
 let frameCounter = 0;
 
+// Send frame data to FastAPI for phosphene processing
+async function sendToFastAPI(rgbData: any, depthData: any) {
+  try {
+    // Convert RGB data to base64 PNG
+    const rgbCanvas = document.createElement("canvas");
+    rgbCanvas.width = rgbData.width;
+    rgbCanvas.height = rgbData.height;
+    const rgbCtx = rgbCanvas.getContext("2d");
+    if (!rgbCtx) return null;
+
+    const rgbImgData = rgbCtx.createImageData(rgbCanvas.width, rgbCanvas.height);
+    for (let y = 0; y < rgbData.height; y++) {
+      for (let x = 0; x < rgbData.width; x++) {
+        const srcIdx = (y * rgbData.width + x) * 4;
+        const dstY = rgbData.height - 1 - y;
+        const dstIdx = (dstY * rgbData.width + x) * 4;
+        rgbImgData.data[dstIdx] = rgbData.data[srcIdx];
+        rgbImgData.data[dstIdx + 1] = rgbData.data[srcIdx + 1];
+        rgbImgData.data[dstIdx + 2] = rgbData.data[srcIdx + 2];
+        rgbImgData.data[dstIdx + 3] = rgbData.data[srcIdx + 3];
+      }
+    }
+    rgbCtx.putImageData(rgbImgData, 0, 0);
+    const imageBase64 = rgbCanvas.toDataURL("image/png");
+    
+    // Log RGB image info
+    console.log(`📤 [SEND] RGB Image: ${rgbCanvas.width}x${rgbCanvas.height}, base64 length: ${imageBase64.length}, prefix: ${imageBase64.substring(0, 30)}`);
+
+    // Convert depth data to base64 PNG
+    let depthBase64 = "";
+    if (depthData) {
+      const depthCanvas = document.createElement("canvas");
+      depthCanvas.width = depthData.width;
+      depthCanvas.height = depthData.height;
+      const depthCtx = depthCanvas.getContext("2d");
+      if (!depthCtx) return null;
+
+      const depthImgData = depthCtx.createImageData(depthCanvas.width, depthCanvas.height);
+      for (let y = 0; y < depthData.height; y++) {
+        for (let x = 0; x < depthData.width; x++) {
+          const srcIdx = y * depthData.width + x;
+          const dstY = depthData.height - 1 - y;
+          const dstIdx = (dstY * depthData.width + x) * 4;
+          const depth = depthData.data[srcIdx];
+          depthImgData.data[dstIdx] = depth;
+          depthImgData.data[dstIdx + 1] = depth;
+          depthImgData.data[dstIdx + 2] = depth;
+          depthImgData.data[dstIdx + 3] = 255;
+        }
+      }
+      depthCtx.putImageData(depthImgData, 0, 0);
+      depthBase64 = depthCanvas.toDataURL("image/png");
+      
+      // Log depth image info
+      console.log(`📤 [SEND] Depth Image: ${depthCanvas.width}x${depthCanvas.height}, base64 length: ${depthBase64.length}, prefix: ${depthBase64.substring(0, 30)}`);
+    }
+
+    // Call FastAPI
+    const response = await fetch("http://localhost:8000/api/process-with-depth", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        depth_map_base64: depthBase64,
+        depth_sampling: "median",
+        conf_threshold: 0.1,  // Lowered from 0.5 to detect more objects
+        t_min: 0.1,
+        k_min: 1,
+        k_max: 5,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`FastAPI error: ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log(`🔮 FastAPI response:`, {
+      detections: result.metadata.detection_count,
+      withDepth: result.metadata.depth_assigned_count,
+      processingTime: result.metadata.timing_breakdown.total_ms,
+    });
+
+    return result;
+  } catch (err) {
+    console.error("FastAPI call failed:", err);
+    return null;
+  }
+}
+
 function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
   frameCounter++;
   
-  // Save only every 20th frame
-  if (frameCounter % 10 !== 0) return;
+  console.log(`📦 Frame counter: ${frameCounter}, condition check: ${frameCounter % 10}`);
+  
+  // Save only every 10th frame
+  if (frameCounter % 10 !== 0) {
+    console.log(`⏭️ Skipping frame ${frameCounter} (not a multiple of 10)`);
+    return;
+  }
 
-  const savedCount = Math.floor(frameCounter / 20);
+  const savedCount = Math.floor(frameCounter / 10);
   console.log(`✅ [Saving] Frame #${savedCount} (total processed: ${frameCounter})`);
   
+  // Send to FastAPI for processing
+  sendToFastAPI(rgbData, depthData).then((result) => {
+    if (result && result.phosphene_image) {
+      // Save the phosphene output image
+      savePhospheneImage(result.phosphene_image, frameIndex, savedCount);
+    }
+  });
+  
+  // Also save original frames
   saveRGBImage(rgbData, frameIndex, savedCount);
   if (depthData) {
     saveDepthImage(depthData, frameIndex, savedCount);
@@ -548,6 +656,31 @@ async function saveDepthImage(depthData: any, frameIndex: number, savedCount: nu
   await writable.write(blob);
   await writable.close();
   console.log(`✅ Depth image saved to folder: frame_${savedCount}_${frameIndex}_depth.png`);
+}
+
+// Save phosphene processed image from FastAPI
+async function savePhospheneImage(phospheneBase64: string, frameIndex: number, savedCount: number) {
+  try {
+    // Convert base64 to blob
+    const base64Data = phospheneBase64.split(',')[1] || phospheneBase64;
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'image/png' });
+
+    const folder = await getFolderHandle();
+    if (!folder) return;
+
+    const fileHandle = await folder.getFileHandle(`frame_${savedCount}_${frameIndex}_phosphene.png`, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    console.log(`✅ Phosphene image saved to folder: frame_${savedCount}_${frameIndex}_phosphene.png`);
+  } catch (err) {
+    console.error("Error saving phosphene image:", err);
+  }
 }
 
 // Export other versions for compatibility

@@ -11,7 +11,7 @@ import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 function MobileView() {
   // Enable buffer debugging (only in development)
   useFrameBuffer({
-    logInterval: 50,      // Log every 3 seconds
+    logInterval: 1000,      // Log every 5 seconds
     logPixelData: true,
     downsamplePercentage: 50     // Set to true to sample center pixel color
   });
@@ -98,14 +98,15 @@ function MobileView() {
             );
           }
 
+          // GLTF Model entity
+          console.log("Rendering GLTF model: /car.glb");
           return (
             <Entity
               key={e.id}
-              gltfModel={url}
+              gltf-model="/car.glb"
               position={`${pos.x} ${pos.y} ${pos.z}`}
               rotation={`${rot.x} ${rot.y} ${rot.z}`}
               scale={`${scl.x} ${scl.y} ${scl.z}`}
-              material={`color: ${color}`}
             />
           );
         })}

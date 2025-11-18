@@ -446,18 +446,22 @@ app.add_middleware(
 def decode_base64_image(base64_string: str) -> np.ndarray:
     """Decode base64 string to OpenCV image"""
     try:
+        logger.info(f"📥 [RECEIVE] RGB base64 length: {len(base64_string)}, prefix: {base64_string[:30]}")
+        
         # Remove data URL prefix if present
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
         # Decode base64
         img_data = base64.b64decode(base64_string)
+        logger.info(f"📥 [DECODE] RGB bytes length: {len(img_data)}")
         
         # Convert to numpy array
         nparr = np.frombuffer(img_data, np.uint8)
         
         # Decode image
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        logger.info(f"📥 [IMAGE] RGB decoded: {img.shape if img is not None else 'FAILED'}, dtype: {img.dtype if img is not None else 'N/A'}")
         
         if img is None:
             raise ValueError("Failed to decode image")
@@ -484,17 +488,27 @@ def decode_depth_map(depth_base64: str) -> np.ndarray:
         2D numpy array of depth values in meters
     """
     try:
+        logger.info(f"📥 [RECEIVE] Depth base64 length: {len(depth_base64)}, prefix: {depth_base64[:30]}")
+        
         # Remove data URL prefix if present
         if ',' in depth_base64:
             depth_base64 = depth_base64.split(',')[1]
         
         depth_data = base64.b64decode(depth_base64)
+        logger.info(f"📥 [DECODE] Depth bytes length: {len(depth_data)}")
         
         # Try to decode as image first (PNG, JPEG, EXR)
         nparr = np.frombuffer(depth_data, np.uint8)
         depth_map = cv2.imdecode(nparr, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_GRAYSCALE)
         
         if depth_map is not None:
+            logger.info(f"📥 [IMAGE] Depth decoded as image: {depth_map.shape}, dtype: {depth_map.dtype}")
+            
+            # Log depth statistics
+            non_zero_count = np.count_nonzero(depth_map)
+            total_pixels = depth_map.size
+            logger.info(f"📊 [DEPTH STATS] Non-zero pixels: {non_zero_count}/{total_pixels} ({100*non_zero_count/total_pixels:.1f}%), min: {depth_map.min()}, max: {depth_map.max()}, mean: {depth_map[depth_map>0].mean() if non_zero_count > 0 else 0:.2f}")
+            
             # Convert to float32
             depth_map = depth_map.astype(np.float32)
             
@@ -517,6 +531,46 @@ def decode_depth_map(depth_base64: str) -> np.ndarray:
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid depth map data: {str(e)}")
+
+
+def save_debug_images(frame: np.ndarray, depth_map: np.ndarray, phosphene_image: np.ndarray, timestamp: str):
+    """
+    Save RGB, depth, and phosphene images for debugging
+    
+    Args:
+        frame: RGB image (BGR format from OpenCV)
+        depth_map: Depth map (grayscale or float)
+        phosphene_image: Processed phosphene output
+        timestamp: Timestamp string for filename
+    """
+    try:
+        # Create output directory if it doesn't exist
+        output_dir = os.path.join(os.path.dirname(__file__), "api_output", "debug_frames")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save RGB image (before processing)
+        rgb_path = os.path.join(output_dir, f"rgb_before_{timestamp}.png")
+        cv2.imwrite(rgb_path, frame)
+        logger.info(f"💾 Saved RGB (before): {rgb_path}")
+        
+        # Save depth map (before processing)
+        if depth_map is not None:
+            depth_path = os.path.join(output_dir, f"depth_before_{timestamp}.png")
+            # Normalize depth for visualization
+            depth_vis = cv2.normalize(depth_map, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            cv2.imwrite(depth_path, depth_vis)
+            logger.info(f"💾 Saved Depth (before): {depth_path}")
+        
+        # Save phosphene image (after processing)
+        if phosphene_image is not None:
+            phosphene_path = os.path.join(output_dir, f"phosphene_after_{timestamp}.png")
+            cv2.imwrite(phosphene_path, phosphene_image)
+            logger.info(f"💾 Saved Phosphene (after): {phosphene_path}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to save debug images: {str(e)}")
+        return False
 
 
 def assign_depth_to_detections(
@@ -1149,6 +1203,9 @@ async def process_with_depth(
     try:
         total_start = time.time()
         
+        logger.info(f"🎬 [START] Processing frame with depth integration")
+        logger.info(f"📊 [REQUEST PARAMS] depth_sampling={request.depth_sampling}, conf_threshold={request.conf_threshold}, t_min={request.t_min}, k_min={request.k_min}, k_max={request.k_max}")
+        
         # Decode RGB image
         decode_start = time.time()
         frame = decode_base64_image(request.image_base64)
@@ -1158,6 +1215,9 @@ async def process_with_depth(
         depth_decode_start = time.time()
         depth_map = decode_depth_map(request.depth_map_base64)
         depth_decode_time = (time.time() - depth_decode_start) * 1000
+        
+        # Generate timestamp for this frame
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds
         
         # Ensure depth map matches image dimensions
         if len(depth_map.shape) == 1:
@@ -1184,8 +1244,15 @@ async def process_with_depth(
         if not detector_service.is_ready():
             raise HTTPException(status_code=503, detail="Detector not initialized")
         
-        detections = detector_service.detect(frame, conf_threshold=request.conf_threshold)
+        detections = detector_service.detect(frame)
         detection_time = (time.time() - detect_start) * 1000
+        
+        logger.info(f"🔍 YOLO Detection: Found {len(detections)} objects")
+        if len(detections) > 0:
+            for i, det in enumerate(detections[:3]):  # Log first 3 detections
+                logger.info(f"  Detection {i+1}: class={det.get('class')}, conf={det.get('confidence'):.2f}, bbox={det.get('bbox')}")
+        else:
+            logger.warning("⚠️ No objects detected by YOLO! Check if model is loaded correctly.")
         
         # Assign depth to detections
         depth_assign_start = time.time()
@@ -1215,20 +1282,38 @@ async def process_with_depth(
         if not translator_service.is_ready():
             raise HTTPException(status_code=503, detail="Translator not initialized")
         
-        phosphene_path = translator_service.translate(
+        h, w = frame.shape[:2]
+        phosphene_b64, selected_objects, translate_metadata = translator_service.translate(
             detections_with_depth,
+            image_width=w,
+            image_height=h,
             t_min=request.t_min,
             k_min=request.k_min,
             k_max=request.k_max
         )
         translation_time = (time.time() - translate_start) * 1000
         
-        # Encode phosphene image
-        encode_start = time.time()
-        with open(phosphene_path, 'rb') as f:
-            phosphene_b64 = base64.b64encode(f.read()).decode('utf-8')
-        encode_time = (time.time() - encode_start) * 1000
+        logger.info(f"🎨 Translation: Selected {len(selected_objects)} objects for phosphene display")
+        if len(selected_objects) > 0:
+            for i, obj in enumerate(selected_objects[:3]):
+                logger.info(f"  Selected {i+1}: class={obj.get('class')}, score={obj.get('score'):.2f}, distance={obj.get('distance_m')}")
+        else:
+            logger.warning("⚠️ No objects selected by translator! Check t_min threshold or detection confidence.")
         
+        # Decode phosphene image for saving
+        phosphene_image = None
+        if phosphene_b64:
+            try:
+                phosphene_bytes = base64.b64decode(phosphene_b64.split(',')[1] if ',' in phosphene_b64 else phosphene_b64)
+                phosphene_nparr = np.frombuffer(phosphene_bytes, np.uint8)
+                phosphene_image = cv2.imdecode(phosphene_nparr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                logger.error(f"Failed to decode phosphene image for saving: {e}")
+        
+        # Save debug images (before and after processing)
+        save_debug_images(frame, depth_map, phosphene_image, timestamp)
+        
+        # No need to encode again, already base64
         total_time = (time.time() - total_start) * 1000
         
         # Build response with detailed timing
@@ -1245,8 +1330,7 @@ async def process_with_depth(
                     "depth_decode_ms": round(depth_decode_time, 2),
                     "detection_ms": round(detection_time, 2),
                     "depth_assignment_ms": round(depth_assign_time, 2),
-                    "translation_ms": round(translation_time, 2),
-                    "encode_ms": round(encode_time, 2)
+                    "translation_ms": round(translation_time, 2)
                 }
             }
         }
