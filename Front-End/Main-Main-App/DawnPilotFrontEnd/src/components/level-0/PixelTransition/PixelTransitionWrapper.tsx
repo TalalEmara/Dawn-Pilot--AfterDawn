@@ -1,13 +1,14 @@
 import PixelTransition from "./PixelTransition";
 
 interface PixelTransitionWrapperProps {
+  label: string;
   image: string;
   className?: string;
   onClick?: () => void;
   children?: React.ReactNode;
 }
 
-function PixelTransitionWrapper({ image, className, onClick, children }: PixelTransitionWrapperProps) {
+function PixelTransitionWrapper({label, image, className, onClick, children }: PixelTransitionWrapperProps) {
   
   return (
     <div onClick={onClick}>
@@ -35,7 +36,7 @@ function PixelTransitionWrapper({ image, className, onClick, children }: PixelTr
               fontWeight: "bold",
             }}
           >
-            Car
+            {label}
           </div>
         }
         gridSize={12}
