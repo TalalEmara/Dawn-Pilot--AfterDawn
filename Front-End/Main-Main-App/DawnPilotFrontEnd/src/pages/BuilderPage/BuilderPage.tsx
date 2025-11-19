@@ -14,8 +14,10 @@ import { useModelLibrary } from '../../hooks/useModelLibrary';
 import PropertiesPanel from '../../components/level-1/PropertiesPanel/PropertiesPanel';
 import { useDebugAFrameBuffersDev } from '../../hooks/useDebugAFrameBuffers';
 // import { useAFrameSync } from '../../hooks/useAframeSync';
-
-const BuilderPage: React.FC = () => {
+interface BuilderPageProps {
+  onModelSelect: (modelName: string) => void;
+}
+const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
   // Enable buffer debugging (only in development, no ref needed!)
   // useDebugAFrameBuffersDev({
   //   logInterval: 30,      // Log every 3 seconds
@@ -131,7 +133,8 @@ const BuilderPage: React.FC = () => {
       addEntity: handleAddEntity,
       removeLastEntity: handleRemoveLastEntity,
       deleteEntity,
-      queryEntities
+      queryEntities,
+      onModelSelect
     }}>
         {/* <PropertiesPanel /> */}
       <div className={styles.BuilderPageContainer}>

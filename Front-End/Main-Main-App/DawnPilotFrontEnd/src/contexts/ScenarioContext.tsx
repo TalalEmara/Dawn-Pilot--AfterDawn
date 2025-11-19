@@ -6,17 +6,19 @@ interface ScenarioWorld {
   entities: Entity[];
 }
 
-interface ScenarioContextType {
-  world: ScenarioWorld;
+// In ScenarioContext.ts
+export interface ScenarioContextType {
+  world: World;
   models: ModelInfo[];
   loading: boolean;
   error: string | null;
-  loadWorld: () => Promise<any>;
+  loadWorld: () => Promise<void>;
   createNewWorld: () => Promise<void>;
   addEntity: (modelName: string, overrides?: Record<string, any>) => Promise<void>;
   removeLastEntity: () => Promise<void>;
-  deleteEntity: (entityId: string) => Promise<any>;
-  queryEntities: (componentNames: string[]) => Promise<Entity[]>;
+  deleteEntity: (entityId: string) => Promise<void>;
+  queryEntities: (query: any) => Promise<any>;
+  onModelSelect?: (modelName: string) => void; // Add this
 }
 
 const ScenarioContext = createContext<ScenarioContextType | undefined>(undefined);

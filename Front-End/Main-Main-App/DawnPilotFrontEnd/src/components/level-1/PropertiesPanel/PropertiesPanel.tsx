@@ -6,8 +6,10 @@ import { useCreateEntityFromModel } from "../../../hooks/ScenarioWorld/useCreate
 
 interface PropertiesPanelProps {
   modelName: string;
+  onClose: () => void; // ← ADD THIS
 }
-function PropertiesPanel({modelName}: PropertiesPanelProps) {
+
+function PropertiesPanel({ modelName, onClose }: PropertiesPanelProps) {
   const [values, setValues] = useState({
     Position: { x: 0, y: 0, z: 0 },
     Rotation: { x: 0, y: 0, z: 0 },
@@ -29,7 +31,13 @@ function PropertiesPanel({modelName}: PropertiesPanelProps) {
       {
         onSuccess: (data) => {
           console.log("✅ Entity created:", data.entity);
-          // alert(data.message);
+          // Reset and close on success
+          setValues({
+            Position: { x: 0, y: 0, z: 0 },
+            Rotation: { x: 0, y: 0, z: 0 },
+            Scale: { x: 1, y: 1, z: 1 },
+          });
+          onClose(); // ← ADD THIS
         },
         onError: (error: any) => {
           console.error("❌ Error creating entity:", error);
@@ -45,12 +53,16 @@ function PropertiesPanel({modelName}: PropertiesPanelProps) {
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
     });
-    console.log("Discarded");
+    onClose(); // ← ADD THIS
   };
 
   return (
     <div className={styles.panelContainer}>
-      <p className={styles.panelTitle}>Properties Panel</p>
+      {/* ← ADD THIS HEADER */}
+      <div className={styles.panelHeader}>
+        <p className={styles.panelTitle}>Add {modelName}</p>
+        <button className={styles.closeButton} onClick={onClose}>×</button>
+      </div>
 
       <ComponentInput
         type="Vector3"
@@ -75,13 +87,13 @@ function PropertiesPanel({modelName}: PropertiesPanelProps) {
 
       <div className={styles.buttonRow}>
         <DawnButton
-          label={createEntity.isPending ? "Applying..." : "Apply Changes"}
+          label={createEntity.isPending ? "Creating..." : "Create Entity"}
           onClick={handleApply}
           disabled={createEntity.isPending}
         />
         <DawnButton
           classType="secondary"
-          label="Discard"
+          label="Cancel"
           onClick={handleDiscard}
         />
       </div>

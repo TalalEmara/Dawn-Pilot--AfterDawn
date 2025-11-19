@@ -1,3 +1,17 @@
+.panelHeader{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1vh;
+}
+.closeButton{
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--background-color);
+    background-color: transparent;
+}
 .panelContainer{
     position: absolute;
     z-index: 1000;

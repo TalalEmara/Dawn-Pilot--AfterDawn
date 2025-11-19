@@ -1,11 +1,34 @@
+import { useContext } from 'react';
 import PixelTransitionWrapper from '../../level-0/PixelTransition/PixelTransitionWrapper';
 import styles from './BuilderSidePanel.module.css';
 import CarImg from '../../../assets/modelsImages/Car.jpg';
-import { useScenario } from '../../../contexts/ScenarioContext';
+import ScenarioContext, { useScenario } from '../../../contexts/ScenarioContext';
 import DawnButton from '../../level-0/DawnButton/DawnButton';
+/ Dynamically import ALL images from the modelsImages folder
+// This will automatically include any image you add to that folder!
+const imageModules = import.meta.glob<{ default: string }>(
+  '../../../assets/modelsImages/*.{jpg,jpeg,png,gif,webp}',
+  { eager: true }
+);
+
+// Convert the glob result to a more usable format
+// Key will be the filename (e.g., "Car", "Truck")
+const modelImages: Record<string, string> = {};
+for (const path in imageModules) {
+  // Extract filename without extension from path
+  // Example: '../../../assets/modelsImages/Car.jpg' -> 'Car'
+  const filename = path.split('/').pop()?.replace(/\.(jpg|jpeg|png|gif|webp)$/i, '') || '';
+  modelImages[filename] = imageModules[path].default;
+}
+// Fallback image - use the first available image or undefined
+const DEFAULT_MODEL_IMAGE = Object.values(modelImages)[0];
+const getModelImage = (modelName: string): string => {
+  return modelImages[modelName] || DEFAULT_MODEL_IMAGE;
+};
 
 function BuilderSidePanel() {
-  const { addEntity, models, loading } = useScenario();
+  // Use context instead of the hook
+  const { models, loading, error, onModelSelect } = useScenario();
 
   return (
     <aside className={styles.panel}>
@@ -13,27 +36,21 @@ function BuilderSidePanel() {
         <p className={styles.logo}>DawnPilot</p>
         <p className={styles.heading}>Models ({models.length})</p>
         
+        {loading && <p className={styles.loadingText}>Loading models...</p>}
+        {error && <p className={styles.errorText}>Error: {error}</p>}
+        
         <div className={styles.modelList}>
           {models.map((model) => (
             <PixelTransitionWrapper 
               key={model.name}
-              image={CarImg} 
+              image={getModelImage(model.name)}
               className={styles.modelCard}
-              onClick={() => addEntity(model.name, {
-                Position: { x: 0, y: 0.5, z: -4 },
-                Scale: { x: 0.06, y: 0.06, z: 0.06 }
-              })}
-            >
-              <div className={styles.modelCardContent}>
-                <span className={styles.modelName}>{model.name}</span>
-                {model.description && (
-                  <span className={styles.modelDescription}>{model.description}</span>
-                )}
-              </div>
-            </PixelTransitionWrapper>
+              onClick={() => onModelSelect?.(model.name)}
+              label={model.name}
+            />
           ))}
         </div>
-
+{/* 
         <div className={styles.modelInfo}>
           <p>Available Models:</p>
           <ul>
@@ -44,7 +61,7 @@ function BuilderSidePanel() {
               </li>
             ))}
           </ul>
-        </div>
+        </div> */}
 
         <div className={styles.buttonFooter}>
           <DawnButton 
