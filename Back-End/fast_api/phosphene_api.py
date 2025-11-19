@@ -336,6 +336,10 @@ class TranslatorService:
                     None,
                     self.output_dir
                 )
+                
+                # Ensure canvas_size matches input image (no scaling needed)
+                self.translator.params['canvas_size'] = [image_height, image_width]
+                logger.debug(f"📐 Translator initialized: input={image_width}x{image_height}, canvas_size={self.translator.params['canvas_size']}")
             else:
                 # Update bundle directly in memory (no file I/O)
                 self.translator.bundle = detection_data
@@ -344,6 +348,11 @@ class TranslatorService:
                 self.translator.input_width = image_width
                 self.translator.input_height = image_height
                 self.translator.canvas_size = (image_width, image_height)
+                
+                # CRITICAL: Update params canvas_size to match (format: [H, W])
+                self.translator.params['canvas_size'] = [image_height, image_width]
+                
+                logger.debug(f"📐 Translator dimensions updated: input={image_width}x{image_height}, canvas_size={self.translator.params['canvas_size']}")
             
             # Update threshold parameters
             self.translator.params['T_min'] = t_min
@@ -533,7 +542,7 @@ def decode_depth_map(depth_base64: str) -> np.ndarray:
         raise HTTPException(status_code=400, detail=f"Invalid depth map data: {str(e)}")
 
 
-def save_debug_images(frame: np.ndarray, depth_map: np.ndarray, phosphene_image: np.ndarray, timestamp: str):
+def save_debug_images(frame: np.ndarray, depth_map: np.ndarray, phosphene_image: np.ndarray, timestamp: str, detections: list = None):
     """
     Save RGB, depth, and phosphene images for debugging
     
@@ -542,6 +551,7 @@ def save_debug_images(frame: np.ndarray, depth_map: np.ndarray, phosphene_image:
         depth_map: Depth map (grayscale or float)
         phosphene_image: Processed phosphene output
         timestamp: Timestamp string for filename
+        detections: List of detections with bounding boxes (optional)
     """
     try:
         # Create output directory if it doesn't exist
@@ -552,6 +562,23 @@ def save_debug_images(frame: np.ndarray, depth_map: np.ndarray, phosphene_image:
         rgb_path = os.path.join(output_dir, f"rgb_before_{timestamp}.png")
         cv2.imwrite(rgb_path, frame)
         logger.info(f"💾 Saved RGB (before): {rgb_path}")
+        
+        # Save RGB with bounding boxes overlaid
+        if detections:
+            frame_with_boxes = frame.copy()
+            for det in detections:
+                bbox = det.get('bbox', [0, 0, 0, 0])  # [x, y, w, h]
+                x, y, w, h = [int(v) for v in bbox]
+                # Draw rectangle
+                cv2.rectangle(frame_with_boxes, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # Draw label
+                label = f"{det.get('class', 'unknown')} {det.get('confidence', 0):.2f}"
+                cv2.putText(frame_with_boxes, label, (x, y - 5), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            
+            rgb_boxes_path = os.path.join(output_dir, f"rgb_with_boxes_{timestamp}.png")
+            cv2.imwrite(rgb_boxes_path, frame_with_boxes)
+            logger.info(f"💾 Saved RGB with boxes: {rgb_boxes_path}")
         
         # Save depth map (before processing)
         if depth_map is not None:
@@ -1136,18 +1163,217 @@ async def process_from_url(
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
+@app.post("/api/upload-with-depth")
+async def upload_with_depth(
+    image_file: UploadFile = File(..., description="RGB image file"),
+    depth_file: UploadFile = File(..., description="Depth map image file"),
+    depth_sampling: str = "median",
+    conf_threshold: float = 0.5,
+    t_min: float = 0.3,
+    k_min: int = 1,
+    k_max: int = 5,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Upload RGB image and depth map files for depth-aware processing (RECOMMENDED)
+    
+    Accepts: multipart/form-data with 'image_file' and 'depth_file' fields
+    Best for: Production use, large images, mobile apps, real-time VR processing
+    Advantage: No base64 overhead (~33% smaller payload than /api/process-with-depth)
+    
+    This endpoint provides the same functionality as /api/process-with-depth but
+    accepts file uploads instead of base64 encoded data for better performance.
+    
+    Form fields:
+        image_file: RGB camera frame (JPEG/PNG)
+        depth_file: Depth map from VR/WebGL Z-buffer (PNG/JPEG/EXR)
+        depth_sampling: Method to extract depth ("median" recommended)
+        conf_threshold: YOLO detection confidence (0.0-1.0)
+        t_min: Minimum score threshold for translation
+        k_min: Minimum objects to select
+        k_max: Maximum objects to select
+    
+    Returns:
+        Same as /api/process-with-depth with detections, phosphene image, and metadata
+    """
+    try:
+        total_start = time.time()
+        
+        logger.info(f"🎬 [START] Processing uploaded files with depth integration")
+        logger.info(f"📊 [REQUEST PARAMS] depth_sampling={depth_sampling}, conf_threshold={conf_threshold}, t_min={t_min}, k_min={k_min}, k_max={k_max}")
+        
+        # Read and decode RGB image file
+        read_start = time.time()
+        image_contents = await image_file.read()
+        image_nparr = np.frombuffer(image_contents, np.uint8)
+        frame = cv2.imdecode(image_nparr, cv2.IMREAD_COLOR)
+        image_read_time = (time.time() - read_start) * 1000
+        
+        if frame is None:
+            raise HTTPException(status_code=400, detail="Invalid RGB image file")
+        
+        logger.info(f"📥 [IMAGE] RGB file decoded: {frame.shape}, dtype: {frame.dtype}")
+        
+        # Read and decode depth map file
+        depth_read_start = time.time()
+        depth_contents = await depth_file.read()
+        depth_nparr = np.frombuffer(depth_contents, np.uint8)
+        depth_map = cv2.imdecode(depth_nparr, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_GRAYSCALE)
+        depth_read_time = (time.time() - depth_read_start) * 1000
+        
+        if depth_map is None:
+            raise HTTPException(status_code=400, detail="Invalid depth map file")
+        
+        logger.info(f"📥 [IMAGE] Depth file decoded: {depth_map.shape}, dtype: {depth_map.dtype}")
+        
+        # Log depth statistics
+        non_zero_count = np.count_nonzero(depth_map)
+        total_pixels = depth_map.size
+        logger.info(f"📊 [DEPTH STATS] Non-zero pixels: {non_zero_count}/{total_pixels} ({100*non_zero_count/total_pixels:.1f}%), min: {depth_map.min()}, max: {depth_map.max()}, mean: {depth_map[depth_map>0].mean() if non_zero_count > 0 else 0:.2f}")
+        
+        # Convert depth to float32 and normalize if needed
+        depth_map = depth_map.astype(np.float32)
+        if depth_map.max() > 100:  # Likely pixel values, not meters
+            depth_map = depth_map / depth_map.max() * 10.0  # Normalize to 0-10m range
+        
+        # Generate timestamp for this frame
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        
+        # Ensure depth map matches image dimensions
+        if depth_map.shape[:2] != frame.shape[:2]:
+            logger.warning(
+                f"Depth map size {depth_map.shape} != image size {frame.shape[:2]}, resizing..."
+            )
+            depth_map = cv2.resize(depth_map, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
+        
+        # Run YOLO detection
+        detect_start = time.time()
+        if not detector_service.is_ready():
+            raise HTTPException(status_code=503, detail="Detector not initialized")
+        
+        detections = detector_service.detect(frame)
+        detection_time = (time.time() - detect_start) * 1000
+        
+        logger.info(f"🔍 YOLO Detection: Found {len(detections)} objects")
+        if len(detections) > 0:
+            for i, det in enumerate(detections[:3]):
+                logger.info(f"  Detection {i+1}: class={det.get('class')}, conf={det.get('confidence'):.2f}, bbox={det.get('bbox')}")
+        else:
+            logger.warning("⚠️ No objects detected by YOLO! Check if model is loaded correctly.")
+        
+        # Assign depth to detections
+        depth_assign_start = time.time()
+        detections_with_depth = assign_depth_to_detections(
+            detections,
+            depth_map,
+            method=depth_sampling
+        )
+        depth_assign_time = (time.time() - depth_assign_start) * 1000
+        
+        logger.info(
+            f"Depth assignment: {len(detections_with_depth)} detections, "
+            f"method={depth_sampling}, time={depth_assign_time:.2f}ms"
+        )
+        
+        # Log depth statistics
+        depths = [d.get('distance_m') for d in detections_with_depth if d.get('distance_m') is not None]
+        if depths:
+            logger.info(
+                f"Depth stats: min={min(depths):.2f}m, max={max(depths):.2f}m, "
+                f"mean={np.mean(depths):.2f}m, median={np.median(depths):.2f}m"
+            )
+        
+        # Translate to phosphene representation
+        translate_start = time.time()
+        if not translator_service.is_ready():
+            raise HTTPException(status_code=503, detail="Translator not initialized")
+        
+        h, w = frame.shape[:2]
+        phosphene_b64, selected_objects, translate_metadata = translator_service.translate(
+            detections_with_depth,
+            image_width=w,
+            image_height=h,
+            t_min=t_min,
+            k_min=k_min,
+            k_max=k_max
+        )
+        translation_time = (time.time() - translate_start) * 1000
+        
+        logger.info(f"🎨 Translation: Selected {len(selected_objects)} objects for phosphene display")
+        if len(selected_objects) > 0:
+            for i, obj in enumerate(selected_objects[:3]):
+                logger.info(f"  Selected {i+1}: class={obj.get('class')}, score={obj.get('score'):.2f}, distance={obj.get('distance_m')}")
+        else:
+            logger.warning("⚠️ No objects selected by translator! Check t_min threshold or detection confidence.")
+        
+        # Decode phosphene image for saving
+        phosphene_image = None
+        if phosphene_b64:
+            try:
+                phosphene_bytes = base64.b64decode(phosphene_b64.split(',')[1] if ',' in phosphene_b64 else phosphene_b64)
+                phosphene_nparr = np.frombuffer(phosphene_bytes, np.uint8)
+                phosphene_image = cv2.imdecode(phosphene_nparr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                logger.error(f"Failed to decode phosphene image for saving: {e}")
+        
+        # Save debug images
+        save_debug_images(frame, depth_map, phosphene_image, timestamp, detections_with_depth)
+        
+        total_time = (time.time() - total_start) * 1000
+        
+        # Build response with detailed timing
+        result = {
+            "detections": detections_with_depth,
+            "phosphene_image": phosphene_b64,
+            "metadata": {
+                "detection_count": len(detections_with_depth),
+                "depth_assigned_count": len([d for d in detections_with_depth if d.get('distance_m') is not None]),
+                "depth_sampling_method": depth_sampling,
+                "timing_breakdown": {
+                    "total_ms": round(total_time, 2),
+                    "image_read_ms": round(image_read_time, 2),
+                    "depth_read_ms": round(depth_read_time, 2),
+                    "detection_ms": round(detection_time, 2),
+                    "depth_assignment_ms": round(depth_assign_time, 2),
+                    "translation_ms": round(translation_time, 2)
+                }
+            }
+        }
+        
+        # Schedule cleanup
+        if background_tasks:
+            background_tasks.add_task(cleanup_old_files, translator_service.output_dir)
+        
+        logger.info(
+            f"Upload depth processing complete: {len(detections_with_depth)} detections "
+            f"({result['metadata']['depth_assigned_count']} with depth), "
+            f"total={total_time:.2f}ms"
+        )
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload depth processing error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload depth processing failed: {str(e)}")
+
+
 @app.post("/api/process-with-depth")
 async def process_with_depth(
     request: ProcessWithDepthRequest,
     background_tasks: BackgroundTasks = None
 ):
     """
-    Process image with VR/WebGL Z-buffer depth map integration
+    Process image with VR/WebGL Z-buffer depth map integration (Base64)
     
     This endpoint combines YOLO object detection with depth information from
     a VR/Three.js scene to enable depth-aware phosphene translation. The depth
     values are assigned to each detected object, and the translator automatically
     prioritizes closer objects in the phosphene representation.
+    
+    **Note:** For better performance with large images, use /api/upload-with-depth instead,
+    which accepts file uploads and avoids base64 encoding overhead (~33% smaller payload).
     
     **Depth Sampling Methods:**
     - `centroid`: Depth at object center point (fast, works for centered objects)
@@ -1311,7 +1537,7 @@ async def process_with_depth(
                 logger.error(f"Failed to decode phosphene image for saving: {e}")
         
         # Save debug images (before and after processing)
-        save_debug_images(frame, depth_map, phosphene_image, timestamp)
+        save_debug_images(frame, depth_map, phosphene_image, timestamp, detections_with_depth)
         
         # No need to encode again, already base64
         total_time = (time.time() - total_start) * 1000
