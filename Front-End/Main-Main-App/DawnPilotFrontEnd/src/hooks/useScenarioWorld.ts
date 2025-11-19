@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { SCENARIO_API_URL } from '../config/api';
 
 export interface Entity {
   name: string;
@@ -14,8 +15,7 @@ interface ScenarioWorld {
   entities: Entity[];
 }
 
-const API_BASE_URL = 'http://localhost:5000/scenario';
-// const API_BASE_URL = 'http://192.168.1.106:5000/scenario';
+const API_BASE_URL = SCENARIO_API_URL;
 
 export function useScenarioWorld() {
   const [world, setWorld] = useState<ScenarioWorld>({ entities: [] });

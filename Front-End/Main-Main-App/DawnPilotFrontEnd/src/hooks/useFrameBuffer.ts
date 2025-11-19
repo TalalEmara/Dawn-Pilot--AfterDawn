@@ -507,38 +507,54 @@ async function sendToFastAPI(rgbData: any, depthData: any) {
       console.log(`📤 [SEND] Depth Image: ${depthCanvas.width}x${depthCanvas.height}, base64 length: ${depthBase64.length}, prefix: ${depthBase64.substring(0, 30)}`);
     }
 
-    // Call FastAPI
-    const response = await fetch("http://localhost:8000/api/process-with-depth", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        image_base64: imageBase64,
-        depth_map_base64: depthBase64,
-        depth_sampling: "median",
-        conf_threshold: 0.1,  // Lowered from 0.5 to detect more objects
-        t_min: 0.1,
-        k_min: 1,
-        k_max: 5,
-      }),
-    });
+    // Call FastAPI with timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/process-with-depth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+          depth_map_base64: depthBase64,
+          depth_sampling: "median",
+          conf_threshold: 0.1,
+          t_min: 0.1,
+          k_min: 1,
+          k_max: 5,
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
 
-    if (!response.ok) {
-      console.error(`FastAPI error: ${response.status}`);
+      if (!response.ok) {
+        console.warn(`⚠️ FastAPI error: ${response.status} - Continuing without phosphene processing`);
+        return null;
+      }
+
+      const result = await response.json();
+      console.log(`🔮 FastAPI response:`, {
+        detections: result.metadata.detection_count,
+        withDepth: result.metadata.depth_assigned_count,
+        processingTime: result.metadata.timing_breakdown.total_ms,
+      });
+
+      return result;
+    } catch (fetchErr) {
+      clearTimeout(timeout);
+      if ((fetchErr as Error).name === 'AbortError') {
+        console.warn("⚠️ FastAPI request timeout - Continuing without phosphene processing");
+      } else {
+        console.warn("⚠️ FastAPI unavailable - Continuing without phosphene processing");
+      }
       return null;
     }
-
-    const result = await response.json();
-    console.log(`🔮 FastAPI response:`, {
-      detections: result.metadata.detection_count,
-      withDepth: result.metadata.depth_assigned_count,
-      processingTime: result.metadata.timing_breakdown.total_ms,
-    });
-
-    return result;
   } catch (err) {
-    console.error("FastAPI call failed:", err);
+    console.error("Frame processing error:", err);
     return null;
   }
 }
