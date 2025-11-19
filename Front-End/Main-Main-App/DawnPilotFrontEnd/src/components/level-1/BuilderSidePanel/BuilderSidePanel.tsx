@@ -4,7 +4,7 @@ import styles from './BuilderSidePanel.module.css';
 import CarImg from '../../../assets/modelsImages/Car.jpg';
 import ScenarioContext, { useScenario } from '../../../contexts/ScenarioContext';
 import DawnButton from '../../level-0/DawnButton/DawnButton';
-/ Dynamically import ALL images from the modelsImages folder
+// Dynamically import ALL images from the modelsImages folder
 // This will automatically include any image you add to that folder!
 const imageModules = import.meta.glob<{ default: string }>(
   '../../../assets/modelsImages/*.{jpg,jpeg,png,gif,webp}',

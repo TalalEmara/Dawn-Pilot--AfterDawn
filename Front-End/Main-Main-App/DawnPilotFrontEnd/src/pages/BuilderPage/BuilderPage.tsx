@@ -191,7 +191,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
               return (
                 <Entity
                   key={e.id}
-                  gltfModel={url}
+                  gltf-Model={url}
                   position={`${pos.x} ${pos.y} ${pos.z}`}
                   rotation={`${rot.x} ${rot.y} ${rot.z}`}
                   scale={`${scl.x} ${scl.y} ${scl.z}`}
