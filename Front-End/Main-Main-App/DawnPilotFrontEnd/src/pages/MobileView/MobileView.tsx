@@ -8,6 +8,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useComponentManager } from '../../hooks/useComponentManager';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCameraSync } from '../../hooks/useCameraSync';
+import { useCameraCapture } from '../../hooks/useCameraCapture';
+import { useDepthCapture } from '../../hooks/useDepthCapture';
+import { usePhospheneVision } from '../../hooks/usePhospheneVision';
 import { SOCKET_URL } from '../../config/api';
 
 function MobileView() {
@@ -19,6 +22,17 @@ function MobileView() {
   const animationFrameRef = useRef<number | null>(null);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 2, z: 4 });
   const [showCertWarning, setShowCertWarning] = useState(false);
+  
+  // Phosphene vision state
+  const [phospheneActive, setPhospheneActive] = useState(false);
+  const [phospheneImage, setPhospheneImage] = useState<string | null>(null);
+  const [fastAPIHealthy, setFastAPIHealthy] = useState<boolean | null>(null);
+  const phospheneIntervalRef = useRef<number | null>(null);
+  
+  // Phosphene hooks
+  const { captureFrameRaw } = useCameraCapture();
+  const { captureDepthMapRaw } = useDepthCapture();
+  const { processFrame, processing, error: phospheneError, lastResult, checkHealth } = usePhospheneVision();
   
   // WebSocket camera synchronization - mobile follows desktop
   const { isConnected, remoteCameraRef, setOnCameraUpdate } = useCameraSync({
@@ -146,6 +160,63 @@ function MobileView() {
       rigRef.current.el.setAttribute('position', { x: 0, y: 2, z: 4 });
     }
   }, []);
+  
+  // Check FastAPI health on mount
+  useEffect(() => {
+    const checkAPIHealth = async () => {
+      const healthy = await checkHealth();
+      setFastAPIHealthy(healthy);
+    };
+    checkAPIHealth();
+  }, [checkHealth]);
+
+  // Phosphene vision capture loop
+  useEffect(() => {
+    if (!phospheneActive) {
+      if (phospheneIntervalRef.current) {
+        clearInterval(phospheneIntervalRef.current);
+        phospheneIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const captureAndProcess = async () => {
+      if (processing) return;
+
+      try {
+        const rgbBase64 = captureFrameRaw(0.8);
+        const depthBase64 = captureDepthMapRaw();
+
+        if (!rgbBase64 || !depthBase64) {
+          console.warn('Failed to capture frame or depth');
+          return;
+        }
+
+        const result = await processFrame(rgbBase64, depthBase64, {
+          depth_sampling: 'median',
+          conf_threshold: 0.5,
+          t_min: 0.3,
+          k_min: 1,
+          k_max: 5
+        });
+
+        if (result?.phosphene_image) {
+          setPhospheneImage(`data:image/png;base64,${result.phosphene_image}`);
+        }
+      } catch (err) {
+        console.error('Phosphene processing error:', err);
+      }
+    };
+
+    // Start capture loop every 500ms
+    phospheneIntervalRef.current = window.setInterval(captureAndProcess, 500);
+
+    return () => {
+      if (phospheneIntervalRef.current) {
+        clearInterval(phospheneIntervalRef.current);
+      }
+    };
+  }, [phospheneActive, processing, captureFrameRaw, captureDepthMapRaw, processFrame]);
 
   return (
     
@@ -266,6 +337,71 @@ function MobileView() {
         📱 Mobile Viewer (Following Desktop)
       </div>
       
+      {/* Phosphene Vision Toggle */}
+      <div style={{
+        position: 'absolute',
+        bottom: 80,
+        left: 10,
+        zIndex: 1000
+      }}>
+        {/* FastAPI Status Indicator */}
+        {fastAPIHealthy === false && (
+          <div style={{
+            background: '#f44336',
+            color: 'white',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            marginBottom: '8px',
+            fontFamily: 'monospace'
+          }}>
+            ⚠️ FastAPI Not Available
+            <div style={{ fontSize: '9px', marginTop: '4px' }}>
+              Start: python phosphene_api.py
+            </div>
+          </div>
+        )}
+        
+        <button
+          onClick={() => setPhospheneActive(!phospheneActive)}
+          disabled={fastAPIHealthy === false}
+          style={{
+            background: phospheneActive ? '#f44336' : fastAPIHealthy === false ? '#999' : '#4CAF50',
+            color: 'white',
+            padding: '12px 20px',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            cursor: fastAPIHealthy === false ? 'not-allowed' : 'pointer',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+            opacity: fastAPIHealthy === false ? 0.5 : 1
+          }}
+        >
+          {phospheneActive ? '🛑 Stop Phosphene' : '▶️ Start Phosphene'}
+        </button>
+        {phospheneActive && (
+          <div style={{
+            marginTop: '8px',
+            background: 'rgba(0,0,0,0.7)',
+            color: 'white',
+            padding: '8px',
+            borderRadius: '4px',
+            fontSize: '10px',
+            fontFamily: 'monospace'
+          }}>
+            <div>Status: {processing ? '⏳ Processing...' : '✓ Active'}</div>
+            {lastResult && (
+              <>
+                <div>Detections: {lastResult.metadata.detection_count}</div>
+                <div>Time: {lastResult.metadata.timing_breakdown.total_ms.toFixed(0)}ms</div>
+              </>
+            )}
+            {phospheneError && <div style={{ color: '#ff5555' }}>Error: {phospheneError}</div>}
+          </div>
+        )}
+      </div>
+      
       {/* Camera Position Display */}
       <div style={{
         position: 'absolute',
@@ -283,6 +419,29 @@ function MobileView() {
         <div>Y: {cameraPosition.y.toFixed(2)}</div>
         <div>Z: {cameraPosition.z.toFixed(2)}</div>
       </div>
+      
+      {/* Phosphene Overlay - Full Screen */}
+      {phospheneActive && phospheneImage && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 500,
+          pointerEvents: 'none'
+        }}>
+          <img
+            src={phospheneImage}
+            alt="Phosphene Vision"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
+          />
+        </div>
+      )}
       
       <Scene
         embedded
