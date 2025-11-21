@@ -67,7 +67,6 @@ export function useCameraSync(options: UseCameraSyncOptions) {
 
     // Listen for camera updates from other clients
     socket.on('camera:updated', (data: { clientId: string } & CameraState) => {
-      console.log(`📹 Camera update from ${data.clientId}:`, data.position);
       setRemoteCamera({
         position: data.position,
         rotation: data.rotation
@@ -76,7 +75,6 @@ export function useCameraSync(options: UseCameraSyncOptions) {
 
     // Listen for device motion updates
     socket.on('device:motion:update', (data: { clientId: string } & DeviceMotionData) => {
-      console.log(`📱 Device motion from ${data.clientId}`);
       // Can be used for advanced synchronization
     });
 

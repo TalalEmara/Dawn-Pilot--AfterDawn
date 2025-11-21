@@ -12,25 +12,19 @@ import { SOCKET_URL } from '../../config/api';
 
 function MobileView() {
   const cameraRef = useRef<any>(null);
+  const rigRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 1.6, z: 4 });
-  const [cameraRotation, setCameraRotation] = useState({ x: 0, y: 0, z: 0 });
   const [showCertWarning, setShowCertWarning] = useState(false);
-  const [gpsEnabled, setGpsEnabled] = useState(false);
-  const [totalDistance, setTotalDistance] = useState(0);
-  const [movementTrail, setMovementTrail] = useState<Array<{x: number, y: number, z: number}>>([]);
-  const startPositionRef = useRef({ x: 0, y: 1.6, z: 4 }); // Standard VR eye height
-  const deviceHeadingRef = useRef(0); // Device compass heading in degrees
   
-  // WebSocket camera synchronization
-  const { isConnected, remoteCamera, updateCamera } = useCameraSync({
+  // WebSocket camera synchronization - mobile follows desktop
+  const { isConnected, remoteCamera } = useCameraSync({
     clientType: 'mobile',
     enableDeviceMotion: true,
-    throttleMs: 50  // Update every 50ms max
+    throttleMs: 50
   });
   
-  // Track when we last received desktop camera update
-  const lastDesktopUpdateRef = useRef(0);
-  const [followDesktop, setFollowDesktop] = useState(false);
+  // Movement state for rocker control (reserved for future use)
+  // const movementVelocityRef = useRef({ x: 0, z: 0 });
   
   // Check if certificate needs to be accepted
   useEffect(() => {
@@ -76,184 +70,49 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
   
-  // Follow desktop camera when it's active
+  // Mobile follows desktop camera position (works in both normal and VR mode)
   useEffect(() => {
-    if (remoteCamera) {
-      lastDesktopUpdateRef.current = Date.now();
-      
-      // If desktop sent update recently, follow it
-      if (cameraRef.current?.el && !gpsEnabled) {
-        const el = cameraRef.current.el;
-        el.object3D.position.set(
+    if (!remoteCamera || !rigRef.current?.el) {
+      return;
+    }
+
+    const rigEl = rigRef.current.el;
+    
+    // Throttle updates to avoid flickering
+    const updatePosition = () => {
+      if (rigEl.object3D) {
+        rigEl.object3D.position.set(
           remoteCamera.position.x,
           remoteCamera.position.y,
           remoteCamera.position.z
         );
-        el.object3D.rotation.set(
-          (remoteCamera.rotation.x * Math.PI) / 180,
-          (remoteCamera.rotation.y * Math.PI) / 180,
-          (remoteCamera.rotation.z * Math.PI) / 180
-        );
-        console.log('📹 Mobile following desktop:', remoteCamera.position);
-      }
-    }
-  }, [remoteCamera, gpsEnabled]);
-  
-  // Check if desktop is still active
-  useEffect(() => {
-    const checkInterval = setInterval(() => {
-      const timeSinceDesktop = Date.now() - lastDesktopUpdateRef.current;
-      const shouldFollow = timeSinceDesktop < 2000; // Follow if desktop sent update within 2s
-      setFollowDesktop(shouldFollow);
-    }, 500);
-    
-    return () => clearInterval(checkInterval);
-  }, []);
-  
-  // Track camera movement and sync via WebSocket
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (cameraRef.current) {
-        // Get the actual A-Frame element
-        const el = cameraRef.current.el;
-        if (el && el.getAttribute) {
-          const position = el.getAttribute('position');
-          const rotation = el.getAttribute('rotation');
-          
-          if (position && rotation) {
-            const newCameraState = {
-              position: { x: position.x, y: position.y, z: position.z },
-              rotation: { x: rotation.x, y: rotation.y, z: rotation.z }
-            };
-            
-            // Update local state for UI display
-            setCameraPosition(newCameraState.position);
-            setCameraRotation(newCameraState.rotation);
-            
-            // Send to server for sync with desktop
-            updateCamera(newCameraState);
-          }
-        }
-      }
-    }, 100); // Check every 100ms
-    
-    return () => clearInterval(interval);
-  }, [updateCamera]);
-  
-  // Apply remote camera updates from desktop
-  useEffect(() => {
-    if (remoteCamera && cameraRef.current) {
-      console.log('📹 Applying remote camera update:', remoteCamera.position);
-      // Don't override if we're the one moving
-      // This creates a collaborative view mode
-    }
-  }, [remoteCamera]);
-  
-  // Track device orientation for movement direction
-  useEffect(() => {
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      if (event.alpha !== null) {
-        // Alpha is compass heading (0-360 degrees, 0=North)
-        deviceHeadingRef.current = event.alpha;
       }
     };
-
-    window.addEventListener('deviceorientation', handleOrientation);
-    return () => window.removeEventListener('deviceorientation', handleOrientation);
-  }, []);
-  
-  // GPS-based position tracking for real-world movement
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      console.warn('⚠️ Geolocation not supported');
-      return;
-    }
-
-    let referencePosition: { latitude: number; longitude: number } | null = null;
-    const earthRadius = 6371000; // meters
-    const metersPerDegree = (earthRadius * Math.PI) / 180;
-    const scaleMultiplier = 7; // Scale GPS movement for visibility (7x)
     
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        
-        if (!gpsEnabled) {
-          setGpsEnabled(true);
-        }
-        
-        if (!referencePosition) {
-          // Set reference point on first GPS reading
-          referencePosition = { latitude, longitude };
-          console.log('📍 GPS initialized:', { latitude, longitude });
-          
-          // Store start position
-          if (cameraRef.current?.el) {
-            const startPos = cameraRef.current.el.getAttribute('position');
-            startPositionRef.current = { x: startPos.x, y: 1.6, z: startPos.z }; // Standard eye height
-          }
-          return;
-        }
-        
-        // Calculate movement from reference point (not delta from last position)
-        const deltaLat = latitude - referencePosition.latitude;
-        const deltaLon = longitude - referencePosition.longitude;
-        
-        // Convert to scene coordinates with high accuracy
-        // East/West movement (longitude) = X axis
-        // North/South movement (latitude) = Z axis (inverted because forward is -Z in A-Frame)
-        const worldX = deltaLon * metersPerDegree * Math.cos(latitude * Math.PI / 180) * scaleMultiplier;
-        const worldZ = -deltaLat * metersPerDegree * scaleMultiplier;
-        
-        // Calculate distance from start
-        const distance = Math.sqrt(worldX * worldX + worldZ * worldZ) / scaleMultiplier; // Real distance
-        
-        // Update camera position directly when not following desktop
-        if (cameraRef.current?.el && !followDesktop) {
-          const el = cameraRef.current.el;
-          const newPos = {
-            x: startPositionRef.current.x + worldX,
-            y: startPositionRef.current.y,
-            z: startPositionRef.current.z + worldZ
-          };
-          el.setAttribute('position', newPos);
-          
-          // Update state for UI
-          setCameraPosition(newPos);
-          
-          // Add to trail periodically (every 0.3 meters)
-          if (distance > (totalDistance + 0.3)) {
-            setMovementTrail(trail => [...trail.slice(-20), newPos]);
-          }
-        }
-        
-        // Update total distance
-        setTotalDistance(distance);
-        
-        console.log('🚶 GPS position:', { 
-          worldX: worldX.toFixed(2), 
-          worldZ: worldZ.toFixed(2), 
-          distance: distance.toFixed(2),
-          accuracy: accuracy?.toFixed(1) + 'm'
-        });
-      },
-      (error) => {
-        console.error('❌ GPS error:', error.message);
-        setGpsEnabled(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-      }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [gpsEnabled, totalDistance, followDesktop]);
+    // Use requestAnimationFrame for smooth updates
+    const rafId = requestAnimationFrame(updatePosition);
+    
+    // Update local state for UI
+    setCameraPosition(remoteCamera.position);
+    
+    return () => cancelAnimationFrame(rafId);
+  }, [remoteCamera]);
 
   return (
     
-    <div style={{ background: "Black", width: "100vw", height: "100vh" }}>
+    <div style={{ background: "Black", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      {/* Force VR button to be visible without scrolling */}
+      <style>{`
+        .a-enter-vr-button {
+          bottom: 20% !important;
+          position: fixed !important;
+          z-index: 99999 !important;
+        }
+        body {
+          overflow: hidden !important;
+        }
+      `}</style>
+
       {/* Certificate Warning Modal */}
       {showCertWarning && !isConnected && (
         <div style={{
@@ -342,26 +201,20 @@ function MobileView() {
         </div>
       </div>
       
-      {/* GPS Status */}
+      {/* Mobile Mode Status */}
       <div style={{
         position: 'absolute',
         top: 10,
         left: 10,
         zIndex: 1000,
-        background: gpsEnabled ? '#4CAF50' : '#FF9800',
+        background: '#2196F3',
         color: 'white',
         padding: '8px 16px',
         borderRadius: '4px',
         fontSize: '12px',
         fontFamily: 'monospace'
       }}>
-        {followDesktop ? '🖥️ Following Desktop (Manual Mode)' : 
-         gpsEnabled ? '📍 GPS Active (Sync Mode)' : '📍 GPS Starting...'}
-        {gpsEnabled && !followDesktop && (
-          <div style={{ fontSize: '10px', marginTop: '4px' }}>
-            Distance: {totalDistance.toFixed(1)}m
-          </div>
-        )}
+        📱 Mobile Viewer (Following Desktop)
       </div>
       
       {/* Camera Position Display */}
@@ -412,27 +265,6 @@ function MobileView() {
           color="#2a5a2a"
           material="src: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0YTFhIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=); repeat: 100 100"
         />
-        
-        {/* Start position marker */}
-        <Entity
-          primitive="a-cylinder"
-          position={`${startPositionRef.current.x} 0 ${startPositionRef.current.z}`}
-          radius="0.3"
-          height="0.1"
-          color="#00FF00"
-        />
-        
-        {/* Movement trail */}
-        {movementTrail.map((pos, idx) => (
-          <Entity
-            key={idx}
-            primitive="a-sphere"
-            position={`${pos.x} 0 ${pos.z}`}
-            radius="0.1"
-            color="#FF9800"
-            opacity="0.6"
-          />
-        ))}
 
         {/* Render entities from backend */}
         {world.entities.map((e) => {
@@ -473,19 +305,21 @@ function MobileView() {
           );
         })}
 
-        {/* Camera with VR support and movement controls */}
-        <Entity
-          ref={cameraRef}
-          primitive="a-camera"
-          look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true"
-          wasd-controls="enabled: true; acceleration: 100"
-        >
-          {/* VR cursor for interaction */}
+        {/* Camera rig for movement (works in VR and normal mode) */}
+        <Entity ref={rigRef} position="0 1.6 4">
           <Entity
-            primitive="a-cursor"
-            animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-            material="color: white; shader: flat"
-          />
+            ref={cameraRef}
+            primitive="a-camera"
+            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+            position="0 0 0"
+          >
+            {/* VR cursor for interaction */}
+            <Entity
+              primitive="a-cursor"
+              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
+              material="color: white; shader: flat"
+            />
+          </Entity>
         </Entity>
       </Scene>
     </div>
