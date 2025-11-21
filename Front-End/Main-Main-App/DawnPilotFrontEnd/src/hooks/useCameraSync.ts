@@ -67,9 +67,10 @@ export function useCameraSync(options: UseCameraSyncOptions) {
 
     // Listen for camera updates from other clients
     socket.on('camera:updated', (data: { clientId: string } & CameraState) => {
+      // Only keep the absolute latest position - discard any queued updates
       setRemoteCamera({
-        position: data.position,
-        rotation: data.rotation
+        position: { ...data.position },
+        rotation: { ...data.rotation }
       });
     });
 

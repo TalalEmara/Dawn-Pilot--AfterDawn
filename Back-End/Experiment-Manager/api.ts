@@ -76,16 +76,17 @@ io.on('connection', (socket) => {
     position: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number };
   }) => {
-    // Update stored camera state
+    // Update stored camera state (overwrite, don't accumulate)
     const client = connectedClients.get(socket.id);
     if (client) {
       client.camera = data;
     }
     
-    // Broadcast to all other clients
+    // Broadcast ONLY to other clients (not back to sender)
     socket.broadcast.emit('camera:updated', {
       clientId: socket.id,
-      ...data
+      position: data.position,
+      rotation: data.rotation
     });
   });
   

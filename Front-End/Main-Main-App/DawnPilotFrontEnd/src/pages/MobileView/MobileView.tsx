@@ -11,8 +11,11 @@ import { useCameraSync } from '../../hooks/useCameraSync';
 import { SOCKET_URL } from '../../config/api';
 
 function MobileView() {
-  const cameraRef = useRef<any>(null);
-  const rigRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const cameraRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const hasReceivedPosition = useRef(false);
+  const targetPosition = useRef({ x: 0, y: 1.6, z: 4 });
+  const currentPosition = useRef({ x: 0, y: 1.6, z: 4 });
+  const animationFrameRef = useRef<number | null>(null);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 1.6, z: 4 });
   const [showCertWarning, setShowCertWarning] = useState(false);
   
@@ -20,7 +23,7 @@ function MobileView() {
   const { isConnected, remoteCamera } = useCameraSync({
     clientType: 'mobile',
     enableDeviceMotion: true,
-    throttleMs: 50
+    throttleMs: 16  // 60fps
   });
   
   // Movement state for rocker control (reserved for future use)
@@ -70,33 +73,67 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
   
-  // Mobile follows desktop camera position (works in both normal and VR mode)
+  // Mobile follows desktop camera position - smooth interpolation
   useEffect(() => {
-    if (!remoteCamera || !rigRef.current?.el) {
+    if (!remoteCamera) {
       return;
     }
 
-    const rigEl = rigRef.current.el;
+    // Mark that we've received position
+    hasReceivedPosition.current = true;
     
-    // Throttle updates to avoid flickering
-    const updatePosition = () => {
-      if (rigEl.object3D) {
-        rigEl.object3D.position.set(
-          remoteCamera.position.x,
-          remoteCamera.position.y,
-          remoteCamera.position.z
-        );
-      }
-    };
-    
-    // Use requestAnimationFrame for smooth updates
-    const rafId = requestAnimationFrame(updatePosition);
+    // Update target position
+    targetPosition.current = { ...remoteCamera.position };
     
     // Update local state for UI
     setCameraPosition(remoteCamera.position);
-    
-    return () => cancelAnimationFrame(rafId);
   }, [remoteCamera]);
+
+  // Smooth animation loop for camera position interpolation
+  useEffect(() => {
+    const animate = () => {
+      if (!cameraRef.current?.el) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      const cameraEl = cameraRef.current.el;
+      const object3D = cameraEl.object3D;
+      
+      if (object3D && hasReceivedPosition.current) {
+        // Smooth interpolation (lerp) - 30% towards target each frame for responsive feel
+        const lerpFactor = 0.3;
+        currentPosition.current.x += (targetPosition.current.x - currentPosition.current.x) * lerpFactor;
+        currentPosition.current.y += (targetPosition.current.y - currentPosition.current.y) * lerpFactor;
+        currentPosition.current.z += (targetPosition.current.z - currentPosition.current.z) * lerpFactor;
+        
+        // Apply to Three.js object3D directly (doesn't interfere with look-controls)
+        object3D.position.set(
+          currentPosition.current.x,
+          currentPosition.current.y,
+          currentPosition.current.z
+        );
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  // Initialize camera position on mount
+  useEffect(() => {
+    if (cameraRef.current?.el && !hasReceivedPosition.current) {
+      // Set initial position only if we haven't received desktop position yet
+      cameraRef.current.el.setAttribute('position', { x: 0, y: 1.6, z: 4 });
+    }
+  }, []);
 
   return (
     
@@ -268,58 +305,55 @@ function MobileView() {
 
         {/* Render entities from backend */}
         {world.entities.map((e) => {
-          const pos = e.Position || { x: 0, y: 0, z: 0 };
-          const rot = e.Rotation || { x: 0, y: 0, z: 0 };
-          const scl = e.Scale || { x: 1, y: 1, z: 1 };
-          const color = e.Color?.value || "#fff";
-          const url = e.Model?.url;
+            const pos = e.Position || { x: 0, y: 0, z: 0 };
+            const rot = e.Rotation || { x: 0, y: 0, z: 0 };
+            const scl = e.Scale || { x: 1, y: 1, z: 1 };
+            const color = e.Color?.value || "#fff";
+            const url = e.Model?.url;
 
-          console.log("Rendering entity:", e);
-          console.log("Rendering url:", url);
+            console.log("Rendering entity:", e);
+            console.log("Rendering url:", url);
 
-          if (url === "Aframe") {
-            const tag = `a-${e.name.toLowerCase()}`; // e.g. Sphere -> a-sphere
-            console.log("Rendering primitive tag:", tag);
+            if (url === "Aframe") {
+              const tag = `a-${e.name.toLowerCase()}`; // e.g. Sphere -> a-sphere
+              console.log("Rendering primitive tag:", tag);
+              return (
+                <Entity
+                  key={e.id}
+                  primitive={tag}
+                  position={`${pos.x} ${pos.y} ${pos.z}`}
+                  rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                  scale={`${scl.x} ${scl.y} ${scl.z}`}
+                  material={`color: ${color}`}
+                />
+              );
+            }
+
+            // GLTF Model entity
+            console.log("Rendering GLTF model:", url);
             return (
               <Entity
                 key={e.id}
-                primitive={tag}
+                gltf-model={url}
                 position={`${pos.x} ${pos.y} ${pos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
-                material={`color: ${color}`}
               />
             );
-          }
+          })}
 
-          // GLTF Model entity
-          console.log("Rendering GLTF model:", url);
-          return (
-            <Entity
-              key={e.id}
-              gltf-model={url}
-              position={`${pos.x} ${pos.y} ${pos.z}`}
-              rotation={`${rot.x} ${rot.y} ${rot.z}`}
-              scale={`${scl.x} ${scl.y} ${scl.z}`}
-            />
-          );
-        })}
-
-        {/* Camera rig for movement (works in VR and normal mode) */}
-        <Entity ref={rigRef} position="0 1.6 4">
+        {/* Camera syncs with desktop position */}
+        <Entity
+          ref={cameraRef}
+          primitive="a-camera"
+          look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+        >
+          {/* VR cursor for interaction */}
           <Entity
-            ref={cameraRef}
-            primitive="a-camera"
-            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
-            position="0 0 0"
-          >
-            {/* VR cursor for interaction */}
-            <Entity
-              primitive="a-cursor"
-              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-              material="color: white; shader: flat"
-            />
-          </Entity>
+            primitive="a-cursor"
+            animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
+            material="color: white; shader: flat"
+          />
         </Entity>
       </Scene>
     </div>

@@ -14,7 +14,7 @@ function DesktopViewer() {
   const { isConnected, updateCamera } = useCameraSync({
     clientType: 'desktop',
     enableDeviceMotion: false,
-    throttleMs: 50
+    throttleMs: 16  // 60fps
   });
   
   const { world, loadWorld } = useScenarioWorld();
