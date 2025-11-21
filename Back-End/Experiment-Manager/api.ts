@@ -42,14 +42,10 @@ app.use('/scenario',scenarioRouter);
 
 // === WebSocket Real-Time Camera Tracking ===
 
-// Store active clients and their camera states
+// Store active clients (no camera state to prevent accumulation)
 const connectedClients = new Map<string, {
   id: string;
   type: 'mobile' | 'desktop';
-  camera: {
-    position: { x: number; y: number; z: number };
-    rotation: { x: number; y: number; z: number };
-  };
 }>();
 
 io.on('connection', (socket) => {
@@ -59,11 +55,7 @@ io.on('connection', (socket) => {
   socket.on('client:register', (data: { type: 'mobile' | 'desktop' }) => {
     connectedClients.set(socket.id, {
       id: socket.id,
-      type: data.type,
-      camera: {
-        position: { x: 0, y: 2, z: 4 },
-        rotation: { x: 0, y: 0, z: 0 }
-      }
+      type: data.type
     });
     console.log(`📱 Client ${socket.id} registered as ${data.type}`);
     
@@ -71,19 +63,13 @@ io.on('connection', (socket) => {
     socket.emit('clients:list', Array.from(connectedClients.values()));
   });
   
-  // Handle camera position updates from mobile device
+  // Handle camera position updates - pass through without storing
   socket.on('camera:update', (data: {
     position: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number };
   }) => {
-    // Update stored camera state (overwrite, don't accumulate)
-    const client = connectedClients.get(socket.id);
-    if (client) {
-      client.camera = data;
-    }
-    
-    // Broadcast ONLY to other clients (not back to sender)
-    socket.broadcast.emit('camera:updated', {
+    // Use volatile to discard if client is lagging (prevents buffering old positions)
+    socket.volatile.broadcast.emit('camera:updated', {
       clientId: socket.id,
       position: data.position,
       rotation: data.rotation

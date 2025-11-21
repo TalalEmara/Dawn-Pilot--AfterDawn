@@ -12,15 +12,16 @@ import { SOCKET_URL } from '../../config/api';
 
 function MobileView() {
   const cameraRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const rigRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const hasReceivedPosition = useRef(false);
-  const targetPosition = useRef({ x: 0, y: 1.6, z: 4 });
-  const currentPosition = useRef({ x: 0, y: 1.6, z: 4 });
+  const targetPosition = useRef({ x: 0, y: 2, z: 4 });
+  const currentPosition = useRef({ x: 0, y: 2, z: 4 });
   const animationFrameRef = useRef<number | null>(null);
-  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 1.6, z: 4 });
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 2, z: 4 });
   const [showCertWarning, setShowCertWarning] = useState(false);
   
   // WebSocket camera synchronization - mobile follows desktop
-  const { isConnected, remoteCamera } = useCameraSync({
+  const { isConnected, remoteCameraRef, setOnCameraUpdate } = useCameraSync({
     clientType: 'mobile',
     enableDeviceMotion: true,
     throttleMs: 16  // 60fps
@@ -73,41 +74,52 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
   
-  // Mobile follows desktop camera position - smooth interpolation
+  // Setup callback for camera updates (no React re-renders)
   useEffect(() => {
-    if (!remoteCamera) {
-      return;
-    }
-
-    // Mark that we've received position
-    hasReceivedPosition.current = true;
-    
-    // Update target position
-    targetPosition.current = { ...remoteCamera.position };
-    
-    // Update local state for UI
-    setCameraPosition(remoteCamera.position);
-  }, [remoteCamera]);
+    setOnCameraUpdate((camera) => {
+      // Update target position directly
+      targetPosition.current = { ...camera.position };
+      
+      // On first update, snap immediately
+      if (!hasReceivedPosition.current) {
+        currentPosition.current = { ...camera.position };
+        hasReceivedPosition.current = true;
+      }
+      
+      // Update UI state
+      setCameraPosition(camera.position);
+    });
+  }, [setOnCameraUpdate]);
 
   // Smooth animation loop for camera position interpolation
   useEffect(() => {
+    let lastLogTime = 0;
+    
     const animate = () => {
-      if (!cameraRef.current?.el) {
+      if (!rigRef.current?.el) {
         animationFrameRef.current = requestAnimationFrame(animate);
         return;
       }
 
-      const cameraEl = cameraRef.current.el;
-      const object3D = cameraEl.object3D;
+      const rigEl = rigRef.current.el;
+      const object3D = rigEl.object3D;
       
       if (object3D && hasReceivedPosition.current) {
-        // Smooth interpolation (lerp) - 30% towards target each frame for responsive feel
-        const lerpFactor = 0.3;
+        // Debug log every 2 seconds
+        const now = Date.now();
+        if (now - lastLogTime > 2000) {
+          console.log(`📹 Target: ${targetPosition.current.x.toFixed(2)}, ${targetPosition.current.y.toFixed(2)}, ${targetPosition.current.z.toFixed(2)}`);
+          console.log(`📹 Current: ${currentPosition.current.x.toFixed(2)}, ${currentPosition.current.y.toFixed(2)}, ${currentPosition.current.z.toFixed(2)}`);
+          lastLogTime = now;
+        }
+        
+        // Smooth interpolation (lerp) - 50% towards target each frame for fast response
+        const lerpFactor = 0.5;
         currentPosition.current.x += (targetPosition.current.x - currentPosition.current.x) * lerpFactor;
         currentPosition.current.y += (targetPosition.current.y - currentPosition.current.y) * lerpFactor;
         currentPosition.current.z += (targetPosition.current.z - currentPosition.current.z) * lerpFactor;
         
-        // Apply to Three.js object3D directly (doesn't interfere with look-controls)
+        // Apply to rig (works in both VR and normal mode)
         object3D.position.set(
           currentPosition.current.x,
           currentPosition.current.y,
@@ -127,11 +139,11 @@ function MobileView() {
     };
   }, []);
 
-  // Initialize camera position on mount
+  // Initialize camera rig position on mount
   useEffect(() => {
-    if (cameraRef.current?.el && !hasReceivedPosition.current) {
-      // Set initial position only if we haven't received desktop position yet
-      cameraRef.current.el.setAttribute('position', { x: 0, y: 1.6, z: 4 });
+    if (rigRef.current?.el && !hasReceivedPosition.current) {
+      // Set initial rig position only if we haven't received desktop position yet
+      rigRef.current.el.setAttribute('position', { x: 0, y: 2, z: 4 });
     }
   }, []);
 
@@ -342,18 +354,20 @@ function MobileView() {
             );
           })}
 
-        {/* Camera syncs with desktop position */}
-        <Entity
-          ref={cameraRef}
-          primitive="a-camera"
-          look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
-        >
-          {/* VR cursor for interaction */}
+        {/* Camera rig for movement (works in VR and normal mode) */}
+        <Entity ref={rigRef} position="0 2 4">
           <Entity
-            primitive="a-cursor"
-            animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-            material="color: white; shader: flat"
-          />
+            ref={cameraRef}
+            primitive="a-camera"
+            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+          >
+            {/* VR cursor for interaction */}
+            <Entity
+              primitive="a-cursor"
+              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
+              material="color: white; shader: flat"
+            />
+          </Entity>
         </Entity>
       </Scene>
     </div>

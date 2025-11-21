@@ -24,7 +24,8 @@ export function useCameraSync(options: UseCameraSyncOptions) {
   
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [remoteCamera, setRemoteCamera] = useState<CameraState | null>(null);
+  const remoteCameraRef = useRef<CameraState | null>(null);
+  const onCameraUpdateRef = useRef<((camera: CameraState) => void) | null>(null);
   const lastUpdateRef = useRef<number>(0);
   const cameraRef = useRef<CameraState>({
     position: { x: 0, y: 2, z: 4 },
@@ -67,11 +68,16 @@ export function useCameraSync(options: UseCameraSyncOptions) {
 
     // Listen for camera updates from other clients
     socket.on('camera:updated', (data: { clientId: string } & CameraState) => {
-      // Only keep the absolute latest position - discard any queued updates
-      setRemoteCamera({
+      // Store in ref (no React re-render)
+      remoteCameraRef.current = {
         position: { ...data.position },
         rotation: { ...data.rotation }
-      });
+      };
+      
+      // Call callback if provided
+      if (onCameraUpdateRef.current) {
+        onCameraUpdateRef.current(remoteCameraRef.current);
+      }
     });
 
     // Listen for device motion updates
@@ -171,9 +177,14 @@ export function useCameraSync(options: UseCameraSyncOptions) {
     };
   }, [enableDeviceMotion, clientType]);
 
+  const setOnCameraUpdate = useCallback((callback: (camera: CameraState) => void) => {
+    onCameraUpdateRef.current = callback;
+  }, []);
+
   return {
     isConnected,
-    remoteCamera,
+    remoteCameraRef,
+    setOnCameraUpdate,
     updateCamera,
     socket: socketRef.current
   };
