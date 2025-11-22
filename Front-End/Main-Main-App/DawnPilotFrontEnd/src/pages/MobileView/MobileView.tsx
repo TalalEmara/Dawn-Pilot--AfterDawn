@@ -184,13 +184,16 @@ function MobileView() {
       if (processing) return;
 
       try {
-        const rgbBase64 = captureFrameRaw(0.8);
-        const depthBase64 = captureDepthMapRaw();
+        // Await async captures
+        const rgbBase64 = await captureFrameRaw(0.8);
+        const depthBase64 = await captureDepthMapRaw();
 
         if (!rgbBase64 || !depthBase64) {
           console.warn('Failed to capture frame or depth');
           return;
         }
+
+        console.log(`[Phosphene] Captured RGB: ${Math.round(rgbBase64.length / 1024)}KB, Depth: ${Math.round(depthBase64.length / 1024)}KB`);
 
         const result = await processFrame(rgbBase64, depthBase64, {
           depth_sampling: 'median',

@@ -22,29 +22,44 @@ export function useCameraCapture() {
     };
   }, []);
 
-  const captureFrame = useCallback((quality: number = 0.8): string | null => {
-    try {
-      const scene = document.querySelector('a-scene') as any;
-      if (!scene?.canvas) {
-        console.error('Canvas not found');
-        return null;
-      }
+  const captureFrame = useCallback((quality: number = 0.8): Promise<string | null> => {
+    return new Promise((resolve) => {
+      try {
+        const scene = document.querySelector('a-scene') as any;
+        if (!scene?.canvas) {
+          console.error('Canvas not found');
+          resolve(null);
+          return;
+        }
 
-      const startTime = performance.now();
-      const dataUrl = scene.canvas.toDataURL('image/jpeg', quality);
-      
-      statsRef.current.lastCaptureTime = performance.now() - startTime;
-      statsRef.current.captureCount++;
-      
-      return dataUrl;
-    } catch (error) {
-      console.error('Failed to capture camera frame:', error);
-      return null;
-    }
+        // Wait for next A-Frame render tick to ensure canvas is updated
+        scene.renderer.render(scene.object3D, scene.camera);
+        
+        // Use requestAnimationFrame to capture after render completes
+        requestAnimationFrame(() => {
+          try {
+            const startTime = performance.now();
+            const dataUrl = scene.canvas.toDataURL('image/jpeg', quality);
+            
+            statsRef.current.lastCaptureTime = performance.now() - startTime;
+            statsRef.current.captureCount++;
+            
+            console.log(`[CameraCapture] Captured frame ${statsRef.current.captureCount}, size: ${Math.round(dataUrl.length / 1024)}KB`);
+            resolve(dataUrl);
+          } catch (error) {
+            console.error('Failed to capture after render:', error);
+            resolve(null);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to capture camera frame:', error);
+        resolve(null);
+      }
+    });
   }, []);
 
-  const captureFrameRaw = useCallback((quality: number = 0.8): string | null => {
-    const dataUrl = captureFrame(quality);
+  const captureFrameRaw = useCallback(async (quality: number = 0.8): Promise<string | null> => {
+    const dataUrl = await captureFrame(quality);
     if (!dataUrl) return null;
     
     // Remove "data:image/jpeg;base64," prefix

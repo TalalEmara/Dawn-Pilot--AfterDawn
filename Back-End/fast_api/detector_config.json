@@ -1,5 +1,10 @@
 {
-    "detector_type": "yolo",
+    "detector_type": "mock", 
+    "mock": {
+        "brightness_threshold": 120,
+        "min_area": 500,
+        "max_detections": 10
+    },
     "yolo": {
         "model_path": "yolov8n.pt",
         "conf_threshold": 0.5

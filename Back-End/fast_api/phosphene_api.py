@@ -30,6 +30,7 @@ from PIL import Image
 # Import local modules
 from translator import Translator
 from realtime_detector import create_detector
+from mock_detector import create_mock_detector
 
 # Configure logging
 logging.basicConfig(
@@ -171,15 +172,27 @@ class DetectorService:
                         model_path=frcnn_config.get("model_path"),
                         conf_threshold=frcnn_config.get("conf_threshold", 0.5)
                     )
+                elif self.detector_type == "mock":
+                    mock_config = config.get("mock", {})
+                    self.detector = create_mock_detector(
+                        brightness_threshold=mock_config.get("brightness_threshold", 200),
+                        min_area=mock_config.get("min_area", 100),
+                        max_detections=mock_config.get("max_detections", 10)
+                    )
+                    # Add is_loaded attribute for compatibility
+                    self.detector.is_loaded = True
                 else:
-                    self.detector = create_detector("mock")
+                    # Default to mock
+                    self.detector = create_mock_detector()
+                    self.detector.is_loaded = True
                     self.detector_type = "mock"
             else:
                 logger.warning(f"Config file not found: {self.config_path}, using mock detector")
-                self.detector = create_detector("mock")
+                self.detector = create_mock_detector()
+                self.detector.is_loaded = True
                 self.detector_type = "mock"
             
-            logger.info(f"Detector loaded: {self.detector_type} (ready: {self.detector.is_loaded})")
+            logger.info(f"Detector loaded: {self.detector_type} (ready: {getattr(self.detector, 'is_loaded', True)})")
         
         except Exception as e:
             logger.error(f"Failed to load detector: {e}")
@@ -1444,6 +1457,25 @@ async def process_with_depth(
         
         # Generate timestamp for this frame
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # milliseconds
+        
+        # DEBUG: Save received images to verify what we got
+        debug_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_output", "debug_frames")
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        # Save RGB frame
+        rgb_debug_path = os.path.join(debug_dir, f"received_rgb_{timestamp}.jpg")
+        cv2.imwrite(rgb_debug_path, frame)
+        logger.info(f"💾 Saved RGB frame to: {rgb_debug_path} (shape: {frame.shape})")
+        
+        # Save depth map (normalize to visible range for inspection)
+        depth_debug_path = os.path.join(debug_dir, f"received_depth_{timestamp}.png")
+        if depth_map is not None and depth_map.size > 0:
+            # Normalize depth to 0-255 for visualization
+            depth_normalized = cv2.normalize(depth_map, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            cv2.imwrite(depth_debug_path, depth_normalized)
+            logger.info(f"💾 Saved depth map to: {depth_debug_path} (shape: {depth_map.shape}, range: {depth_map.min():.3f}-{depth_map.max():.3f})")
+        else:
+            logger.warning(f"⚠️ Depth map is empty or invalid!")
         
         # Ensure depth map matches image dimensions
         if len(depth_map.shape) == 1:
