@@ -32,21 +32,36 @@ function DesktopViewer() {
   // Desktop broadcasts camera to mobile
   useEffect(() => {
     let frameCount = 0;
-    const interval = setInterval(() => {
+    let lastPosition = { x: 0, y: 0, z: 0 };
+    let lastRotation = { x: 0, y: 0, z: 0 };
+    const positionThreshold = 0.01; // Only send if moved more than 1cm
+    
+    const broadcastCamera = () => {
       if (cameraRef.current?.el) {
         const el = cameraRef.current.el;
         const position = el.getAttribute('position');
         const rotation = el.getAttribute('rotation');
         
         if (position && rotation) {
-          updateCamera({
-            position: { x: position.x, y: position.y, z: position.z },
-            rotation: { x: rotation.x, y: rotation.y, z: rotation.z }
-          });
+          // Only broadcast if position actually changed (reduce unnecessary updates)
+          const posChanged = 
+            Math.abs(position.x - lastPosition.x) > positionThreshold ||
+            Math.abs(position.y - lastPosition.y) > positionThreshold ||
+            Math.abs(position.z - lastPosition.z) > positionThreshold;
           
-          // Log every 2 seconds (40 frames at 50ms)
+          if (posChanged || frameCount === 0) {
+            updateCamera({
+              position: { x: position.x, y: position.y, z: position.z },
+              rotation: { x: rotation.x, y: rotation.y, z: rotation.z }
+            });
+            
+            lastPosition = { x: position.x, y: position.y, z: position.z };
+            lastRotation = { x: rotation.x, y: rotation.y, z: rotation.z };
+          }
+          
+          // Log every 2 seconds (120 frames at 60fps)
           frameCount++;
-          if (frameCount % 40 === 0) {
+          if (frameCount % 120 === 0) {
             console.log('📡 Desktop broadcasting:', {
               pos: `(${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`,
               connected: isConnected
@@ -54,9 +69,13 @@ function DesktopViewer() {
           }
         }
       }
-    }, 50);
+      
+      requestAnimationFrame(broadcastCamera);
+    };
     
-    return () => clearInterval(interval);
+    const animationId = requestAnimationFrame(broadcastCamera);
+    
+    return () => cancelAnimationFrame(animationId);
   }, [updateCamera, isConnected]);
   
   // VR Controller support (Gamepad API) - uses actual gamepad axes with smoothing

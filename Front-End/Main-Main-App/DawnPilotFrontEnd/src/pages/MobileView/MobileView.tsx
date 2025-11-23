@@ -20,6 +20,7 @@ function MobileView() {
   const targetPosition = useRef({ x: 0, y: 2, z: 4 });
   const currentPosition = useRef({ x: 0, y: 2, z: 4 });
   const animationFrameRef = useRef<number | null>(null);
+  const isUpdatingRef = useRef(false); // Prevent concurrent updates
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 2, z: 4 });
   const [showCertWarning, setShowCertWarning] = useState(false);
   
@@ -91,16 +92,28 @@ function MobileView() {
   // Setup callback for camera updates (no React re-renders)
   useEffect(() => {
     setOnCameraUpdate((camera) => {
+      // Only update if not currently in the middle of an animation frame update
+      if (isUpdatingRef.current) return;
+      
       // Update target position directly
       targetPosition.current = { ...camera.position };
       
-      // On first update, snap immediately
+      // On first update, snap immediately to avoid initial flicker
       if (!hasReceivedPosition.current) {
         currentPosition.current = { ...camera.position };
         hasReceivedPosition.current = true;
+        
+        // Immediately apply to DOM to prevent any flash
+        if (rigRef.current?.el?.object3D) {
+          rigRef.current.el.object3D.position.set(
+            camera.position.x,
+            camera.position.y,
+            camera.position.z
+          );
+        }
       }
       
-      // Update UI state
+      // Update UI state (throttled, only for display)
       setCameraPosition(camera.position);
     });
   }, [setOnCameraUpdate]);
@@ -119,26 +132,47 @@ function MobileView() {
       const object3D = rigEl.object3D;
       
       if (object3D && hasReceivedPosition.current) {
+        // Set update flag to prevent WebSocket callback interference
+        isUpdatingRef.current = true;
+        
         // Debug log every 2 seconds
         const now = Date.now();
         if (now - lastLogTime > 2000) {
-          console.log(`📹 Target: ${targetPosition.current.x.toFixed(2)}, ${targetPosition.current.y.toFixed(2)}, ${targetPosition.current.z.toFixed(2)}`);
-          console.log(`📹 Current: ${currentPosition.current.x.toFixed(2)}, ${currentPosition.current.y.toFixed(2)}, ${currentPosition.current.z.toFixed(2)}`);
+          const distance = Math.sqrt(
+            Math.pow(targetPosition.current.x - currentPosition.current.x, 2) +
+            Math.pow(targetPosition.current.y - currentPosition.current.y, 2) +
+            Math.pow(targetPosition.current.z - currentPosition.current.z, 2)
+          );
+          console.log(`📹 Target: (${targetPosition.current.x.toFixed(2)}, ${targetPosition.current.y.toFixed(2)}, ${targetPosition.current.z.toFixed(2)})`);
+          console.log(`📹 Current: (${currentPosition.current.x.toFixed(2)}, ${currentPosition.current.y.toFixed(2)}, ${currentPosition.current.z.toFixed(2)})`);
+          console.log(`📏 Distance to target: ${distance.toFixed(3)}m`);
           lastLogTime = now;
         }
         
-        // Smooth interpolation (lerp) - 50% towards target each frame for fast response
-        const lerpFactor = 0.5;
-        currentPosition.current.x += (targetPosition.current.x - currentPosition.current.x) * lerpFactor;
-        currentPosition.current.y += (targetPosition.current.y - currentPosition.current.y) * lerpFactor;
-        currentPosition.current.z += (targetPosition.current.z - currentPosition.current.z) * lerpFactor;
+        // Calculate distance to target
+        const dx = targetPosition.current.x - currentPosition.current.x;
+        const dy = targetPosition.current.y - currentPosition.current.y;
+        const dz = targetPosition.current.z - currentPosition.current.z;
+        const distanceSquared = dx * dx + dy * dy + dz * dz;
         
-        // Apply to rig (works in both VR and normal mode)
-        object3D.position.set(
-          currentPosition.current.x,
-          currentPosition.current.y,
-          currentPosition.current.z
-        );
+        // Only interpolate if we're not already at the target (avoid micro-movements)
+        if (distanceSquared > 0.0001) {
+          // Smooth interpolation (lerp) - 30% towards target each frame (slower for smoother)
+          const lerpFactor = 0.3;
+          currentPosition.current.x += dx * lerpFactor;
+          currentPosition.current.y += dy * lerpFactor;
+          currentPosition.current.z += dz * lerpFactor;
+          
+          // Apply to rig (works in both VR and normal mode)
+          object3D.position.set(
+            currentPosition.current.x,
+            currentPosition.current.y,
+            currentPosition.current.z
+          );
+        }
+        
+        // Clear update flag
+        isUpdatingRef.current = false;
       }
       
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -153,12 +187,20 @@ function MobileView() {
     };
   }, []);
 
-  // Initialize camera rig position on mount
+  // Initialize camera rig position on mount (wait for scene to load)
   useEffect(() => {
-    if (rigRef.current?.el && !hasReceivedPosition.current) {
-      // Set initial rig position only if we haven't received desktop position yet
-      rigRef.current.el.setAttribute('position', { x: 0, y: 2, z: 4 });
-    }
+    const initializePosition = () => {
+      if (rigRef.current?.el?.object3D && !hasReceivedPosition.current) {
+        // Set initial position directly on object3D (faster, no A-Frame overhead)
+        rigRef.current.el.object3D.position.set(0, 2, 4);
+        console.log('🎬 Initial rig position set to (0, 2, 4)');
+      }
+    };
+    
+    // Wait a bit for A-Frame to fully initialize
+    const timer = setTimeout(initializePosition, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
   
   // Check FastAPI health on mount
