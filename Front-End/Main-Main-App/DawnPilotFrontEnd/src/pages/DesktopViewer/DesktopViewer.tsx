@@ -32,9 +32,6 @@ function DesktopViewer() {
   // Desktop broadcasts camera to mobile
   useEffect(() => {
     let frameCount = 0;
-    let lastPosition = { x: 0, y: 0, z: 0 };
-    let lastRotation = { x: 0, y: 0, z: 0 };
-    const positionThreshold = 0.01; // Only send if moved more than 1cm
     
     const broadcastCamera = () => {
       if (cameraRef.current?.el) {
@@ -43,21 +40,11 @@ function DesktopViewer() {
         const rotation = el.getAttribute('rotation');
         
         if (position && rotation) {
-          // Only broadcast if position actually changed (reduce unnecessary updates)
-          const posChanged = 
-            Math.abs(position.x - lastPosition.x) > positionThreshold ||
-            Math.abs(position.y - lastPosition.y) > positionThreshold ||
-            Math.abs(position.z - lastPosition.z) > positionThreshold;
-          
-          if (posChanged || frameCount === 0) {
-            updateCamera({
-              position: { x: position.x, y: position.y, z: position.z },
-              rotation: { x: rotation.x, y: rotation.y, z: rotation.z }
-            });
-            
-            lastPosition = { x: position.x, y: position.y, z: position.z };
-            lastRotation = { x: rotation.x, y: rotation.y, z: rotation.z };
-          }
+          // Always send position - mobile will interpolate smoothly
+          updateCamera({
+            position: { x: position.x, y: position.y, z: position.z },
+            rotation: { x: rotation.x, y: rotation.y, z: rotation.z }
+          });
           
           // Log every 2 seconds (120 frames at 60fps)
           frameCount++;

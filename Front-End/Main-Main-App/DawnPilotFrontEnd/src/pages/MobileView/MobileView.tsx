@@ -17,11 +17,10 @@ function MobileView() {
   const cameraRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const rigRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const hasReceivedPosition = useRef(false);
-  const targetPosition = useRef({ x: 0, y: 2, z: 4 });
-  const currentPosition = useRef({ x: 0, y: 2, z: 4 });
+  const targetPosition = useRef({ x: 0, y: 0, z: 0 }); // Will be set by desktop
+  const currentPosition = useRef({ x: 0, y: 0, z: 0 }); // Will be set by desktop
   const animationFrameRef = useRef<number | null>(null);
-  const isUpdatingRef = useRef(false); // Prevent concurrent updates
-  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 2, z: 4 });
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
   const [showCertWarning, setShowCertWarning] = useState(false);
   
   // Phosphene vision state
@@ -92,9 +91,6 @@ function MobileView() {
   // Setup callback for camera updates (no React re-renders)
   useEffect(() => {
     setOnCameraUpdate((camera) => {
-      // Only update if not currently in the middle of an animation frame update
-      if (isUpdatingRef.current) return;
-      
       // Update target position directly
       targetPosition.current = { ...camera.position };
       
@@ -132,9 +128,6 @@ function MobileView() {
       const object3D = rigEl.object3D;
       
       if (object3D && hasReceivedPosition.current) {
-        // Set update flag to prevent WebSocket callback interference
-        isUpdatingRef.current = true;
-        
         // Debug log every 2 seconds
         const now = Date.now();
         if (now - lastLogTime > 2000) {
@@ -157,8 +150,8 @@ function MobileView() {
         
         // Only interpolate if we're not already at the target (avoid micro-movements)
         if (distanceSquared > 0.0001) {
-          // Smooth interpolation (lerp) - 30% towards target each frame (slower for smoother)
-          const lerpFactor = 0.3;
+          // Smooth interpolation (lerp) - 50% towards target each frame
+          const lerpFactor = 0.5;
           currentPosition.current.x += dx * lerpFactor;
           currentPosition.current.y += dy * lerpFactor;
           currentPosition.current.z += dz * lerpFactor;
@@ -170,9 +163,6 @@ function MobileView() {
             currentPosition.current.z
           );
         }
-        
-        // Clear update flag
-        isUpdatingRef.current = false;
       }
       
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -185,22 +175,6 @@ function MobileView() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, []);
-
-  // Initialize camera rig position on mount (wait for scene to load)
-  useEffect(() => {
-    const initializePosition = () => {
-      if (rigRef.current?.el?.object3D && !hasReceivedPosition.current) {
-        // Set initial position directly on object3D (faster, no A-Frame overhead)
-        rigRef.current.el.object3D.position.set(0, 2, 4);
-        console.log('🎬 Initial rig position set to (0, 2, 4)');
-      }
-    };
-    
-    // Wait a bit for A-Frame to fully initialize
-    const timer = setTimeout(initializePosition, 100);
-    
-    return () => clearTimeout(timer);
   }, []);
   
   // Check FastAPI health on mount
@@ -559,7 +533,8 @@ function MobileView() {
           })}
 
         {/* Camera rig for movement (works in VR and normal mode) */}
-        <Entity ref={rigRef} position="0 2 4">
+        {/* CRITICAL: No hardcoded position - controlled entirely by refs */}
+        <Entity ref={rigRef}>
           <Entity
             ref={cameraRef}
             primitive="a-camera"
