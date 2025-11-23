@@ -27,32 +27,39 @@ export function useCameraCapture() {
       try {
         const scene = document.querySelector('a-scene') as any;
         if (!scene?.canvas) {
-          console.error('Canvas not found');
+          console.error('[CameraCapture] Canvas not found');
+          resolve(null);
+          return;
+        }
+        
+        if (!scene.renderStarted) {
+          console.error('[CameraCapture] Scene rendering not started');
           resolve(null);
           return;
         }
 
-        // Wait for next A-Frame render tick to ensure canvas is updated
+        // Always capture from normal rendering (even in VR mode)
+        // Force render current scene to canvas
         scene.renderer.render(scene.object3D, scene.camera);
         
-        // Use requestAnimationFrame to capture after render completes
         requestAnimationFrame(() => {
           try {
             const startTime = performance.now();
             const dataUrl = scene.canvas.toDataURL('image/jpeg', quality);
             
+            const sizeKB = Math.round(dataUrl.length / 1024);
             statsRef.current.lastCaptureTime = performance.now() - startTime;
             statsRef.current.captureCount++;
             
-            console.log(`[CameraCapture] Captured frame ${statsRef.current.captureCount}, size: ${Math.round(dataUrl.length / 1024)}KB`);
+            console.log(`[CameraCapture] Frame ${statsRef.current.captureCount}, size: ${sizeKB}KB, time: ${statsRef.current.lastCaptureTime.toFixed(2)}ms`);
             resolve(dataUrl);
           } catch (error) {
-            console.error('Failed to capture after render:', error);
+            console.error('[CameraCapture] Failed to capture frame:', error);
             resolve(null);
           }
         });
       } catch (error) {
-        console.error('Failed to capture camera frame:', error);
+        console.error('[CameraCapture] Failed to capture camera frame:', error);
         resolve(null);
       }
     });

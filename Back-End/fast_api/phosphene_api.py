@@ -668,6 +668,11 @@ def assign_depth_to_detections(
             det['distance_m'] = None
             continue
         
+        # Debug: Log depth distribution in this bbox
+        valid_depths = depth_roi[depth_roi > 0]
+        if valid_depths.size > 0:
+            logger.debug(f"Bbox depth stats - min: {valid_depths.min():.1f}, max: {valid_depths.max():.1f}, median: {np.median(valid_depths):.1f}")
+        
         # Sample depth based on method
         try:
             if method == "centroid":
@@ -677,26 +682,40 @@ def assign_depth_to_detections(
             
             elif method == "median":
                 # Median depth (robust to noise/outliers)
-                valid_depths = depth_roi[depth_roi > 0]  # Ignore 0 (invalid/sky)
                 depth = float(np.median(valid_depths)) if valid_depths.size > 0 else 0.0
             
             elif method == "min":
-                # Closest point (conservative - closest obstacle)
-                valid_depths = depth_roi[depth_roi > 0]
+                # Closest point (lowest depth value)
                 depth = float(np.min(valid_depths)) if valid_depths.size > 0 else 0.0
             
             elif method == "mean":
                 # Average depth
-                valid_depths = depth_roi[depth_roi > 0]
                 depth = float(np.mean(valid_depths)) if valid_depths.size > 0 else 0.0
             
             else:
                 logger.warning(f"Unknown depth sampling method: {method}, using median")
-                valid_depths = depth_roi[depth_roi > 0]
                 depth = float(np.median(valid_depths)) if valid_depths.size > 0 else 0.0
             
-            # Assign depth (translator uses distance_m, depth, or depth_z)
-            det['distance_m'] = depth if depth > 0 else None
+            # Convert normalized depth (0-255) to approximate meters
+            # BasicDepthPacking: HIGH values = NEAR, LOW values = FAR
+            # Observed actual range: pixel 20 (very close) to pixel 0 (~10m away)
+            # Need to remap this narrow range to physical distances: 0.2m (close) to 10m (far)
+            depth_normalized = min(depth / 255.0, 1.0)  # Normalize to 0-1
+            
+            # Remap observed range [0, 20] pixels to distance range [10m, 0.2m] (inverted)
+            # High pixel value (20) = close = 0.2m
+            # Low pixel value (0) = far = 10m
+            depth_clamped = max(0.0, min(40.0, depth))  # Clamp to observed pixel range [0, 20]
+            
+            # Linear interpolation with inversion:
+            # Map [0, 20] → [10.0, 0.2]
+            t = depth_clamped / 40.0  # Normalize to [0, 1] within observed range (0→0, 40→1)
+            depth_meters = 10.0 + t * (0.2 - 10.0)  # Interpolate from 10m to 0.2m (0→10m, 20→0.2m)
+            
+            # Assign depth and raw pixel value
+            det['distance_m'] = depth_meters if depth_meters > 0 else None
+            det['depth_pixel'] = float(depth)  # Store raw depth pixel value (0-255)
+            logger.info(f"🎯 Detection '{det.get('class', 'unknown')}': depth_pixel={depth:.1f} (20=close/0.2m, 0=far/10m) → distance={depth_meters:.2f}m")
             
         except Exception as e:
             logger.error(f"Error sampling depth for detection: {e}")

@@ -17,13 +17,29 @@ export function useDepthCapture() {
       try {
         const scene = document.querySelector('a-scene') as any;
         if (!scene?.object3D || !scene.renderer || !scene.camera) {
-          console.error('Scene, renderer, or camera not found');
+          console.error('[DepthCapture] Scene, renderer, or camera not found');
+          resolve(null);
+          return;
+        }
+        
+        if (!scene.renderStarted) {
+          console.error('[DepthCapture] Scene rendering not started');
           resolve(null);
           return;
         }
 
-        // Wait for next frame to ensure scene is rendered
-        requestAnimationFrame(() => {
+        // Always use simple RAF - no special VR handling needed
+        const rafCount = 1;
+        
+        const waitForRender = (remaining: number) => {
+          if (remaining === 0) {
+            captureDepthNow();
+            return;
+          }
+          requestAnimationFrame(() => waitForRender(remaining - 1));
+        };
+        
+        const captureDepthNow = () => {
           try {
             const startTime = performance.now();
 
@@ -31,15 +47,33 @@ export function useDepthCapture() {
             const camera = scene.camera;
             const sceneObject = scene.object3D;
 
-            // Create render target for depth
+            // Get actual rendering dimensions
             const width = renderer.domElement.width;
             const height = renderer.domElement.height;
-            const renderTarget = new THREE.WebGLRenderTarget(width, height);
+            
+            console.log(`[DepthCapture] Canvas: ${width}x${height}`);
 
-            // Create depth material
-            const depthMaterial = new THREE.MeshDepthMaterial({
-              depthPacking: THREE.RGBADepthPacking
+            // Create render target for depth
+            const renderTarget = new THREE.WebGLRenderTarget(width, height, {
+              minFilter: THREE.NearestFilter,
+              magFilter: THREE.NearestFilter,
+              format: THREE.RGBAFormat
             });
+
+            // Create depth material - use BasicDepthPacking for simpler linear depth
+            const depthMaterial = new THREE.MeshDepthMaterial({
+              depthPacking: THREE.BasicDepthPacking  // Linear depth (easier to work with)
+            });
+            
+            // Configure camera near/far for better depth range
+            // BasicDepthPacking: 0 (black) = near, 255 (white) = far
+            // We INVERT this later so: 255 (white) = near/close, 0 (black) = far/distant
+            // This matches intuition: BRIGHTER = CLOSER
+            const originalNear = camera.near;
+            const originalFar = camera.far;
+            camera.near = 0.1;   // Very close (will be inverted to 255/bright)
+            camera.far = 50;     // Far (will be inverted to 0/dark)
+            camera.updateProjectionMatrix();
 
             // Store original materials
             const originalMaterials = new Map();
@@ -50,55 +84,91 @@ export function useDepthCapture() {
               }
             });
 
+            // Save original render state
+            const originalRenderTarget = renderer.getRenderTarget();
+            
             // Render depth to target
             renderer.setRenderTarget(renderTarget);
+            renderer.clear();
             renderer.render(sceneObject, camera);
-            renderer.setRenderTarget(null);
+            renderer.setRenderTarget(originalRenderTarget);
 
             // Read pixels
             const pixelBuffer = new Uint8Array(width * height * 4);
             renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, pixelBuffer);
 
-            // Convert RGBA to grayscale
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d')!;
-            const imageData = ctx.createImageData(width, height);
-
-            for (let i = 0; i < pixelBuffer.length; i += 4) {
-              const gray = pixelBuffer[i]; // Use R channel as depth
-              imageData.data[i] = gray;     // R
-              imageData.data[i + 1] = gray; // G
-              imageData.data[i + 2] = gray; // B
-              imageData.data[i + 3] = 255;  // A
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-
-            // Restore original materials
+            // Restore original materials immediately
             sceneObject.traverse((node: any) => {
               if (node.isMesh && originalMaterials.has(node)) {
                 node.material = originalMaterials.get(node);
               }
             });
+            
+            // Restore camera settings
+            camera.near = originalNear;
+            camera.far = originalFar;
+            camera.updateProjectionMatrix();
 
             // Cleanup
             renderTarget.dispose();
             depthMaterial.dispose();
+
+            // Convert RGBA to grayscale and analyze depth distribution
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d')!;
+            const imageData = ctx.createImageData(width, height);
+            
+            // Track depth statistics for debugging
+            let minDepth = 255, maxDepth = 0, sumDepth = 0, count = 0;
+
+            // Flip vertically: WebGL origin is bottom-left, canvas is top-left
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                // Read from bottom-up (WebGL coordinate system)
+                const srcIdx = ((height - 1 - y) * width + x) * 4;
+                // Write to top-down (canvas coordinate system)
+                const dstIdx = (y * width + x) * 4;
+                
+                const depth = pixelBuffer[srcIdx]; // R channel (0=near, 255=far)
+                
+                imageData.data[dstIdx] = depth;     // R
+                imageData.data[dstIdx + 1] = depth; // G
+                imageData.data[dstIdx + 2] = depth; // B
+                imageData.data[dstIdx + 3] = 255;   // A
+                
+                // Statistics
+                if (depth > 0) {
+                  minDepth = Math.min(minDepth, depth);
+                  maxDepth = Math.max(maxDepth, depth);
+                  sumDepth += depth;
+                  count++;
+                }
+              }
+            }
+            
+            const avgDepth = count > 0 ? sumDepth / count : 0;
+            console.log(`[DepthCapture] Depth range: ${minDepth}-${maxDepth}, avg: ${avgDepth.toFixed(1)} (0=near, 255=far)`);
+
+            ctx.putImageData(imageData, 0, 0);
 
             const dataUrl = canvas.toDataURL('image/png');
             
             statsRef.current.lastCaptureTime = performance.now() - startTime;
             statsRef.current.captureCount++;
 
-            console.log(`[DepthCapture] Captured depth ${statsRef.current.captureCount}, size: ${Math.round(dataUrl.length / 1024)}KB`);
+            console.log(`[DepthCapture] Depth ${statsRef.current.captureCount}, size: ${Math.round(dataUrl.length / 1024)}KB, time: ${statsRef.current.lastCaptureTime.toFixed(2)}ms`);
             resolve(dataUrl);
           } catch (error) {
-            console.error('Failed to capture depth after render:', error);
+            console.error('[DepthCapture] Failed to capture depth:', error);
             resolve(null);
           }
-        });
+        };
+        
+        // Start the RAF chain
+        waitForRender(rafCount);
+        
       } catch (error) {
         console.error('Failed to capture depth map:', error);
         resolve(null);

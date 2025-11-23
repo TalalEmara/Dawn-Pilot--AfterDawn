@@ -28,6 +28,7 @@ function MobileView() {
   const [phospheneImage, setPhospheneImage] = useState<string | null>(null);
   const [fastAPIHealthy, setFastAPIHealthy] = useState<boolean | null>(null);
   const phospheneIntervalRef = useRef<number | null>(null);
+  const [phospheneVRMode, setPhospheneVRMode] = useState(false); // VR with phosphene overlay
   
   // Phosphene hooks
   const { captureFrameRaw } = useCameraCapture();
@@ -188,6 +189,11 @@ function MobileView() {
 
   // Phosphene vision capture loop
   useEffect(() => {
+    // Auto-start phosphene when entering phosphene VR mode
+    if (phospheneVRMode && !phospheneActive) {
+      setPhospheneActive(true);
+    }
+    
     if (!phospheneActive) {
       if (phospheneIntervalRef.current) {
         clearInterval(phospheneIntervalRef.current);
@@ -200,16 +206,36 @@ function MobileView() {
       if (processing) return;
 
       try {
+        // Check if scene is ready
+        const scene = document.querySelector('a-scene') as any;
+        if (!scene || !scene.renderStarted) {
+          console.warn('[Phosphene] Scene not ready for capture');
+          return;
+        }
+        
+        // Check VR mode
+        const isVR = scene.is('vr-mode');
+        console.log(`[Phosphene] Capturing in ${isVR ? 'VR' : 'Normal'} mode`);
+
         // Await async captures
         const rgbBase64 = await captureFrameRaw(0.8);
         const depthBase64 = await captureDepthMapRaw();
 
         if (!rgbBase64 || !depthBase64) {
-          console.warn('Failed to capture frame or depth');
+          console.warn('[Phosphene] Failed to capture frame or depth');
           return;
         }
 
         console.log(`[Phosphene] Captured RGB: ${Math.round(rgbBase64.length / 1024)}KB, Depth: ${Math.round(depthBase64.length / 1024)}KB`);
+        
+        // Debug: Save captured frame for inspection
+        try {
+          const rgbDataUrl = `data:image/jpeg;base64,${rgbBase64}`;
+          localStorage.setItem('debug_last_rgb', rgbDataUrl);
+          console.log('[Phosphene] Debug: To view captured RGB, run in console: window.open(localStorage.getItem("debug_last_rgb"))');
+        } catch (e) {
+          console.warn('[Phosphene] Could not save debug image:', e);
+        }
 
         const result = await processFrame(rgbBase64, depthBase64, {
           depth_sampling: 'median',
@@ -227,15 +253,47 @@ function MobileView() {
       }
     };
 
-    // Start capture loop every 500ms
-    phospheneIntervalRef.current = window.setInterval(captureAndProcess, 500);
+    // Delay before starting capture loop
+    // No need for VR-specific delay since we're capturing from normal rendering
+    const initialDelay = 500;
+    
+    console.log(`[Phosphene] Starting capture loop in ${initialDelay}ms`);
+    
+    const startTimer = setTimeout(() => {
+      // Start capture loop every 1000ms
+      phospheneIntervalRef.current = window.setInterval(captureAndProcess, 1000);
+      // Do first capture immediately after delay
+      captureAndProcess();
+    }, initialDelay);
 
     return () => {
+      if (startTimer) {
+        clearTimeout(startTimer);
+      }
       if (phospheneIntervalRef.current) {
         clearInterval(phospheneIntervalRef.current);
       }
     };
-  }, [phospheneActive, processing, captureFrameRaw, captureDepthMapRaw, processFrame]);
+  }, [phospheneActive, phospheneVRMode, processing, captureFrameRaw, captureDepthMapRaw, processFrame]);
+
+  // Listen for VR mode exit to turn off phosphene VR mode
+  useEffect(() => {
+    const handleExitVR = () => {
+      if (phospheneVRMode) {
+        console.log('🔮 Exiting Phosphene VR mode');
+        setPhospheneVRMode(false);
+        setPhospheneActive(false);
+      }
+    };
+
+    const scene = document.querySelector('a-scene');
+    if (scene) {
+      scene.addEventListener('exit-vr', handleExitVR);
+      return () => {
+        scene.removeEventListener('exit-vr', handleExitVR);
+      };
+    }
+  }, [phospheneVRMode]);
 
   return (
     
@@ -247,10 +305,47 @@ function MobileView() {
           position: fixed !important;
           z-index: 99999 !important;
         }
+        .phosphene-vr-button {
+          bottom: calc(20% + 60px) !important;
+          position: fixed !important;
+          z-index: 99999 !important;
+          right: 20px !important;
+          padding: 12px 24px !important;
+          background: #9C27B0 !important;
+          color: white !important;
+          border: none !important;
+          border-radius: 8px !important;
+          font-size: 14px !important;
+          font-weight: bold !important;
+          cursor: pointer !important;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+        }
+        .phosphene-vr-button:hover {
+          background: #7B1FA2 !important;
+        }
+        .phosphene-vr-button:disabled {
+          background: #999 !important;
+          cursor: not-allowed !important;
+          opacity: 0.5 !important;
+        }
         body {
           overflow: hidden !important;
         }
       `}</style>
+
+      {/* Phosphene VR Mode Button - Above regular VR button */}
+      <button
+        className="phosphene-vr-button"
+        onClick={() => {
+          setPhospheneVRMode(!phospheneVRMode);
+          // Don't enter WebXR - just toggle stereo display mode
+          // User will put phone in Cardboard viewer manually
+        }}
+        disabled={fastAPIHealthy === false}
+        title={fastAPIHealthy === false ? "FastAPI not available" : "Toggle Cardboard Stereo Phosphene View"}
+      >
+        {phospheneVRMode ? '👁️ Exit Phosphene VR' : '🔮 Phosphene VR Mode'}
+      </button>
 
       {/* Certificate Warning Modal */}
       {showCertWarning && !isConnected && (
@@ -414,6 +509,20 @@ function MobileView() {
               <>
                 <div>Detections: {lastResult.metadata.detection_count}</div>
                 <div>Time: {lastResult.metadata.timing_breakdown.total_ms.toFixed(0)}ms</div>
+                {lastResult.detections && lastResult.detections.length > 0 && (
+                  <div style={{ marginTop: '4px', borderTop: '1px solid #555', paddingTop: '4px' }}>
+                    {lastResult.detections.map((det: any, idx: number) => (
+                      <div key={idx} style={{ fontSize: '9px' }}>
+                        {det.class}: {det.distance_m ? `${det.distance_m.toFixed(2)}m` : 'N/A'}
+                        {det.depth_pixel !== undefined && (
+                          <span style={{ color: '#888', marginLeft: '4px' }}>
+                            (px:{det.depth_pixel.toFixed(0)})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
             {phospheneError && <div style={{ color: '#ff5555' }}>Error: {phospheneError}</div>}
@@ -439,8 +548,59 @@ function MobileView() {
         <div>Z: {cameraPosition.z.toFixed(2)}</div>
       </div>
       
-      {/* Phosphene Overlay - Full Screen */}
-      {phospheneActive && phospheneImage && (
+      {/* Phosphene Overlay for VR Mode - Side-by-side stereo view */}
+      {/* This creates a Cardboard-compatible stereo view without entering WebXR */}
+      {phospheneVRMode && phospheneImage && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 900,
+          pointerEvents: 'none',
+          display: 'flex',
+          backgroundColor: '#000'
+        }}>
+          {/* Left eye - Shows full scene on left half */}
+          <div style={{ 
+            width: '50%', 
+            height: '100%', 
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            <img
+              src={phospheneImage}
+              alt="Phosphene Vision Left"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+          {/* Right eye - Shows full scene on right half */}
+          <div style={{ 
+            width: '50%', 
+            height: '100%', 
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            <img
+              src={phospheneImage}
+              alt="Phosphene Vision Right"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Phosphene Overlay for Normal Mode - Full screen */}
+      {!phospheneVRMode && phospheneActive && phospheneImage && (
         <div style={{
           position: 'absolute',
           top: 0,
@@ -467,7 +627,12 @@ function MobileView() {
         vr-mode-ui="enabled: true"
         device-orientation-permission-ui="enabled: true"
         fog="type: linear; color: #111; near: 50; far: 200"
-        style={{ width: "100%", height: "100%" }}
+        style={{ 
+          width: "100%", 
+          height: "100%",
+          // Hide scene when in phosphene VR mode (show only stereo phosphene overlay)
+          visibility: phospheneVRMode ? 'hidden' : 'visible'
+        }}
       >
         {/* Sky background */}
         <Entity primitive="a-sky" color="#87CEEB" />
@@ -540,12 +705,7 @@ function MobileView() {
             primitive="a-camera"
             look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
           >
-            {/* VR cursor for interaction */}
-            <Entity
-              primitive="a-cursor"
-              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-              material="color: white; shader: flat"
-            />
+            {/* Cursor removed - was causing white circle in captures */}
           </Entity>
         </Entity>
       </Scene>
