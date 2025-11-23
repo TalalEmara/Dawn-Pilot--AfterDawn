@@ -33,7 +33,7 @@ function MobileView() {
   const nextButtonIndexRef = useRef(0);
   
   // Debug mode to see raw controller input
-  const [debugMode, setDebugMode] = useState(true);
+  const [debugMode, setDebugMode] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   
   // Phosphene vision state
@@ -243,16 +243,10 @@ function MobileView() {
 
   // Handle controller detection on mount
   useEffect(() => {
-    console.log('🎮 Controller Mode Active');
-    console.log('📱 Controller button presses will be auto-mapped to movement');
-    console.log('🔧 Watching for button presses...');
-    console.log('');
-    console.log('If your controller sends keyCode 0 (Unidentified):');
-    console.log('  First button = Forward (W)');
-    console.log('  Second button = Backward (S)');
-    console.log('  Third button = Strafe Left (A)');
-    console.log('  Fourth button = Strafe Right (D)');
-    setControllerStatus('🎮 Keyboard/Controller (Auto-map)');
+    console.log('✅ Controller Ready (Key Mapper)');
+    console.log('📱 W(87)/A(65)/S(83)/D(68) → Movement');
+    console.log('🎮 Press controller buttons to move!');
+    setControllerStatus('✅ Ready');
   }, []);
 
   // Keyboard event handling for controller in keyboard mode
