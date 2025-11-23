@@ -9,9 +9,11 @@ import { useCameraSync } from '../../hooks/useCameraSync';
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);
   const [controllerStatus, setControllerStatus] = useState<string>('WASD or VR Controller');
+  const isSyncingFromMobile = useRef(false); // Flag to prevent broadcast during mobile sync
+  const syncTimeoutRef = useRef<number | null>(null);
   
   // WebSocket camera synchronization - desktop broadcasts to mobile
-  const { isConnected, updateCamera } = useCameraSync({
+  const { isConnected, updateCamera, setOnCameraUpdate } = useCameraSync({
     clientType: 'desktop',
     enableDeviceMotion: false,
     throttleMs: 16  // 60fps
@@ -29,10 +31,51 @@ function DesktopViewer() {
       });
   }, [loadWorld]);
   
+  // Listen for mobile position updates and snap desktop to mobile
+  useEffect(() => {
+    setOnCameraUpdate((camera) => {
+      if (cameraRef.current?.el) {
+        const el = cameraRef.current.el;
+        
+        // Set flag to stop broadcasting temporarily
+        isSyncingFromMobile.current = true;
+        
+        // Clear any existing timeout
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+        }
+        
+        // Mobile sends its corrected position, desktop snaps to it
+        el.setAttribute('position', {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z
+        });
+        console.log(`📥 Desktop synced to mobile: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`);
+        
+        // Resume broadcasting after 200ms (enough time for position to settle)
+        syncTimeoutRef.current = window.setTimeout(() => {
+          isSyncingFromMobile.current = false;
+        }, 200);
+      }
+    });
+    
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, [setOnCameraUpdate]);
+  
   // Desktop broadcasts camera to mobile
   useEffect(() => {
     let frameCount = 0;
     const interval = setInterval(() => {
+      // Skip broadcasting if we're syncing from mobile
+      if (isSyncingFromMobile.current) {
+        return;
+      }
+      
       if (cameraRef.current?.el) {
         const el = cameraRef.current.el;
         const position = el.getAttribute('position');

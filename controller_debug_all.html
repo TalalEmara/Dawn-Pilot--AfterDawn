@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full Controller Debug - All Input Methods</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 15px;
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    
+    .section {
+      background: #111;
+      border: 2px solid #0f0;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 5px;
+    }
+    
+    .header {
+      color: #ff0;
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    
+    .log {
+      background: #000;
+      padding: 8px;
+      margin-top: 8px;
+      border-left: 3px solid #0f0;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    
+    .log-entry {
+      margin: 2px 0;
+    }
+    
+    .active {
+      background: #0f0;
+      color: #000;
+      padding: 2px 5px;
+      font-weight: bold;
+    }
+    
+    .status-ok {
+      color: #0f0;
+    }
+    
+    .status-warn {
+      color: #ff0;
+    }
+    
+    .status-error {
+      color: #f00;
+    }
+    
+    .instruction {
+      background: #222;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-left: 4px solid #ff0;
+      color: #ff0;
+    }
+  </style>
+</head>
+<body>
+  <div class="instruction">
+    <strong>🎮 UNIVERSAL CONTROLLER DETECTOR</strong><br>
+    This will detect ANY input from your controller:<br>
+    • Gamepad API (standard mode)<br>
+    • Keyboard events (keyboard mode)<br>
+    • Mouse events (mouse mode)<br>
+    • Touch events (touchscreen emulation)<br>
+    <br>
+    <strong>ACTION:</strong> Press buttons and move joystick on your controller!
+  </div>
+
+  <div class="section">
+    <div class="header">🎮 GAMEPAD API</div>
+    <div id="gamepad-status">Checking...</div>
+    <div class="log" id="gamepad-log"></div>
+  </div>
+
+  <div class="section">
+    <div class="header">⌨️ KEYBOARD EVENTS</div>
+    <div id="keyboard-status">Listening...</div>
+    <div class="log" id="keyboard-log"></div>
+  </div>
+
+  <div class="section">
+    <div class="header">🖱️ MOUSE EVENTS</div>
+    <div id="mouse-status">Listening...</div>
+    <div class="log" id="mouse-log"></div>
+  </div>
+
+  <div class="section">
+    <div class="header">👆 TOUCH EVENTS</div>
+    <div id="touch-status">Listening...</div>
+    <div class="log" id="touch-log"></div>
+  </div>
+
+  <div class="section">
+    <div class="header">📊 SUMMARY</div>
+    <div id="summary">Waiting for input...</div>
+  </div>
+
+  <script>
+    // Log helpers
+    function log(elementId, message, highlight = false) {
+      const el = document.getElementById(elementId);
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      if (highlight) entry.className += ' active';
+      const time = new Date().toLocaleTimeString();
+      entry.textContent = `[${time}] ${message}`;
+      el.appendChild(entry);
+      el.scrollTop = el.scrollHeight;
+      
+      // Keep only last 20 entries
+      while (el.children.length > 20) {
+        el.removeChild(el.firstChild);
+      }
+      
+      updateSummary();
+    }
+
+    let detectedMethods = new Set();
+
+    function updateSummary() {
+      const summary = document.getElementById('summary');
+      if (detectedMethods.size === 0) {
+        summary.innerHTML = '<span class="status-warn">No input detected yet. Press buttons on controller!</span>';
+      } else {
+        summary.innerHTML = '<span class="status-ok">✅ Detected input methods:</span><br>' + 
+          Array.from(detectedMethods).map(m => `  • ${m}`).join('<br>');
+      }
+    }
+
+    // ========== GAMEPAD API ==========
+    let gamepadCheckInterval;
+    let lastGamepadState = {};
+
+    function checkGamepads() {
+      const gamepads = navigator.getGamepads();
+      const statusEl = document.getElementById('gamepad-status');
+      
+      let hasGamepad = false;
+      for (let i = 0; i < gamepads.length; i++) {
+        const gp = gamepads[i];
+        if (gp) {
+          hasGamepad = true;
+          
+          // Check for axis changes
+          for (let a = 0; a < gp.axes.length; a++) {
+            const val = gp.axes[a];
+            const key = `gp${i}_axis${a}`;
+            if (Math.abs(val) > 0.2 && lastGamepadState[key] !== val) {
+              log('gamepad-log', `🕹️ Gamepad ${i} Axis ${a}: ${val.toFixed(3)}`, true);
+              detectedMethods.add('🎮 Gamepad API - Axis ' + a);
+              lastGamepadState[key] = val;
+            }
+          }
+          
+          // Check for button changes
+          for (let b = 0; b < gp.buttons.length; b++) {
+            const btn = gp.buttons[b];
+            const key = `gp${i}_btn${b}`;
+            if (btn.pressed && !lastGamepadState[key]) {
+              log('gamepad-log', `🎯 Gamepad ${i} Button ${b} PRESSED (value: ${btn.value})`, true);
+              detectedMethods.add('🎮 Gamepad API - Button ' + b);
+              lastGamepadState[key] = true;
+            } else if (!btn.pressed && lastGamepadState[key]) {
+              lastGamepadState[key] = false;
+            }
+          }
+        }
+      }
+      
+      if (hasGamepad) {
+        statusEl.innerHTML = '<span class="status-ok">✅ Gamepad detected</span>';
+      } else {
+        statusEl.innerHTML = '<span class="status-warn">⚠️ No gamepad found</span>';
+      }
+    }
+
+    window.addEventListener('gamepadconnected', (e) => {
+      log('gamepad-log', `🎉 GAMEPAD CONNECTED: "${e.gamepad.id}"`, true);
+      document.getElementById('gamepad-status').innerHTML = '<span class="status-ok">✅ Connected: ' + e.gamepad.id + '</span>';
+      detectedMethods.add('🎮 Gamepad API - Connected');
+    });
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+      log('gamepad-log', `❌ GAMEPAD DISCONNECTED: "${e.gamepad.id}"`);
+    });
+
+    if ('getGamepads' in navigator) {
+      gamepadCheckInterval = setInterval(checkGamepads, 100);
+      log('gamepad-log', 'Gamepad API supported - monitoring...');
+    } else {
+      document.getElementById('gamepad-status').innerHTML = '<span class="status-error">❌ Not supported</span>';
+      log('gamepad-log', 'Gamepad API not supported in this browser');
+    }
+
+    // ========== KEYBOARD EVENTS ==========
+    let keyPressCount = 0;
+    
+    document.addEventListener('keydown', (e) => {
+      keyPressCount++;
+      const keyInfo = `Key: "${e.key}" Code: "${e.code}" KeyCode: ${e.keyCode}`;
+      log('keyboard-log', `⬇️ DOWN - ${keyInfo}`, true);
+      detectedMethods.add(`⌨️ Keyboard - ${e.code || e.key}`);
+      document.getElementById('keyboard-status').innerHTML = 
+        `<span class="status-ok">✅ ${keyPressCount} key events detected</span>`;
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const keyInfo = `Key: "${e.key}" Code: "${e.code}"`;
+      log('keyboard-log', `⬆️ UP - ${keyInfo}`);
+    });
+
+    document.addEventListener('keypress', (e) => {
+      log('keyboard-log', `🔤 PRESS - Char: "${e.key}"`);
+    });
+
+    // ========== MOUSE EVENTS ==========
+    let mouseEventCount = 0;
+    let lastMouseX = 0, lastMouseY = 0;
+    let mouseMoveThrottle = 0;
+
+    document.addEventListener('mousemove', (e) => {
+      const now = Date.now();
+      if (now - mouseMoveThrottle > 200) {
+        const dx = e.clientX - lastMouseX;
+        const dy = e.clientY - lastMouseY;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+          log('mouse-log', `🖱️ MOVE - X: ${e.clientX}, Y: ${e.clientY} (Δ${dx}, Δ${dy})`);
+          detectedMethods.add('🖱️ Mouse Move');
+          mouseEventCount++;
+          document.getElementById('mouse-status').innerHTML = 
+            `<span class="status-ok">✅ ${mouseEventCount} mouse events</span>`;
+        }
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        mouseMoveThrottle = now;
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      log('mouse-log', `🖱️ DOWN - Button: ${e.button} at (${e.clientX}, ${e.clientY})`, true);
+      detectedMethods.add(`🖱️ Mouse Button ${e.button}`);
+      mouseEventCount++;
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      log('mouse-log', `🖱️ UP - Button: ${e.button}`);
+    });
+
+    document.addEventListener('click', (e) => {
+      log('mouse-log', `🖱️ CLICK - Button: ${e.button}`);
+    });
+
+    document.addEventListener('wheel', (e) => {
+      log('mouse-log', `🖱️ WHEEL - ΔX: ${e.deltaX}, ΔY: ${e.deltaY}`, true);
+      detectedMethods.add('🖱️ Mouse Wheel');
+      mouseEventCount++;
+    });
+
+    // ========== TOUCH EVENTS ==========
+    let touchEventCount = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchEventCount++;
+      const touch = e.touches[0];
+      log('touch-log', `👆 START - X: ${touch.clientX}, Y: ${touch.clientY}, Touches: ${e.touches.length}`, true);
+      detectedMethods.add('👆 Touch Start');
+      document.getElementById('touch-status').innerHTML = 
+        `<span class="status-ok">✅ ${touchEventCount} touch events</span>`;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      const touch = e.touches[0];
+      if (touchEventCount % 5 === 0) { // Throttle
+        log('touch-log', `👆 MOVE - X: ${touch.clientX}, Y: ${touch.clientY}`);
+      }
+      touchEventCount++;
+    });
+
+    document.addEventListener('touchend', (e) => {
+      log('touch-log', `👆 END - Remaining touches: ${e.touches.length}`);
+    });
+
+    // ========== INITIAL STATE ==========
+    log('gamepad-log', '🔍 Checking for gamepads...');
+    checkGamepads();
+    log('keyboard-log', '⌨️ Ready to detect keyboard input');
+    log('mouse-log', '🖱️ Ready to detect mouse input');
+    log('touch-log', '👆 Ready to detect touch input');
+
+    console.log('🎮 Controller Debug Tool Loaded');
+    console.log('📝 All events will be logged here and on screen');
+  </script>
+</body>
+</html>

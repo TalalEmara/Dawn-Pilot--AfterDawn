@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gamepad Test - VR Controller</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+    }
+    
+    .header {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .status {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    
+    .connected {
+      color: #4CAF50;
+    }
+    
+    .disconnected {
+      color: #f44336;
+    }
+    
+    .gamepad-info {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .gamepad-name {
+      font-size: 18px;
+      color: #4CAF50;
+      margin-bottom: 10px;
+    }
+    
+    .axes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin: 10px 0;
+    }
+    
+    .axis-item {
+      background: #1a1a1a;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    
+    .axis-label {
+      color: #888;
+      font-size: 12px;
+    }
+    
+    .axis-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #4CAF50;
+    }
+    
+    .buttons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+    
+    .button-item {
+      background: #1a1a1a;
+      padding: 8px;
+      border-radius: 5px;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    
+    .button-item.pressed {
+      background: #4CAF50;
+      color: #000;
+    }
+    
+    .instructions {
+      background: #2a4a6a;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    
+    .log {
+      background: #1a1a1a;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    
+    .log-entry {
+      margin: 5px 0;
+      padding: 5px;
+      border-left: 3px solid #4CAF50;
+      padding-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="status" id="status">🎮 Waiting for gamepad...</div>
+    <div id="info">
+      Press any button on your VR controller to activate it.<br>
+      Make sure it's paired via Bluetooth.
+    </div>
+  </div>
+
+  <div id="gamepads-container"></div>
+
+  <div class="instructions">
+    <strong>📋 Instructions:</strong><br>
+    1. <strong>Go to Phone Settings → Bluetooth</strong><br>
+    2. <strong>Pair your VR controller</strong> (it should show as "Connected")<br>
+    3. Open this page in <strong>Chrome</strong> or <strong>Edge</strong><br>
+    4. <strong>Press and hold any button</strong> on the controller for 2 seconds<br>
+    5. Move the joystick and press buttons to see values<br>
+    <br>
+    <strong>✅ Expected Behavior:</strong><br>
+    • Status changes to "✅ Controller Connected"<br>
+    • Joystick shows axis values (-1.0 to 1.0)<br>
+    • Buttons highlight when pressed<br>
+    <br>
+    <strong>⚠️ Troubleshooting:</strong><br>
+    • Controller paired but not detected? → Restart browser<br>
+    • No axes/buttons shown? → Controller might be in keyboard/mouse mode<br>
+    • Still not working? → Try pairing again or check battery<br>
+    <br>
+    <strong>🔍 Browser Support:</strong><br>
+    Chrome/Edge: ✅ Full support<br>
+    Firefox: ✅ Full support<br>
+    Safari: ⚠️ Limited support<br>
+  </div>
+
+  <div class="log" id="log">
+    <strong>📝 Event Log:</strong><br>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const infoEl = document.getElementById('info');
+    const gamepadsContainer = document.getElementById('gamepads-container');
+    const logEl = document.getElementById('log');
+
+    let connectedGamepads = {};
+
+    function log(message) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message);
+    }
+
+    // Check for existing gamepads on page load
+    function checkExistingGamepads() {
+      const gamepads = navigator.getGamepads();
+      log('🔍 Checking for existing gamepads...');
+      log(`📊 navigator.getGamepads() returned array of length: ${gamepads.length}`);
+      
+      let foundAny = false;
+      
+      for (let i = 0; i < gamepads.length; i++) {
+        const gamepad = gamepads[i];
+        log(`   Index ${i}: ${gamepad ? '✅ Gamepad object found' : '❌ null/undefined'}`);
+        
+        if (gamepad) {
+          foundAny = true;
+          log(`✅ Found existing gamepad: "${gamepad.id}" (index ${gamepad.index})`);
+          log(`   Mapping: ${gamepad.mapping || 'none'}`);
+          log(`   Connected: ${gamepad.connected}`);
+          log(`   Axes: ${gamepad.axes.length}, Buttons: ${gamepad.buttons.length}`);
+          log(`   Timestamp: ${gamepad.timestamp}`);
+          connectedGamepads[gamepad.index] = gamepad;
+        }
+      }
+      
+      if (!foundAny) {
+        log('⚠️ No gamepads detected in array.');
+        log('💡 Try these steps:');
+        log('   1. Check Phone Settings → Bluetooth → Controller should show "Connected"');
+        log('   2. Press and HOLD any button for 3 seconds');
+        log('   3. Try pressing the Home/Menu button');
+        log('   4. Disconnect and reconnect Bluetooth');
+      }
+      
+      updateStatus();
+    }
+
+    // Gamepad connected event
+    window.addEventListener('gamepadconnected', (e) => {
+      const gamepad = e.gamepad;
+      log(`🎮 🎉 GAMEPAD CONNECTED EVENT FIRED!`);
+      log(`   ID: "${gamepad.id}"`);
+      log(`   Index: ${gamepad.index}`);
+      log(`   Mapping: ${gamepad.mapping || 'none'}`);
+      log(`   Connected: ${gamepad.connected}`);
+      log(`   Axes: ${gamepad.axes.length}, Buttons: ${gamepad.buttons.length}`);
+      connectedGamepads[gamepad.index] = gamepad;
+      updateStatus();
+    });
+
+    // Gamepad disconnected event
+    window.addEventListener('gamepaddisconnected', (e) => {
+      const gamepad = e.gamepad;
+      log(`❌ Gamepad disconnected: "${gamepad.id}" (index ${gamepad.index})`);
+      delete connectedGamepads[gamepad.index];
+      updateStatus();
+    });
+
+    function updateStatus() {
+      const gamepadCount = Object.keys(connectedGamepads).length;
+      
+      if (gamepadCount === 0) {
+        statusEl.className = 'status disconnected';
+        statusEl.textContent = '❌ No gamepad connected';
+        infoEl.textContent = 'Press any button on your VR controller to activate it.';
+      } else {
+        statusEl.className = 'status connected';
+        statusEl.textContent = `✅ ${gamepadCount} gamepad(s) connected`;
+        infoEl.textContent = 'Move the joystick and press buttons to see values below.';
+      }
+    }
+
+    function updateGamepadDisplay() {
+      const gamepads = navigator.getGamepads();
+      let html = '';
+
+      for (let i = 0; i < gamepads.length; i++) {
+        const gamepad = gamepads[i];
+        if (!gamepad) continue;
+
+        // Update our reference
+        connectedGamepads[gamepad.index] = gamepad;
+
+        html += `
+          <div class="gamepad-info">
+            <div class="gamepad-name">🎮 ${gamepad.id} (Index: ${gamepad.index})</div>
+            
+            <strong>📊 Axes (${gamepad.axes.length}):</strong>
+            <div class="axes-grid">
+        `;
+
+        for (let a = 0; a < gamepad.axes.length; a++) {
+          const value = gamepad.axes[a];
+          const isActive = Math.abs(value) > 0.1;
+          html += `
+            <div class="axis-item" style="${isActive ? 'border-left: 3px solid #4CAF50;' : ''}">
+              <div class="axis-label">Axis ${a}</div>
+              <div class="axis-value">${value.toFixed(3)}</div>
+            </div>
+          `;
+        }
+
+        html += `
+            </div>
+            
+            <strong>🎯 Buttons (${gamepad.buttons.length}):</strong>
+            <div class="buttons-grid">
+        `;
+
+        for (let b = 0; b < gamepad.buttons.length; b++) {
+          const button = gamepad.buttons[b];
+          const isPressed = button.pressed;
+          const value = button.value;
+          html += `
+            <div class="button-item ${isPressed ? 'pressed' : ''}">
+              <div style="font-size: 12px;">Button ${b}</div>
+              <div style="font-size: 18px;">${value.toFixed(2)}</div>
+            </div>
+          `;
+        }
+
+        html += `
+            </div>
+          </div>
+        `;
+      }
+
+      gamepadsContainer.innerHTML = html;
+    }
+
+    // Animation loop to update display
+    function loop() {
+      updateGamepadDisplay();
+      requestAnimationFrame(loop);
+    }
+
+    // Initialize
+    log('🚀 Gamepad Test initialized');
+    log('🔍 Checking for Gamepad API support...');
+    log(`📱 User Agent: ${navigator.userAgent}`);
+    log(`🌐 Browser: ${getBrowserInfo()}`);
+    
+    if ('getGamepads' in navigator) {
+      log('✅ Gamepad API supported');
+      log('💡 TIP: Make sure controller is paired in Bluetooth settings first!');
+      log('💡 TIP: Press and HOLD any button for 2 seconds to activate');
+      checkExistingGamepads();
+      loop();
+    } else {
+      log('❌ Gamepad API not supported in this browser');
+      statusEl.className = 'status disconnected';
+      statusEl.textContent = '❌ Browser not supported';
+      infoEl.textContent = 'This browser does not support the Gamepad API. Try Chrome or Edge.';
+    }
+    
+    function getBrowserInfo() {
+      const ua = navigator.userAgent;
+      if (ua.includes('Chrome')) return 'Chrome (✅ Supported)';
+      if (ua.includes('Edge')) return 'Edge (✅ Supported)';
+      if (ua.includes('Firefox')) return 'Firefox (✅ Supported)';
+      if (ua.includes('Safari')) return 'Safari (⚠️ Limited)';
+      return 'Unknown';
+    }
+  </script>
+</body>
+</html>

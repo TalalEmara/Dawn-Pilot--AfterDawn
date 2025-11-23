@@ -41,41 +41,30 @@ export const useFrameBuffer = (options?: {
 
     const setupDebug = () => {
       if (isInitializedRef.current) {
-        console.log("[A-Frame Debug] Already initialized, skipping");
         return;
       }
 
       const sceneEl = document.querySelector("a-scene") as ASceneEl;
 
       if (!sceneEl) {
-        console.warn(
-          "[A-Frame Debug] a-scene element not found, retrying in 200ms..."
-        );
         setTimeout(setupDebug, 200);
         return;
       }
-
-      console.log("[A-Frame Debug] Found a-scene element");
 
       const checkRenderer = () => {
         const renderer = (sceneEl as any).renderer;
 
         if (!renderer) {
-          console.warn(
-            "[A-Frame Debug] Renderer not ready, retrying in 200ms..."
-          );
           setTimeout(checkRenderer, 200);
           return;
         }
 
         const gl = renderer.getContext() as WebGLRenderingContext;
         if (!gl) {
-          console.error("[A-Frame Debug] WebGL context not available");
           return;
         }
 
         isInitializedRef.current = true;
-        console.log("[A-Frame Debug] ✓ Buffer monitoring started");
 
         let lastLog = 0;
 
@@ -87,19 +76,12 @@ export const useFrameBuffer = (options?: {
 
             try {
               const debugInfo = renderer.info;
-              if (debugInfo) {
-                console.log(`🔺 Triangles: ${debugInfo.render.triangles}`);
-              }
 
               if (LOG_PIXEL_DATA) {
-                // IMPORTANT: Read pixels AFTER the frame is rendered
-                // Use renderer.render() callback or read on next tick
                 requestAnimationFrame(() => {
                   try {
                     const width = renderer.domElement.width;
                     const height = renderer.domElement.height;
-                    
-                    console.log(`📸 Capturing frame: ${width}x${height}`);
                     
                     const pixelData = new Uint8Array(width * height * 4);
                     
@@ -122,7 +104,6 @@ export const useFrameBuffer = (options?: {
                         break;
                       }
                     }
-                    console.log(`🎨 Has visible pixels: ${hasColor}`);
                     
                     // Downsample
                     const percentage = options?.downsamplePercentage ?? 50;
@@ -142,26 +123,15 @@ export const useFrameBuffer = (options?: {
                       height,
                       percentage
                     );
-                    if (!depthData) {
-                    console.log(`Depth not captured`);
-                    }else{
-                    console.log(`Depth captured`);
-                    }
                     // Save as PNG and send to FastAPI
-                    console.log(`📦 Processing frame #${frameCounter + 1}`);
                     saveFrameDataJSON(rgbData, depthData, Math.floor(now));
                   } catch (err) {
-                    console.error("[A-Frame Debug] Error capturing pixels:", err);
+                    // Silent
                   }
                 });
               }
-
-              console.groupEnd();
             } catch (err) {
-              console.error(
-                "[A-Frame Debug] ❌ Error reading buffer info:",
-                err
-              );
+              // Silent
             }
           }
 
@@ -186,8 +156,6 @@ export const useFrameBuffer = (options?: {
 
       cleanupFnsRef.current.forEach((fn) => fn());
       cleanupFnsRef.current = [];
-
-      console.log("[A-Frame Debug] ℹ️  Buffer monitoring stopped");
     };
   }, [options?.enabled, options?.logInterval, options?.logPixelData, options?.downsamplePercentage]);
 };
@@ -217,8 +185,6 @@ function downsamplePixels(
       downsampled[writeIdx++] = pixels[readIdx + 3]; // A
     }
   }
-
-  console.log(`🔽 Downsampled: ${width}x${height} -> ${newWidth}x${newHeight}`);
 
   return { 
     data: downsampled, 
@@ -273,10 +239,6 @@ function readDepthBuffer(
     camera.getWorldPosition(cameraWorldPos);
     const cameraWorldDir = new THREE.Vector3();
     camera.getWorldDirection(cameraWorldDir);
-    
-    console.log(`📷 Camera near: ${near}, original far: ${originalFar}, visualization far: ${visualizationFar}`);
-    console.log(`📷 Camera world position:`, cameraWorldPos);
-    console.log(`📷 Camera world direction:`, cameraWorldDir);
 
     // Create depth shader with better normalization
     const depthMaterial = new THREE.ShaderMaterial({
@@ -333,22 +295,11 @@ function readDepthBuffer(
         if (distance < minDist) minDist = distance;
         if (distance > maxDist) maxDist = distance;
         
-        console.log(`  - Mesh: ${obj.name || 'unnamed'}, geometry: ${obj.geometry?.type}`);
-        console.log(`    world position:`, worldPos);
-        console.log(`    distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`);
-        
         obj.material = depthMaterial;
         obj.material.needsUpdate = true;
         meshCount++;
       }
     });
-    
-    console.log(`🎯 Processing ${meshCount} meshes for depth`);
-    console.log(`📏 Distance range: ${minDist.toFixed(2)} - ${maxDist.toFixed(2)}`);
-    
-    if (maxDist > visualizationFar) {
-      console.warn(`⚠️  Objects are farther (${maxDist.toFixed(2)}) than visualization far (${visualizationFar}). Consider increasing visualizationFar.`);
-    }
 
     // Create render target
     const depthTarget = new THREE.WebGLRenderTarget(width, height, {
@@ -399,23 +350,6 @@ function readDepthBuffer(
         sampleValues.push(val);
       }
     }
-    
-    console.log(`📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height} (${(nonZeroCount/(width*height)*100).toFixed(2)}%)`);
-    
-    if (sampleValues.length > 0) {
-      console.log(`📊 Sample depth values (0-255):`, sampleValues);
-    } else {
-      console.warn(`⚠️ WARNING: No depth data captured!`);
-      const centerX = Math.floor(width / 2);
-      const centerY = Math.floor(height / 2);
-      const centerIdx = (centerY * width + centerX) * 4;
-      console.log(`📊 Center pixel RGBA:`, [
-        depthPixels[centerIdx],
-        depthPixels[centerIdx + 1],
-        depthPixels[centerIdx + 2],
-        depthPixels[centerIdx + 3]
-      ]);
-    }
 
     // Clean up
     depthTarget.dispose();
@@ -434,8 +368,6 @@ function readDepthBuffer(
         grayscaleDepth[writeIdx++] = depthPixels[idx];
       }
     }
-
-    console.log(`🔍 Depth buffer captured: ${newWidth}x${newHeight}`);
     
     return {
       data: grayscaleDepth,
@@ -474,9 +406,6 @@ async function sendToFastAPI(rgbData: any, depthData: any) {
     }
     rgbCtx.putImageData(rgbImgData, 0, 0);
     const imageBase64 = rgbCanvas.toDataURL("image/png");
-    
-    // Log RGB image info
-    console.log(`📤 [SEND] RGB Image: ${rgbCanvas.width}x${rgbCanvas.height}, base64 length: ${imageBase64.length}, prefix: ${imageBase64.substring(0, 30)}`);
 
     // Convert depth data to base64 PNG
     let depthBase64 = "";
@@ -502,9 +431,6 @@ async function sendToFastAPI(rgbData: any, depthData: any) {
       }
       depthCtx.putImageData(depthImgData, 0, 0);
       depthBase64 = depthCanvas.toDataURL("image/png");
-      
-      // Log depth image info
-      console.log(`📤 [SEND] Depth Image: ${depthCanvas.width}x${depthCanvas.height}, base64 length: ${depthBase64.length}, prefix: ${depthBase64.substring(0, 30)}`);
     }
 
     // Call FastAPI with timeout
@@ -562,16 +488,12 @@ async function sendToFastAPI(rgbData: any, depthData: any) {
 function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
   frameCounter++;
   
-  console.log(`📦 Frame counter: ${frameCounter}, condition check: ${frameCounter % 10}`);
-  
   // Save only every 10th frame
   if (frameCounter % 10 !== 0) {
-    console.log(`⏭️ Skipping frame ${frameCounter} (not a multiple of 10)`);
     return;
   }
 
   const savedCount = Math.floor(frameCounter / 10);
-  console.log(`✅ [Saving] Frame #${savedCount} (total processed: ${frameCounter})`);
   
   // Send to FastAPI for processing
   sendToFastAPI(rgbData, depthData).then((result) => {
@@ -630,7 +552,6 @@ async function saveRGBImage(rgbData: any, frameIndex: number, savedCount: number
   const writable = await fileHandle.createWritable();
   await writable.write(blob);
   await writable.close();
-  console.log(`✅ RGB image saved to folder: frame_${savedCount}_${frameIndex}.png`);
 }
 
 // Save depth data as grayscale PNG
@@ -671,7 +592,6 @@ async function saveDepthImage(depthData: any, frameIndex: number, savedCount: nu
   const writable = await fileHandle.createWritable();
   await writable.write(blob);
   await writable.close();
-  console.log(`✅ Depth image saved to folder: frame_${savedCount}_${frameIndex}_depth.png`);
 }
 
 // Save phosphene processed image from FastAPI
@@ -693,7 +613,6 @@ async function savePhospheneImage(phospheneBase64: string, frameIndex: number, s
     const writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
-    console.log(`✅ Phosphene image saved to folder: frame_${savedCount}_${frameIndex}_phosphene.png`);
   } catch (err) {
     console.error("Error saving phosphene image:", err);
   }
