@@ -28,6 +28,7 @@ function MobileView() {
   
   // Mobile control state (now supports keyboard from controller)
   const [activeButtons, setActiveButtons] = useState({ w: false, a: false, s: false, d: false, q: false, e: false });
+  const activeButtonsRef = useRef({ w: false, a: false, s: false, d: false, q: false, e: false });
   const keyboardKeysPressed = useRef<Set<string>>(new Set());
   const unidentifiedKeyMap = useRef<Map<number, keyof typeof activeButtons>>(new Map());
   const nextButtonIndexRef = useRef(0);
@@ -274,6 +275,12 @@ function MobileView() {
     const buttonAssignmentOrder: Array<keyof typeof activeButtons> = ['w', 's', 'a', 'd'];
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore keys when user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
       let mappedButton: keyof typeof activeButtons | undefined;
       
       // DEBUG MODE: Log all key details
@@ -301,9 +308,12 @@ function MobileView() {
       }
       
       if (mappedButton) {
-        console.log(`🎮 Button ${mappedButton} pressed`);
+        console.log(`🎮 Button ${mappedButton} pressed - activeButtons will update`);
         keyboardKeysPressed.current.add(e.key + e.keyCode); // Use combo to track
-        setActiveButtons(prev => ({ ...prev, [mappedButton]: true }));
+        const newState = { ...activeButtonsRef.current, [mappedButton]: true };
+        activeButtonsRef.current = newState; // Update ref immediately
+        setActiveButtons(newState); // Update state for React
+        console.log(`✅ activeButtons updated:`, newState);
         e.preventDefault();
       }
     };
@@ -333,7 +343,9 @@ function MobileView() {
         });
         
         if (!stillPressed) {
-          setActiveButtons(prev => ({ ...prev, [mappedButton]: false }));
+          const newState = { ...activeButtonsRef.current, [mappedButton]: false };
+          activeButtonsRef.current = newState; // Update ref immediately
+          setActiveButtons(newState); // Update state for React
         }
         e.preventDefault();
       }
@@ -393,13 +405,22 @@ function MobileView() {
 
   // Movement loop - handles gamepad and button input
   useEffect(() => {
-    if (!rigRef.current?.el) return;
+    if (!rigRef.current?.el) {
+      console.log('⚠️ Movement loop waiting for rigRef...');
+      return;
+    }
 
+    console.log('✅ Movement loop started!');
     const el = rigRef.current.el;
     const moveSpeed = 0.15;
     const deadzone = 0.3;
     
+    let frameCount = 0;
     const animate = () => {
+      frameCount++;
+      if (frameCount % 60 === 0) {
+        console.log(`🔄 Animation loop running (frame ${frameCount}), buttons:`, activeButtonsRef.current);
+      }
       let targetVelocityX = 0;
       let targetVelocityZ = 0;
       
@@ -474,32 +495,37 @@ function MobileView() {
         }
       }
       
-      // Button input (touch controls)
-      if (activeButtons.w) {
+      // Button input (touch controls) - use ref to get current state
+      const buttons = activeButtonsRef.current;
+      if (buttons.w) {
+        console.log('⬆️ Moving forward');
         targetVelocityX += sinYaw * moveSpeed;
         targetVelocityZ += cosYaw * moveSpeed;
       }
-      if (activeButtons.s) {
+      if (buttons.s) {
+        console.log('⬇️ Moving backward');
         targetVelocityX -= sinYaw * moveSpeed;
         targetVelocityZ -= cosYaw * moveSpeed;
       }
-      if (activeButtons.a) {
+      if (buttons.a) {
+        console.log('⬅️ Moving left');
         targetVelocityX -= cosYaw * moveSpeed;
         targetVelocityZ += sinYaw * moveSpeed;
       }
-      if (activeButtons.d) {
+      if (buttons.d) {
+        console.log('➡️ Moving right');
         targetVelocityX += cosYaw * moveSpeed;
         targetVelocityZ -= sinYaw * moveSpeed;
       }
-      if (activeButtons.q) {
+      if (buttons.q) {
         targetPosition.current.y += 0.05;
       }
-      if (activeButtons.e) {
+      if (buttons.e) {
         targetPosition.current.y -= 0.05;
       }
       
       // Apply movement directly (no smoothing)
-      const hasInput = targetVelocityX !== 0 || targetVelocityZ !== 0 || activeButtons.q || activeButtons.e;
+      const hasInput = targetVelocityX !== 0 || targetVelocityZ !== 0 || buttons.q || buttons.e;
       
       if (hasInput) {
         targetPosition.current.x += targetVelocityX;
@@ -533,7 +559,7 @@ function MobileView() {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [activeButtons, updateCamera]);
+  }, [updateCamera]);
 
   // Initialize camera rig position on mount
   useEffect(() => {
