@@ -33,23 +33,31 @@ export function useCameraSync(options: UseCameraSyncOptions) {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
-      timeout: 10000
+      timeout: 10000,
+      autoConnect: true
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
+      console.log('✅ Socket.IO connected');
       setIsConnected(true);
       // Tell server what type this client is
       socket.emit('client:register', { type: clientType });
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (error: any) => {
+      console.warn('❌ Socket.IO connection error:', error);
       setIsConnected(false);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason: string) => {
+      console.log('⚠️ Socket.IO disconnected - reason:', reason);
       setIsConnected(false);
+    });
+
+    socket.on('error', (error: any) => {
+      console.error('❌ Socket.IO error:', error);
     });
 
     // Receive other client camera updates

@@ -6,10 +6,12 @@ import { Entity, Scene } from 'aframe-react';
 import { useEffect, useRef, useState } from 'react';
 import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useComponentManager } from '../../hooks/useComponentManager';
-import { useFrameBuffer } from '../../hooks/useFrameBuffer';
+import { useFrameBuffer, getFolderHandle } from '../../hooks/useFrameBuffer';
 import { useCameraSync } from '../../hooks/useCameraSync';
+
 // import { SOCKET_URL } from '../../config/api';
 const SOCKET_URL = "http://192.168.1.117:5000";
+
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
@@ -26,6 +28,7 @@ function MobileView() {
     throttleMs: 16
   });
 
+  // Enable framebuffer capture / saving
   useFrameBuffer({
     logInterval: 1000,
     logPixelData: false,
@@ -147,6 +150,33 @@ function MobileView() {
         <div>Z: {cameraPosition.z.toFixed(2)}</div>
       </div>
 
+      {/* Folder picker button – calls getFolderHandle from user gesture */}
+      <button
+        style={{
+          position: 'absolute',
+          bottom: 10,
+          right: 10,
+          zIndex: 1000,
+          padding: '8px 16px',
+          borderRadius: 4,
+          border: 'none',
+          cursor: 'pointer',
+          background: '#FF9800',
+          color: '#fff',
+          fontSize: '12px',
+          fontFamily: 'monospace'
+        }}
+        onClick={async () => {
+          try {
+            await getFolderHandle(); // opens showDirectoryPicker once
+          } catch (err) {
+            console.error('Failed to select folder', err);
+          }
+        }}
+      >
+        Select Folder to Save Frames
+      </button>
+
       <Scene
         embedded
         vr-mode-ui="enabled: true"
@@ -176,7 +206,6 @@ function MobileView() {
           width="1000"
           height="1000"
           color="#000000"
-        //   material="src: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0YTFhIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=); repeat: 100 100"
         />
 
         {/* Entities from backend */}
@@ -212,7 +241,7 @@ function MobileView() {
           );
         })}
 
-        {/* Rig: position from desktop, orientation from phone (look-controls) */}
+        {/* Rig: position from desktop, orientation from phone */}
         <Entity
           ref={rigRef}
           animation__follow={{
@@ -226,7 +255,7 @@ function MobileView() {
           <Entity
             ref={cameraRef}
             primitive="a-camera"
-            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false; pointerLockEnabled: false"
           />
         </Entity>
       </Scene>

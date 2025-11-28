@@ -5,6 +5,7 @@ import { Entity, Scene } from 'aframe-react';
 import { useEffect, useRef } from 'react';
 import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useCameraSync } from '../../hooks/useCameraSync';
+import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);
@@ -15,7 +16,13 @@ function DesktopViewer() {
   });
 
   const { world, loadWorld } = useScenarioWorld();
-
+  
+    useFrameBuffer({
+      logInterval: 1000,
+      logPixelData: false,
+      downsamplePercentage: 50
+    });
+  
   useEffect(() => {
     loadWorld().catch(err => {
       console.error('Desktop - Failed to load world:', err);
