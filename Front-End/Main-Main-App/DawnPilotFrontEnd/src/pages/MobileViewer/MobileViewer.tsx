@@ -1,0 +1,237 @@
+import 'aframe';
+import 'aframe-particle-system-component';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error
+import { Entity, Scene } from 'aframe-react';
+import { useEffect, useRef, useState } from 'react';
+import { useScenarioWorld } from '../../hooks/useScenarioWorld';
+import { useComponentManager } from '../../hooks/useComponentManager';
+import { useFrameBuffer } from '../../hooks/useFrameBuffer';
+import { useCameraSync } from '../../hooks/useCameraSync';
+// import { SOCKET_URL } from '../../config/api';
+const SOCKET_URL = "http://192.168.1.117:5000";
+function MobileView() {
+  const cameraRef = useRef<any>(null);
+  const rigRef = useRef<any>(null);
+
+  const hasReceivedPosition = useRef(false);
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
+
+  const { world, loadWorld } = useScenarioWorld();
+  const { clearAllTimers } = useComponentManager();
+
+  // Mobile follows desktop camera
+  const { isConnected, setOnCameraUpdate } = useCameraSync({
+    clientType: 'mobile',
+    throttleMs: 16
+  });
+
+  useFrameBuffer({
+    logInterval: 1000,
+    logPixelData: false,
+    downsamplePercentage: 50
+  });
+
+  // Load world once
+  useEffect(() => {
+    loadWorld()
+      .then(data => {
+        console.log('Mobile - World loaded, entities:', data.entities.length);
+      })
+      .catch(err => {
+        console.error('Failed to load world:', err);
+        alert('Error loading world. Make sure backend is running.');
+      });
+
+    return () => {
+      clearAllTimers();
+    };
+  }, [loadWorld, clearAllTimers]);
+
+  // When desktop camera updates, move/animate rig
+  useEffect(() => {
+    setOnCameraUpdate(camera => {
+      const newPos = camera.position;
+
+      if (!hasReceivedPosition.current) {
+        hasReceivedPosition.current = true;
+        if (rigRef.current?.el?.object3D) {
+          rigRef.current.el.object3D.position.set(newPos.x, newPos.y, newPos.z);
+        }
+      } else {
+        const rigEl = rigRef.current?.el;
+        if (rigEl) {
+          rigEl.setAttribute('animation__follow', {
+            property: 'position',
+            to: `${newPos.x} ${newPos.y} ${newPos.z}`,
+            dur: 200,
+            easing: 'easeOutQuad',
+            startEvents: 'follow-target',
+            autoplay: false
+          });
+          rigEl.emit('follow-target', null, false);
+        }
+      }
+
+      setCameraPosition(newPos);
+    });
+  }, [setOnCameraUpdate]);
+
+  return (
+    <div style={{ background: 'black', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <style>{`
+        .a-enter-vr-button {
+          bottom: 20% !important;
+          position: fixed !important;
+          z-index: 99999 !important;
+        }
+        body {
+          overflow: hidden !important;
+        }
+      `}</style>
+
+      {/* WebSocket Connection Status */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          zIndex: 1000,
+          background: isConnected ? '#4CAF50' : '#f44336',
+          color: 'white',
+          padding: '8px 16px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          fontFamily: 'monospace'
+        }}
+      >
+        {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+        <div style={{ fontSize: '9px', marginTop: '4px', opacity: 0.8 }}>{SOCKET_URL}</div>
+      </div>
+
+      {/* Mobile Mode Status */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          zIndex: 1000,
+          background: '#2196F3',
+          color: 'white',
+          padding: '8px 16px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          fontFamily: 'monospace'
+        }}
+      >
+        📱 Mobile Viewer (Following Desktop)
+      </div>
+
+      {/* Camera Position Display */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 50,
+          right: 10,
+          zIndex: 1000,
+          background: 'rgba(0,0,0,0.7)',
+          color: 'white',
+          padding: '8px',
+          borderRadius: '4px',
+          fontSize: '10px',
+          fontFamily: 'monospace'
+        }}
+      >
+        <div>X: {cameraPosition.x.toFixed(2)}</div>
+        <div>Y: {cameraPosition.y.toFixed(2)}</div>
+        <div>Z: {cameraPosition.z.toFixed(2)}</div>
+      </div>
+
+      <Scene
+        embedded
+        vr-mode-ui="enabled: true"
+        device-orientation-permission-ui="enabled: true"
+        fog="type: linear; color: #111; near: 50; far: 200"
+        style={{ width: '100%', height: '100%' }}
+      >
+        {/* Sky */}
+        <Entity primitive="a-sky" color="#87CEEB" />
+
+        {/* Lights */}
+        <Entity light={{ type: 'ambient', color: '#ffffff', intensity: 0.8 }} />
+        <Entity
+          light={{ type: 'directional', color: '#ffffff', intensity: 1.0 }}
+          position="5 10 2"
+        />
+        <Entity
+          light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }}
+          position="0 2 -6"
+        />
+
+        {/* Ground */}
+        <Entity
+          primitive="a-plane"
+          position="0 -1 -4"
+          rotation="-90 0 0"
+          width="1000"
+          height="1000"
+          color="#000000"
+        //   material="src: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0YTFhIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=); repeat: 100 100"
+        />
+
+        {/* Entities from backend */}
+        {world.entities.map(e => {
+          const pos = e.Position || { x: 0, y: 0, z: 0 };
+          const rot = e.Rotation || { x: 0, y: 0, z: 0 };
+          const scl = e.Scale || { x: 1, y: 1, z: 1 };
+          const color = e.Color?.value || '#fff';
+          const url = e.Model?.url;
+
+          if (url === 'Aframe') {
+            const tag = `a-${e.name.toLowerCase()}`;
+            return (
+              <Entity
+                key={e.id}
+                primitive={tag}
+                position={`${pos.x} ${pos.y} ${pos.z}`}
+                rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                scale={`${scl.x} ${scl.y} ${scl.z}`}
+                material={`color: ${color}`}
+              />
+            );
+          }
+
+          return (
+            <Entity
+              key={e.id}
+              gltf-model={url}
+              position={`${pos.x} ${pos.y} ${pos.z}`}
+              rotation={`${rot.x} ${rot.y} ${rot.z}`}
+              scale={`${scl.x} ${scl.y} ${scl.z}`}
+            />
+          );
+        })}
+
+        {/* Rig: position from desktop, orientation from phone (look-controls) */}
+        <Entity
+          ref={rigRef}
+          animation__follow={{
+            property: 'position',
+            dur: 200,
+            easing: 'easeOutQuad',
+            startEvents: 'follow-target',
+            autoplay: false
+          }}
+        >
+          <Entity
+            ref={cameraRef}
+            primitive="a-camera"
+            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+          />
+        </Entity>
+      </Scene>
+    </div>
+  );
+}
+
+export default MobileView;

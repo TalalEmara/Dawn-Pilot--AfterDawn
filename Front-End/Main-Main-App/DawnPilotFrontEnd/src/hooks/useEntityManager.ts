@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import type { Entity } from './useScenarioWorld';
 
-const API_BASE_URL = 'http://localhost:5000/scenario';
-// const API_BASE_URL = 'http://192.168.1.106:5000/scenario';
+// const API_BASE_URL = 'http://localhost:5000/scenario';
+const API_BASE_URL = 'http://192.168.1.117:5000/scenario';
 
 interface CreateEntityFromModelParams {
   modelName: string;
