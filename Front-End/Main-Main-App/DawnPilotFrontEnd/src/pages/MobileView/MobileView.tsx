@@ -1,34 +1,29 @@
-import 'aframe';
-import 'aframe-particle-system-component';
+import "aframe";
+import "aframe-particle-system-component";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
-import { Entity, Scene } from 'aframe-react';
-import { useScenarioWorld } from '../../hooks/useScenarioWorld';
-import { useEffect } from 'react';
-import { useComponentManager } from '../../hooks/useComponentManager';
-import { useFrameBuffer } from '../../hooks/useFrameBuffer';
+import { Entity, Scene } from "aframe-react";
+import { useScenarioWorld } from "../../hooks/useScenarioWorld";
+import { useEffect } from "react";
+import { useComponentManager } from "../../hooks/useComponentManager";
+import { useFrameBuffer } from "../../hooks/useFrameBuffer";
 
 function MobileView() {
   // Enable buffer debugging (only in development)
   useFrameBuffer({
-    logInterval: 50,      // Log every 3 seconds
+    logInterval: 1000, // Log every 3 seconds
     logPixelData: true,
-    downsamplePercentage: 50     // Set to true to sample center pixel color
+    downsamplePercentage: 50, // Set to true to sample center pixel color
   });
 
-  const {
-    world,
-    loadWorld,
-  } = useScenarioWorld();
+  const { world, loadWorld } = useScenarioWorld();
 
-  const {
-    clearAllTimers
-  } = useComponentManager();
+  const { clearAllTimers } = useComponentManager();
 
   useEffect(() => {
-    loadWorld().catch(err => {
-      console.error('Failed to load world:', err);
-      alert('Error loading world. Make sure backend is running.');
+    loadWorld().catch((err) => {
+      console.error("Failed to load world:", err);
+      alert("Error loading world. Make sure backend is running.");
     });
 
     // Cleanup on unmount
@@ -37,20 +32,19 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
 
-    function getFolderHandle() {
-        throw new Error('Function not implemented.');
-    }
+  function getFolderHandle() {
+    throw new Error("Function not implemented.");
+  }
 
   return (
-    
     <div style={{ background: "Black", width: "100vw", height: "100vh" }}>
       <button
-            onClick={async () => {
-                await getFolderHandle();
-            }}
-            >
-            Select Folder to Save Frames
-            </button>
+        onClick={async () => {
+          await getFolderHandle();
+        }}
+      >
+        Select Folder to Save Frames
+      </button>
       <Scene
         embedded
         vr-mode-ui="enabled: true"
