@@ -44,6 +44,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
   });
 
   // Component operations (used by inspector sync) – callback receives single entity
+  // ... inside BuilderPage component ...
+
+  // Component operations (used by inspector sync)
   const {
     loading: componentLoading,
     updateComponentDebounced,
@@ -51,7 +54,8 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
   } = useComponentManager((updatedEntity) => {
     setWorld((prevWorld) => ({
       entities: prevWorld.entities.map((e) =>
-        e.id === updatedEntity.id ? updatedEntity : e
+        // FIX: Merge the update instead of replacing the whole object
+        e.id === updatedEntity.id ? { ...e, ...updatedEntity } : e
       ),
     }));
   });

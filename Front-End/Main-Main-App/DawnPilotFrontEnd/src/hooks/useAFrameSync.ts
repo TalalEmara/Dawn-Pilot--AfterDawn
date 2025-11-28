@@ -11,6 +11,38 @@ interface AFrameSyncOptions {
   watchedComponents?: string[];
 }
 
+/**
+ * Helper to check if two values are effectively equal.
+ * This prevents infinite loops where React sets a value -> A-Frame fires event -> React sets value again.
+ */
+const isEffectivelyEqual = (valA: any, valB: any): boolean => {
+  if (valA === valB) return true;
+
+  // Handle Vector3 objects {x, y, z}
+  if (
+    typeof valA === "object" &&
+    valA !== null &&
+    typeof valB === "object" &&
+    valB !== null
+  ) {
+    // Check for A-Frame vector structure
+    if ("x" in valA && "x" in valB) {
+      const epsilon = 0.001; // Tolerance for float precision differences
+      const xDiff = Math.abs(valA.x - valB.x);
+      const yDiff = Math.abs(valA.y - valB.y);
+      const zDiff = Math.abs((valA.z || 0) - (valB.z || 0)); // Handle z being optional sometimes
+      return xDiff < epsilon && yDiff < epsilon && zDiff < epsilon;
+    }
+    
+    // Check for Color objects {value: string}
+    if ("value" in valA && "value" in valB) {
+      return valA.value === valB.value;
+    }
+  }
+  
+  return false;
+};
+
 export function useAFrameSync(
   entities: Entity[],
   options: AFrameSyncOptions = {}
@@ -20,176 +52,126 @@ export function useAFrameSync(
     watchedComponents = ["position", "rotation", "scale", "color"],
   } = options;
 
-  const entityMapRef = useRef<Map<number, string>>(new Map());
+  // Store latest entities in a Ref so event listeners always access fresh data
+  const entitiesRef = useRef<Entity[]>(entities);
+  const onComponentChangeRef = useRef(onComponentChange);
   const initializedRef = useRef(false);
-  const readyForEventsRef = useRef(false);
 
-  // Keep latest callback and watched list in refs so effect deps stay minimal
-  const onComponentChangeRef = useRef<typeof onComponentChange>();
-  const watchedComponentsRef = useRef<string[]>(watchedComponents);
+  // Update refs whenever props change
+  useEffect(() => {
+    entitiesRef.current = entities;
+  }, [entities]);
 
   useEffect(() => {
     onComponentChangeRef.current = onComponentChange;
   }, [onComponentChange]);
 
   useEffect(() => {
-    watchedComponentsRef.current = watchedComponents;
-  }, [watchedComponents]);
-
-  useEffect(() => {
-    if (entities.length === 0) {
-      // No ECS entities, ensure everything is cleaned
-      const aframeEntities = document.querySelectorAll("[ecs-entity]");
-      aframeEntities.forEach((aframeEntity) => {
-        if ((aframeEntity as any)._handleComponentChange) {
-          aframeEntity.removeEventListener(
-            "componentchanged",
-            (aframeEntity as any)._handleComponentChange
-          );
-          delete (aframeEntity as any)._handleComponentChange;
-        }
-      });
-      entityMapRef.current.clear();
-      initializedRef.current = false;
-      readyForEventsRef.current = false;
-      return;
-    }
-
     const scene = document.querySelector("a-scene") as any;
-    if (!scene) {
-      console.log("Scene not found");
-      return;
-    }
+    
+    // Cleanup function references for removal later
+    const cleanupMap = new Map<Element, (evt: any) => void>();
 
     const setupListeners = () => {
-      if (initializedRef.current) {
-        console.log("A-Frame listeners already initialized");
-        return;
-      }
-
-      console.log(
-        "Setting up A-Frame listeners, entity count:",
-        entities.length
-      );
-
+      // If already initialized for this entity count, skip (optional safety)
+      // but we allow re-running if entity count changed to bind new elements
+      
       const aframeEntities = document.querySelectorAll("[ecs-entity]");
-      console.log("Found ECS A-Frame entities:", aframeEntities.length);
+      
+      aframeEntities.forEach((el, index) => {
+        const aframeEntity = el as any;
 
-      entityMapRef.current.clear();
+        // Skip if we already attached a listener to this specific element
+        // (Note: In a robust app, you might want to remove all and re-add to be safe)
+        if (aframeEntity._ecsSyncAttached) return;
 
-      aframeEntities.forEach((aframeEntity, index) => {
-        const entity = entities[index];
-        if (!entity) return;
+        const handleComponentChange = (evt: any) => {
+          // 1. Get the latest entity state corresponding to this DOM node
+          // We assume DOM order matches the 'entities' array order (React standard behavior)
+          const currentEntity = entitiesRef.current[index];
+          if (!currentEntity) return;
 
-        entityMapRef.current.set(index, entity.id);
-        console.log("Mapped DOM index", index, "to entityId", entity.id);
+          const componentName = evt.detail.name;
+          if (!watchedComponents.includes(componentName)) return;
 
-        function handleComponentChange(evt: any) {
-          // Ignore events until initial setup finishes
-          if (!readyForEventsRef.current) {
+          // 2. Extract new data from the event/DOM
+          let newData: any;
+          if (["position", "rotation", "scale"].includes(componentName)) {
+            // Read directly from attribute to be safe, or use evt.detail.newData
+            const attr = aframeEntity.getAttribute(componentName);
+            newData = { x: attr.x, y: attr.y, z: attr.z };
+          } else if (componentName === "color") {
+            newData = { value: aframeEntity.getAttribute("color") };
+          } else {
+            newData = aframeEntity.getAttribute(componentName);
+          }
+
+          // 3. Map component name to our Entity interface keys
+          let currentReactState: any;
+          let backendComponentName = componentName;
+
+          if (componentName === "position") {
+            currentReactState = currentEntity.Position;
+            backendComponentName = "Position";
+          } else if (componentName === "rotation") {
+            currentReactState = currentEntity.Rotation;
+            backendComponentName = "Rotation";
+          } else if (componentName === "scale") {
+            currentReactState = currentEntity.Scale;
+            backendComponentName = "Scale";
+          } else if (componentName === "color") {
+            currentReactState = currentEntity.Color;
+            backendComponentName = "Color";
+          }
+
+          // 4. ECHO CANCELLATION:
+          // If the value from A-Frame matches what React already thinks it is,
+          // ignore the event. This stops the loop.
+          if (currentReactState && isEffectivelyEqual(currentReactState, newData)) {
             return;
           }
 
-          const componentName = evt.detail?.name;
-          if (!componentName) return;
+          console.log(`Syncing change for ${currentEntity.id}:`, componentName);
 
-          const watched = watchedComponentsRef.current;
-          if (!watched || !watched.includes(componentName)) return;
-
-          console.log(
-            "Component changed:",
-            componentName,
-            "on entity index",
-            index
-          );
-
-          const entityId = entityMapRef.current.get(index);
-          if (!entityId) return;
-
-          let componentData: unknown;
-          if (
-            componentName === "position" ||
-            componentName === "rotation" ||
-            componentName === "scale"
-          ) {
-            const value = aframeEntity.getAttribute(componentName) as {
-              x: number;
-              y: number;
-              z: number;
-            };
-            componentData = { x: value.x, y: value.y, z: value.z };
-          } else if (componentName === "color") {
-            componentData = {
-              value: aframeEntity.getAttribute("color") as string,
-            };
-          } else {
-            componentData = aframeEntity.getAttribute(componentName);
+          // 5. Trigger the update
+          if (onComponentChangeRef.current) {
+            onComponentChangeRef.current(
+              currentEntity.id,
+              backendComponentName,
+              newData
+            );
           }
+        };
 
-          const componentNameMap: { [key: string]: string } = {
-            position: "Position",
-            rotation: "Rotation",
-            scale: "Scale",
-            color: "Color",
-          };
-
-          const backendComponentName =
-            componentNameMap[componentName] || componentName;
-
-          const cb = onComponentChangeRef.current;
-          if (cb) {
-            cb(entityId, backendComponentName, componentData);
-          }
-        }
-
-        (aframeEntity as any)._handleComponentChange = handleComponentChange;
+        // Attach listener
         aframeEntity.addEventListener("componentchanged", handleComponentChange);
+        aframeEntity._ecsSyncAttached = true; // Mark as attached
+        
+        // Store for cleanup
+        cleanupMap.set(aframeEntity, handleComponentChange);
       });
-
-      initializedRef.current = true;
-
-      // After current tick, allow events (so we skip the initial A-Frame setup events)
-      setTimeout(() => {
-        readyForEventsRef.current = true;
-      }, 0);
     };
 
-    const cleanupListeners = () => {
-      console.log("Cleaning up A-Frame listeners");
-      const aframeEntities = document.querySelectorAll("[ecs-entity]");
-      aframeEntities.forEach((aframeEntity) => {
-        if ((aframeEntity as any)._handleComponentChange) {
-          aframeEntity.removeEventListener(
-            "componentchanged",
-            (aframeEntity as any)._handleComponentChange
-          );
-          delete (aframeEntity as any)._handleComponentChange;
-        }
-      });
-      entityMapRef.current.clear();
-      initializedRef.current = false;
-      readyForEventsRef.current = false;
+    const runSetup = () => {
+       if (scene.hasLoaded) {
+         setupListeners();
+       } else {
+         scene.addEventListener("loaded", setupListeners);
+       }
     };
 
-    const initListeners = () => {
-      console.log("Scene loaded, setting up listeners");
-      setupListeners();
-    };
+    runSetup();
 
-    if (scene.hasLoaded) {
-      console.log("Scene already loaded");
-      initListeners();
-    } else {
-      console.log("Waiting for scene to load");
-      scene.addEventListener("loaded", initListeners);
-    }
-
+    // Cleanup function
     return () => {
-      console.log("=== EFFECT CLEANUP ===");
-      cleanupListeners();
+      cleanupMap.forEach((handler, element: any) => {
+        element.removeEventListener("componentchanged", handler);
+        delete element._ecsSyncAttached;
+      });
+      cleanupMap.clear();
       if (scene) {
-        scene.removeEventListener("loaded", initListeners);
+        scene.removeEventListener("loaded", setupListeners);
       }
     };
-  }, [entities.length]); // only re-run when count of ECS entities actually changes
+  }, [entities.length, watchedComponents]); // Only re-bind if number of entities changes
 }
