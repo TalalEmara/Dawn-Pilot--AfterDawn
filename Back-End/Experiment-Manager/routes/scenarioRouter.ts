@@ -10,7 +10,11 @@ import {
   updateComponentOnEntity,
   getScenarioWorld,
   queryEntities,
-  getAvailableModels
+  getAvailableModels,
+  saveScenario,
+  loadScenario,
+  listSavedScenarios,
+  deleteScenario
 } from "../Scenario-Builder/scenarioManager";
 
 const scenarioRouter = Router();
@@ -274,6 +278,131 @@ scenarioRouter.post('/entities/query', (req, res) => {
   } catch (error) {
     res.status(400).json({ 
       error: 'Failed to query entities',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ========================================
+// Save Scenario
+// POST /scenario/save
+// Body: { name: string, description?: string, camera?: { position, rotation } }
+// ========================================
+scenarioRouter.post('/save', (req, res) => {
+  try {
+    const { name, description, camera } = req.body;
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Scenario name is required',
+        example: { name: 'My Scenario', description: 'Optional description', camera: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } } }
+      });
+    }
+    
+    const scenario = saveScenario(name.trim(), description, camera);
+    
+    res.status(201).json({ 
+      message: `Scenario "${name}" saved successfully!`,
+      scenario: {
+        name: scenario.name,
+        description: scenario.description,
+        createdAt: scenario.createdAt,
+        entityCount: scenario.entityCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to save scenario',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ========================================
+// List Saved Scenarios
+// GET /scenario/list
+// ========================================
+scenarioRouter.get('/list', (req, res) => {
+  try {
+    const scenarios = listSavedScenarios();
+    
+    res.json({ 
+      scenarios,
+      count: scenarios.length
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to list scenarios',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ========================================
+// Load Scenario
+// GET /scenario/load/:filename
+// ========================================
+scenarioRouter.get('/load/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    if (!filename) {
+      return res.status(400).json({ 
+        error: 'Filename is required'
+      });
+    }
+    
+    const scenario = loadScenario(filename);
+    
+    res.json({ 
+      message: `Scenario "${scenario.name}" loaded successfully!`,
+      scenario: {
+        name: scenario.name,
+        description: scenario.description,
+        createdAt: scenario.createdAt,
+        entityCount: scenario.entityCount,
+        camera: scenario.camera
+      },
+      world: getScenarioWorld()
+    });
+  } catch (error) {
+    res.status(404).json({ 
+      error: 'Failed to load scenario',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ========================================
+// Delete Scenario
+// DELETE /scenario/:filename
+// ========================================
+scenarioRouter.delete('/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    if (!filename) {
+      return res.status(400).json({ 
+        error: 'Filename is required'
+      });
+    }
+    
+    const deleted = deleteScenario(filename);
+    
+    if (!deleted) {
+      return res.status(404).json({ 
+        error: 'Scenario not found',
+        filename
+      });
+    }
+    
+    res.json({ 
+      message: `Scenario "${filename}" deleted successfully!`,
+      filename
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to delete scenario',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

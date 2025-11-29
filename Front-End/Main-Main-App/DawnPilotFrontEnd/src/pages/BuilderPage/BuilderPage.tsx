@@ -15,6 +15,9 @@ import PropertiesPanel from "../../components/level-1/PropertiesPanel/Properties
 import { useDebugAFrameBuffersDev } from "../../hooks/useDebugAFrameBuffers";
 import { useAFrameSync } from "../../hooks/useAframeSync";
 import { usePersistentCamera } from "../../hooks/BuilderMode/usePersistentCamera";
+import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
+import ScenarioSaveDialog from "../../components/level-1/ScenarioSaveDialog/ScenarioSaveDialog";
+import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
 
 interface BuilderPageProps {
   onModelSelect: (modelName: string) => void;
@@ -64,7 +67,23 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
   const { models } = useModelLibrary();
 
   // Camera persistence (frontend only)
-  const { saveCameraNow } = usePersistentCamera();
+  const { saveCameraNow, getCurrentCamera, setCameraState } = usePersistentCamera();
+
+  // Scenario save/load
+  const { 
+    ///////////// what is this //////////////////
+    /////////////////////////////////////////////
+    saveScenario: saveScenarioAPI, 
+    loadScenario: loadScenarioAPI, 
+    listScenarios,
+    deleteScenario: deleteScenarioAPI,
+    loading: saveLoadLoading 
+  } = useScenarioSaveLoad();
+
+  // Dialog states
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
 
   // Track if A-Frame inspector is open
   const [inspectorActive, setInspectorActive] = useState(false);
@@ -166,6 +185,71 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
     }
   };
 
+  // Handle save scenario
+  const handleSaveScenario = async (name: string, description?: string) => {
+    try {
+      const camera = getCurrentCamera();
+      await saveScenarioAPI({ 
+        name, 
+        description,
+        camera: camera || undefined 
+      });
+      alert(`Scenario "${name}" saved successfully!`);
+      setShowSaveDialog(false);
+    } catch (err) {
+      console.error('Failed to save scenario:', err);
+      alert('Error saving scenario. Make sure backend is running.');
+    }
+  };
+
+  // Handle load scenario
+  const handleLoadScenario = async (filename: string) => {
+    try {
+      const result = await loadScenarioAPI(filename);
+      
+      // Update world state
+      setWorld(result.world);
+      
+      // Restore camera position if available
+      if (result.scenario.camera && setCameraState) {
+        setTimeout(() => {
+          setCameraState(result.scenario.camera);
+        }, 100);
+      }
+      
+      alert(`Scenario "${result.scenario.name}" loaded successfully!`);
+      setShowLoadDialog(false);
+    } catch (err) {
+      console.error('Failed to load scenario:', err);
+      alert('Error loading scenario. Make sure backend is running.');
+    }
+  };
+
+  // Handle delete scenario
+  const handleDeleteScenario = async (filename: string) => {
+    try {
+      await deleteScenarioAPI(filename);
+      // Refresh the list
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+    } catch (err) {
+      console.error('Failed to delete scenario:', err);
+      alert('Error deleting scenario.');
+    }
+  };
+
+  // Load scenarios list when opening load dialog
+  const handleOpenLoadDialog = async () => {
+    try {
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+      setShowLoadDialog(true);
+    } catch (err) {
+      console.error('Failed to list scenarios:', err);
+      alert('Error loading scenarios list.');
+    }
+  };
+
   const isLoading = worldLoading || entityLoading || componentLoading;
 
   return (
@@ -187,12 +271,45 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
       <div className={styles.BuilderPageContainer}>
         <BuilderSidePanel />
 
+        {/* Save/Load Dialogs */}
+        {showSaveDialog && (
+          <ScenarioSaveDialog
+            onSave={handleSaveScenario}
+            onCancel={() => setShowSaveDialog(false)}
+            loading={saveLoadLoading}
+          />
+        )}
+
+        {showLoadDialog && (
+          <ScenarioLoadDialog
+            scenarios={savedScenarios}
+            onLoad={handleLoadScenario}
+            onCancel={() => setShowLoadDialog(false)}
+            onDelete={handleDeleteScenario}
+            loading={saveLoadLoading}
+          />
+        )}
+
         {/* Full screen A-Frame scene */}
         <div style={{ flex: 1 }}>
           <div className={styles.overlayText}>
             ctrl + i to open inspector
             <button style={{ marginLeft: 12 }} onClick={saveCameraNow}>
               Save Camera
+            </button>
+            <button 
+              style={{ marginLeft: 12, backgroundColor: '#00d9ff', color: '#000', fontWeight: 'bold' }} 
+              onClick={() => setShowSaveDialog(true)}
+              disabled={isLoading}
+            >
+              💾 Save Scenario
+            </button>
+            <button 
+              style={{ marginLeft: 12, backgroundColor: '#00ff88', color: '#000', fontWeight: 'bold' }} 
+              onClick={handleOpenLoadDialog}
+              disabled={isLoading}
+            >
+              📂 Load Scenario
             </button>
           </div>
 

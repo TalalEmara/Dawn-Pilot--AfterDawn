@@ -43,7 +43,35 @@ export function usePersistentCamera() {
     };
 
     localStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify(newState));
-  });
+  }, []);
+
+  const getCurrentCamera = useCallback((): CameraState | null => {
+    const scene = document.querySelector('a-scene');
+    if (!scene) return null;
+
+    const cameraEl = scene.querySelector('[camera], a-camera') as any;
+    if (!cameraEl) return null;
+
+    const pos = cameraEl.getAttribute('position');
+    const rot = cameraEl.getAttribute('rotation');
+    if (!pos || !rot) return null;
+
+    return {
+      position: { x: pos.x, y: pos.y, z: pos.z },
+      rotation: { x: rot.x, y: rot.y, z: rot.z },
+    };
+  }, []);
+
+  const setCameraState = useCallback((cameraState: CameraState) => {
+    const scene = document.querySelector('a-scene');
+    if (!scene) return;
+
+    const cameraEl = scene.querySelector('[camera], a-camera') as any;
+    if (!cameraEl) return;
+
+    cameraEl.setAttribute('position', cameraState.position);
+    cameraEl.setAttribute('rotation', cameraState.rotation);
+  }, []);
 
   useEffect(() => {
     const scene = document.querySelector('a-scene');
@@ -58,5 +86,5 @@ export function usePersistentCamera() {
     cameraEl.setAttribute('rotation', camState.rotation);
   }, []);
 
-  return { saveCameraNow };
+  return { saveCameraNow, getCurrentCamera, setCameraState };
 }
