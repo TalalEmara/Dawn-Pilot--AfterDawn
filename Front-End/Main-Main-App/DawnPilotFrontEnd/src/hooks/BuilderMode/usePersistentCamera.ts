@@ -69,8 +69,33 @@ export function usePersistentCamera() {
     const cameraEl = scene.querySelector('[camera], a-camera') as any;
     if (!cameraEl) return;
 
-    cameraEl.setAttribute('position', cameraState.position);
-    cameraEl.setAttribute('rotation', cameraState.rotation);
+    // Get the look-controls component
+    const lookControls = cameraEl.components['look-controls'];
+    
+    if (lookControls) {
+      // Temporarily pause look-controls to prevent it from overriding our rotation
+      lookControls.pause();
+      
+      // Set position and rotation
+      cameraEl.setAttribute('position', cameraState.position);
+      cameraEl.setAttribute('rotation', cameraState.rotation);
+      
+      // Update look-controls internal state to match our rotation
+      if (lookControls.pitchObject && lookControls.yawObject) {
+        // Convert degrees to radians and update look-controls state
+        lookControls.pitchObject.rotation.x = (cameraState.rotation.x * Math.PI) / 180;
+        lookControls.yawObject.rotation.y = (cameraState.rotation.y * Math.PI) / 180;
+      }
+      
+      // Resume look-controls
+      setTimeout(() => {
+        lookControls.play();
+      }, 50);
+    } else {
+      // Fallback if look-controls is not present
+      cameraEl.setAttribute('position', cameraState.position);
+      cameraEl.setAttribute('rotation', cameraState.rotation);
+    }
   }, []);
 
   useEffect(() => {
