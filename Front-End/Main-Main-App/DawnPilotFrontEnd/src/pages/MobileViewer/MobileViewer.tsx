@@ -8,7 +8,7 @@ import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useComponentManager } from '../../hooks/useComponentManager';
 import { useFrameBuffer, getFolderHandle } from '../../hooks/useFrameBuffer';
 import { useCameraSync } from '../../hooks/useCameraSync';
-
+import carImg from '../../assets/frame_159_234589.png.png';
 // import { SOCKET_URL } from '../../config/api';
 const SOCKET_URL = "http://192.168.1.117:5000";
 
@@ -184,6 +184,10 @@ function MobileView() {
         fog="type: linear; color: #111; near: 50; far: 200"
         style={{ width: '100%', height: '100%' }}
       >
+        <Entity primitive="a-assets">
+          <img id="comicbook" crossOrigin="anonymous" src={carImg} />
+        </Entity>
+
         {/* Sky */}
         <Entity primitive="a-sky" color="#87CEEB" />
 
@@ -207,7 +211,7 @@ function MobileView() {
           height="1000"
           color="#000000"
         />
-
+      
         {/* Entities from backend */}
         {world.entities.map(e => {
           const pos = e.Position || { x: 0, y: 0, z: 0 };
@@ -252,11 +256,18 @@ function MobileView() {
             autoplay: false
           }}
         >
+        
           <Entity
             ref={cameraRef}
             primitive="a-camera"
             look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false; pointerLockEnabled: false"
-          />
+          >
+              <Entity
+              position="0 0 -1.5"
+              layer="type: quad; src: #comicbook; width: 5; height: 3"
+            />
+
+            </Entity>
         </Entity>
       </Scene>
     </div>
