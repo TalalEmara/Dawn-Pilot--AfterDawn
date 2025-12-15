@@ -10,6 +10,8 @@ type ASceneEl = HTMLElement & {
 };
 
 let folderHandle: FileSystemDirectoryHandle | null = null;
+// NEW: Reusable canvas for streaming to prevent memory leaks
+let encodingCanvas: HTMLCanvasElement | null = null;
 
 // Exported so UI can trigger it from a button (user gesture)
 export async function getFolderHandle() {
@@ -32,6 +34,8 @@ export const useFrameBuffer = (options?: {
   logInterval?: number;
   logPixelData?: boolean;
   downsamplePercentage?: number;
+  // NEW: Callback to stream the frame
+  onFrame?: (blob: Blob) => void;
 }) => {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
@@ -42,6 +46,8 @@ export const useFrameBuffer = (options?: {
 
     const LOG_INTERVAL = options?.logInterval ?? 2000;
     const LOG_PIXEL_DATA = options?.logPixelData ?? false;
+    // Capture if either logging is on OR we have a streaming callback
+    const SHOULD_CAPTURE = LOG_PIXEL_DATA || !!options?.onFrame;
 
     const setupDebug = () => {
       if (isInitializedRef.current) {
@@ -91,18 +97,18 @@ export const useFrameBuffer = (options?: {
 
             try {
               const debugInfo = renderer.info;
-              if (debugInfo) {
+              if (debugInfo && LOG_PIXEL_DATA) {
                 console.log(`🔺 Triangles: ${debugInfo.render.triangles}`);
               }
 
-              if (LOG_PIXEL_DATA) {
+              if (SHOULD_CAPTURE) {
                 // IMPORTANT: Read pixels AFTER the frame is rendered
                 requestAnimationFrame(() => {
                   try {
                     const width = renderer.domElement.width;
                     const height = renderer.domElement.height;
 
-                    console.log(`📸 Capturing frame: ${width}x${height}`);
+                    if (LOG_PIXEL_DATA) console.log(`📸 Capturing frame: ${width}x${height}`);
 
                     const pixelData = new Uint8Array(width * height * 4);
 
@@ -117,23 +123,8 @@ export const useFrameBuffer = (options?: {
                       pixelData
                     );
 
-                    // Check if we got any non-black pixels
-                    let hasColor = false;
-                    for (let i = 0; i < pixelData.length; i += 4) {
-                      if (
-                        pixelData[i] > 0 ||
-                        pixelData[i + 1] > 0 ||
-                        pixelData[i + 2] > 0
-                      ) {
-                        hasColor = true;
-                        break;
-                      }
-                    }
-                    console.log(`🎨 Has visible pixels: ${hasColor}`);
-
                     // Downsample
-                    const percentage =
-                      options?.downsamplePercentage ?? 50;
+                    const percentage = options?.downsamplePercentage ?? 50;
                     const rgbData = downsamplePixels(
                       pixelData,
                       width,
@@ -141,24 +132,47 @@ export const useFrameBuffer = (options?: {
                       percentage
                     );
 
-                    // Read depth buffer
-                    const depthData = readDepthBuffer(
-                      gl,
-                      renderer,
-                      sceneEl,
-                      width,
-                      height,
-                      percentage
-                    );
-
-                    if (!depthData) {
-                      console.log(`Depth not captured`);
-                    } else {
-                      console.log(`Depth captured`);
+                    // NEW: Stream the frame if callback exists
+                    if (options?.onFrame) {
+                        pixelsToBlob(rgbData.data, rgbData.width, rgbData.height).then(blob => {
+                            if (blob) options.onFrame!(blob);
+                        });
                     }
 
-                    // Save images
-                    saveFrameDataJSON(rgbData, depthData, Math.floor(now));
+                    if (LOG_PIXEL_DATA) {
+                        // Check if we got any non-black pixels
+                        let hasColor = false;
+                        for (let i = 0; i < pixelData.length; i += 4) {
+                          if (
+                            pixelData[i] > 0 ||
+                            pixelData[i + 1] > 0 ||
+                            pixelData[i + 2] > 0
+                          ) {
+                            hasColor = true;
+                            break;
+                          }
+                        }
+                        console.log(`🎨 Has visible pixels: ${hasColor}`);
+
+                        // Read depth buffer
+                        const depthData = readDepthBuffer(
+                          gl,
+                          renderer,
+                          sceneEl,
+                          width,
+                          height,
+                          percentage
+                        );
+
+                        if (!depthData) {
+                          console.log(`Depth not captured`);
+                        } else {
+                          console.log(`Depth captured`);
+                        }
+
+                        // Save images
+                        saveFrameDataJSON(rgbData, depthData, Math.floor(now));
+                    }
                   } catch (err) {
                     console.error(
                       "[A-Frame Debug] Error capturing pixels:",
@@ -204,6 +218,7 @@ export const useFrameBuffer = (options?: {
     options?.logInterval,
     options?.logPixelData,
     options?.downsamplePercentage,
+    options?.onFrame,
   ]);
 };
 
@@ -231,13 +246,37 @@ function downsamplePixels(
     }
   }
 
-  console.log(`🔽 Downsampled: ${width}x${height} -> ${newWidth}x${newHeight}`);
-
   return {
     data: downsampled,
     width: newWidth,
     height: newHeight,
   };
+}
+
+// NEW: Helper to efficiently convert raw pixels to JPEG Blob
+async function pixelsToBlob(data: Uint8Array, width: number, height: number): Promise<Blob | null> {
+    if (!encodingCanvas) encodingCanvas = document.createElement("canvas");
+    encodingCanvas.width = width;
+    encodingCanvas.height = height;
+    const ctx = encodingCanvas.getContext("2d");
+    if (!ctx) return null;
+  
+    // Create ImageData (requires Uint8ClampedArray)
+    const clampedData = new Uint8ClampedArray(data.buffer);
+    const imgData = new ImageData(clampedData, width, height);
+    
+    // WebGL reads pixels bottom-to-top, so we need to flip it
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    tempCanvas.getContext("2d")?.putImageData(imgData, 0, 0);
+    
+    ctx.save();
+    ctx.scale(1, -1);
+    ctx.drawImage(tempCanvas, 0, -height);
+    ctx.restore();
+  
+    return new Promise((resolve) => encodingCanvas!.toBlob(resolve, "image/jpeg", 0.7));
 }
 
 function readDepthBuffer(
@@ -277,12 +316,6 @@ function readDepthBuffer(
     camera.getWorldPosition(cameraWorldPos);
     const cameraWorldDir = new THREE.Vector3();
     camera.getWorldDirection(cameraWorldDir);
-
-    console.log(
-      `📷 Camera near: ${near}, original far: ${originalFar}, visualization far: ${visualizationFar}`
-    );
-    console.log(`📷 Camera world position:`, cameraWorldPos);
-    console.log(`📷 Camera world direction:`, cameraWorldDir);
 
     const depthMaterial = new THREE.ShaderMaterial({
       vertexShader: `
@@ -334,27 +367,11 @@ function readDepthBuffer(
         if (distance < minDist) minDist = distance;
         if (distance > maxDist) maxDist = distance;
 
-        console.log(
-          `  - Mesh: ${obj.name || "unnamed"}, geometry: ${
-            obj.geometry?.type
-          }`
-        );
-        console.log(
-          `    world position:`,
-          worldPos,
-          `distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`
-        );
-
         obj.material = depthMaterial;
         obj.material.needsUpdate = true;
         meshCount++;
       }
     });
-
-    console.log(`🎯 Processing ${meshCount} meshes for depth`);
-    console.log(
-      `📏 Distance range: ${minDist.toFixed(2)} - ${maxDist.toFixed(2)}`
-    );
 
     if (maxDist > visualizationFar) {
       console.warn(
@@ -422,12 +439,6 @@ function readDepthBuffer(
       `📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height}`
     );
 
-    if (sampleValues.length > 0) {
-      console.log(`📊 Sample depth values (0-255):`, sampleValues);
-    } else {
-      console.warn(`⚠️ WARNING: No depth data captured!`);
-    }
-
     depthTarget.dispose();
     depthMaterial.dispose();
 
@@ -443,8 +454,6 @@ function readDepthBuffer(
         grayscaleDepth[writeIdx++] = depthPixels[idx];
       }
     }
-
-    console.log(`🔍 Depth buffer captured: ${newWidth}x${newHeight}`);
 
     return {
       data: grayscaleDepth,
@@ -466,7 +475,6 @@ function saveFrameDataJSON(
 ) {
   frameCounter++;
 
-  // Save every 10th frame
   if (frameCounter % 10 !== 0) return;
 
   const savedCount = Math.floor(frameCounter / 10);

@@ -8,14 +8,16 @@ import { useScenarioWorld } from "../../hooks/useScenarioWorld";
 import { useComponentManager } from "../../hooks/useComponentManager";
 import { useFrameBuffer, getFolderHandle } from "../../hooks/useFrameBuffer";
 import { useCameraSync } from "../../hooks/useCameraSync";
-import carImg from "../../assets/frame_159_234589.png.png"; 
+import carImg from "../../assets/frame_159_234589.png.png";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
-import { useMockStream } from "../../hooks/testing/useMockSteam";
-// import { SOCKET_URL } from '../../config/api';
-const SOCKET_URL = "http://192.168.1.117:5000";
+import { io, Socket } from "socket.io-client";
+
+// Port 8000 for Phosphene AI (Stream)
+const PHOSPHERE_API_URL = "http://192.168.1.107:8000";
+
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
-    schema: { src: { type: "selector" } }, 
+    schema: { src: { type: "selector" } }, // Accepts ID of the canvas
 
     init: function () {
       const canvas = this.data.src;
@@ -39,9 +41,13 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
     },
   });
 }
+
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
+  
+  // State for the AI socket (separate from the sync socket)
+  const [aiSocket, setAiSocket] = useState<Socket | null>(null);
 
   const hasReceivedPosition = useRef(false);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
@@ -49,21 +55,47 @@ function MobileView() {
   const { world, loadWorld } = useScenarioWorld();
   const { clearAllTimers } = useComponentManager();
 
-  // Mobile follows desktop camera
-  const { isConnected, setOnCameraUpdate } = useCameraSync({
+  // 1. Position Sync (Port 5000 - Handled internally by useCameraSync)
+  const { isConnected: isSyncConnected, setOnCameraUpdate } = useCameraSync({
     clientType: "mobile",
     throttleMs: 16,
   });
-  // This paints incoming WebSocket frames to 'hudCanvasRef'
-  // const hudCanvasRef = useBinaryStream(socket);
-  // Enable framebuffer capture / saving
+
+  // 2. AI Stream Connection (Port 8000)
+  useEffect(() => {
+    const socket = io(PHOSPHERE_API_URL, {
+      transports: ['websocket'],
+      reconnection: true
+    });
+
+    socket.on('connect', () => {
+      console.log("🟢 Connected to Phosphene AI Server");
+    });
+
+    setAiSocket(socket);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // 3. Receive Stream: Listen for processed frames from AI socket
+  const hudCanvasRef = useBinaryStream(aiSocket);
+
+  // 4. Send Stream: Capture A-Frame view and emit to AI socket
   useFrameBuffer({
-    logInterval: 1000,
-    logPixelData: false,
-    downsamplePercentage: 50,
+    enabled: !!aiSocket?.connected, // Only capture if connected
+    logInterval: 66,                // ~15 FPS (Adjust to 33 for 30 FPS)
+    downsamplePercentage: 50,       // Send smaller frames to save network
+    logPixelData: false,            // Disable disk saving
+    onFrame: (blob) => {
+      if (aiSocket?.connected) {
+        aiSocket.emit('input_frame', blob);
+      }
+    }
   });
-  const hudCanvasRef = useMockStream();
-  // Load world once
+
+  // Load world logic
   useEffect(() => {
     loadWorld()
       .then((data) => {
@@ -71,7 +103,6 @@ function MobileView() {
       })
       .catch((err) => {
         console.error("Failed to load world:", err);
-        alert("Error loading world. Make sure backend is running.");
       });
 
     return () => {
@@ -79,7 +110,7 @@ function MobileView() {
     };
   }, [loadWorld, clearAllTimers]);
 
-  // When desktop camera updates, move/animate rig
+  // Sync Rig Position logic
   useEffect(() => {
     setOnCameraUpdate((camera) => {
       const newPos = camera.position;
@@ -128,23 +159,23 @@ function MobileView() {
         }
       `}</style>
 
-      {/* WebSocket Connection Status */}
+      {/* Connection Status UI */}
       <div
         style={{
           position: "absolute",
           top: 10,
           right: 10,
           zIndex: 1000,
-          background: isConnected ? "#4CAF50" : "#f44336",
+          background: "rgba(0,0,0,0.5)",
           color: "white",
           padding: "8px 16px",
           borderRadius: "4px",
           fontSize: "12px",
           fontFamily: "monospace",
+          textAlign: "right"
         }}
       >
-        {/* --- 4. The Hidden Buffer Canvas --- */}
-        {/* A-Frame reads from this canvas. It is invisible to the user. */}
+        {/* Hidden Buffer Canvas for HUD Texture */}
         <canvas
           ref={hudCanvasRef}
           id="hud-buffer"
@@ -152,13 +183,12 @@ function MobileView() {
           height="360"
           style={{ display: "none" }}
         />
-        {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
-        <div style={{ fontSize: "9px", marginTop: "4px", opacity: 0.8 }}>
-          {SOCKET_URL}
-        </div>
+        
+        <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
+        <div>AI: {aiSocket?.connected ? "🟢" : "🔴"}</div>
       </div>
 
-      {/* Mobile Mode Status */}
+      {/* Mobile Label */}
       <div
         style={{
           position: "absolute",
@@ -173,10 +203,9 @@ function MobileView() {
           fontFamily: "monospace",
         }}
       >
-        📱 Mobile Viewer (Following Desktop)
+        📱 Mobile Viewer
       </div>
 
-      {/* Camera Position Display */}
       <div
         style={{
           position: "absolute",
@@ -196,7 +225,6 @@ function MobileView() {
         <div>Z: {cameraPosition.z.toFixed(2)}</div>
       </div>
 
-      {/* Folder picker button – calls getFolderHandle from user gesture */}
       <button
         style={{
           position: "absolute",
@@ -214,7 +242,7 @@ function MobileView() {
         }}
         onClick={async () => {
           try {
-            await getFolderHandle(); // opens showDirectoryPicker once
+            await getFolderHandle();
           } catch (err) {
             console.error("Failed to select folder", err);
           }
@@ -229,26 +257,16 @@ function MobileView() {
         device-orientation-permission-ui="enabled: true"
         fog="type: linear; color: #111; near: 50; far: 200"
         style={{ width: "100%", height: "100%" }}
+        renderer="preserveDrawingBuffer: true; antialias: true"
       >
         <Entity primitive="a-assets">
           <img id="comicbook" crossOrigin="anonymous" src={carImg} />
         </Entity>
 
-        {/* Sky */}
         <Entity primitive="a-sky" color="#87CEEB" />
-
-        {/* Lights */}
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity
-          light={{ type: "directional", color: "#ffffff", intensity: 1.0 }}
-          position="5 10 2"
-        />
-        <Entity
-          light={{ type: "directional", color: "#ffffff", intensity: 0.9 }}
-          position="0 2 -6"
-        />
+        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
 
-        {/* Ground */}
         <Entity
           primitive="a-plane"
           position="0 -1 -4"
@@ -258,7 +276,6 @@ function MobileView() {
           color="#000000"
         />
 
-        {/* Entities from backend */}
         {world.entities.map((e) => {
           const pos = e.Position || { x: 0, y: 0, z: 0 };
           const rot = e.Rotation || { x: 0, y: 0, z: 0 };
@@ -291,7 +308,6 @@ function MobileView() {
           );
         })}
 
-        {/* Rig: position from desktop, orientation from phone */}
         <Entity
           ref={rigRef}
           animation__follow={{
@@ -305,19 +321,14 @@ function MobileView() {
           <Entity
             ref={cameraRef}
             primitive="a-camera"
-            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false; pointerLockEnabled: false"
+            look-controls="enabled: true; touchEnabled: true;"
           >
-            {/* <Entity
-              position="0 0 -1.5"
-              layer="type: quad; src: #comicbook; width: 5; height: 3"
-            /> */}
-
-            {/* --- 6. The Dynamic HUD --- */}
-            {/* We replaced 'layer' with a plane using our custom component. */}
+            {/* ✅ HUD Plane using the AI Stream */}
             <Entity
               geometry="primitive: plane; width: 5; height: 2.5"
               position="0 0 -1.5"
               canvas-updater="src: #hud-buffer"
+              material="shader: flat; transparent: true; depthTest: false"
             />
           </Entity>
         </Entity>
