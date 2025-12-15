@@ -139,3 +139,6 @@ dist
 Back-End/fast_api/venv
 Back-End/fast_api/__pycache__
 Back-End/fast_api/api_output
+
+venv
+Back-End/test.py

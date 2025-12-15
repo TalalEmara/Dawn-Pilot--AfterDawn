@@ -30,6 +30,7 @@ from PIL import Image
 # Import local modules
 from translator import Translator
 from realtime_detector import create_detector
+from Pipeline2Integration import Pipeline2Integration
 
 # Configure logging
 logging.basicConfig(
@@ -139,7 +140,7 @@ class DetectorService:
     
     def __init__(self):
         self.detector = None
-        self.detector_type = "mock"
+        self.detector_type = "yolo"
         self.config_path = os.path.join(os.path.dirname(__file__), "detector_config.json")
         self._load_detector()
     
@@ -192,6 +193,7 @@ class DetectorService:
             raise HTTPException(status_code=503, detail="Detector not loaded")
         
         return self.detector.detect(frame)
+        
     
     def update_conf_threshold(self, conf_threshold: float) -> bool:
         """
@@ -350,15 +352,16 @@ class TranslatorService:
             self.translator.params['K_min'] = k_min
             self.translator.params['K_max'] = k_max
             
-            # Generate output
+            # Generate output (simplified image for navigation)
             timestamp = int(time.time() * 1000)
             output_filename = f"api_frame_{timestamp}.png"
-            output_path = self.translator.run(output_filename)
+            output_path = self.translator.run(output_filename) 
             
             # Read and encode output image
             with open(output_path, 'rb') as img_file:
                 img_data = img_file.read()
-                phosphene_base64 = base64.b64encode(img_data).decode('utf-8')
+                phosphene_img = pipeline2.input2phosphenes(img_data)
+                phosphene_base64 = base64.b64encode(phosphene_img).decode('utf-8')
             
             # Get selected objects
             selected_objects = self._get_selected_objects()
@@ -418,7 +421,7 @@ class TranslatorService:
 
 detector_service = DetectorService()
 translator_service = TranslatorService()
-
+pipeline2 = Pipeline2Integration()
 # ============================================================================
 # FastAPI Application
 # ============================================================================
