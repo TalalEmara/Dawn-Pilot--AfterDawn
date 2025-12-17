@@ -20,7 +20,10 @@ call venv\Scripts\activate.bat
 REM Install/upgrade dependencies
 echo.
 echo Installing dependencies...
-pip install -r requirements.txt
+pip install -r ..\requirements.txt
+
+REM Change to parent directory
+cd ..
 
 REM Start the server
 echo.
@@ -30,7 +33,7 @@ echo API Docs: http://localhost:8000/docs
 echo ========================================
 echo.
 
-python phosphene_api.py
+python main.py
 
 REM Keep window open on error
 if errorlevel 1 (
