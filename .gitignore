@@ -143,3 +143,11 @@ Back-End/fast_api/api_output
 
 venv
 Back-End/test.py
+Back-End/fast_api/core/__pycache__/
+Back-End/fast_api/api/__pycache__/
+Back-End/fast_api/translation/utils/__pycache__/
+Back-End/fast_api/translation/__pycache__/
+Back-End/fast_api/translation/utils/__pycache__/
+Back-End/fast_api/models/__pycache__/
+Back-End/fast_api/services/__pycache__/
+Back-End/fast_api/detection/__pycache__/
