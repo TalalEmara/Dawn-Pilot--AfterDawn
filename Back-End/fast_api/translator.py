@@ -17,6 +17,7 @@ Date: October 2025
 
 import json
 import os
+import time
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -248,6 +249,10 @@ class Translator:
         Kmin = int(self.params.get("K_min", 1))
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
+        
+        print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")
+        for obj in objs[:5]:  # Show first 5
+            print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")
 
         selected = [o for o in objs if o["score"] > Tmin]
         if len(selected) > Kmax:
@@ -614,22 +619,35 @@ class Translator:
         Returns:
             str: Path to the saved output image
         """
+        # add timing for each step
         # Create dynamic canvas matching input image dimensions
         W, H = self.canvas_size
         canvas = np.zeros((H, W, 3), dtype=np.uint8)
 
+        
+        start_time = time.time()
         # Step 1: Draw free path navigation area (background element)
         self.draw_freepath(canvas)
+        free_path_time = (time.time() - start_time) * 1000
 
         # Step 2: Select most important objects for navigation
+        select_start = time.time()
         selected = self.select_objects()
+        select_time = (time.time() - select_start) * 1000
+        
+        print(f"[Translator] Selected {len(selected)} objects to render")
+        for obj in selected:
+            print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")
 
         # Step 3: Render each selected object with appropriate visual representation
+        render_start = time.time()
         for i, obj in enumerate(selected):
             object_class = obj.get("class", "unknown")
             centroid = obj.get("centroid_px", [W//2, H//2])
+            print(f"[Translator] Drawing object {i}: class={object_class}, centroid={centroid}")
             self.draw_shape(canvas, obj)
-
+        render_time = (time.time() - render_start) * 1000
+        print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")
         # Step 5: Save final simplified navigation image
         out_path = os.path.join(self.output_dir, out_name)
         cv2.imwrite(out_path, canvas)
