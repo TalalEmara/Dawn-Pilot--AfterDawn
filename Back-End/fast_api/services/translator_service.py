@@ -100,13 +100,25 @@ class TranslatorService:
         image_height: int,
         t_min: float = 0.3,
         k_min: int = 1,
-        k_max: int = 5
+        k_max: int = 5,
+        save_debug_images: bool = False,
+        return_bytes: bool = False
     ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
         """
         Translate detected objects to phosphene representation
         
+        Args:
+            objects: List of detected objects
+            image_width: Width of input image
+            image_height: Height of input image
+            t_min: Minimum score threshold
+            k_min: Minimum number of objects to select
+            k_max: Maximum number of objects to select
+            save_debug_images: If True, save intermediate images to disk for debugging
+            return_bytes: If True, return phosphene image as bytes instead of base64 string
+        
         Returns:
-            tuple: (phosphene_image_base64, selected_objects, metadata)
+            tuple: (phosphene_image_base64_or_bytes, selected_objects, metadata)
         """
         start_time = time.time()
         
@@ -185,38 +197,40 @@ class TranslatorService:
                 translator_output_resized = translator_output_binary
             resize_time = (time.time() - resize_start) * 1000
             
-            # Optional: save the output image before phosphene (for debugging)
-            # pre_phosphene_filename = f"phosphene_input_{timestamp}.png"
-            # pre_phosphene_path = os.path.join(self.output_dir, pre_phosphene_filename)
-            # cv2.imwrite(pre_phosphene_path, translator_output_resized)
-            # logger.info(f"💾 Saved translator output image: {pre_phosphene_path}")
+            # Optionally save translator output before phosphene simulation
+            if save_debug_images:
+                pre_phosphene_filename = f"phosphene_input_{timestamp}.png"
+                pre_phosphene_path = os.path.join(self.output_dir, pre_phosphene_filename)
+                cv2.imwrite(pre_phosphene_path, translator_output_resized)
+                logger.info(f"Saved translator output: {pre_phosphene_path}")
 
             # Normalize to 0-1 range for Pipeline2 (neural network expects normalized input)
             translator_output_normalized = translator_output_resized.astype(np.float32) / 255.0
-            logger.debug(f"📊 Input stats: min={translator_output_normalized.min():.3f}, max={translator_output_normalized.max():.3f}, mean={translator_output_normalized.mean():.3f}")
 
             # Pass through Pipeline2 for phosphene simulation
             phosphene_start = time.time()
             phosphene_img = self.pipeline2.input2phosphenes(translator_output_normalized)
             phosphene_time = (time.time() - phosphene_start) * 1000
             
-            logger.debug(f"📊 Output stats: min={phosphene_img.min():.3f}, max={phosphene_img.max():.3f}, mean={phosphene_img.mean():.3f}, dtype={phosphene_img.dtype}")
-            
             # Scale output back to 0-255 range for visualization
             phosphene_img_scaled = np.clip(phosphene_img * 255.0, 0, 255).astype(np.uint8)
-            logger.debug(f"📊 Scaled output: min={phosphene_img_scaled.min()}, max={phosphene_img_scaled.max()}, mean={phosphene_img_scaled.mean():.1f}")
             
-            # Optional: Save phosphene output image (for debugging)
-            # phosphene_filename = f"phosphene_output_{timestamp}.png"
-            # phosphene_path = os.path.join(self.output_dir, phosphene_filename)
-            # cv2.imwrite(phosphene_path, phosphene_img_scaled)
-            # logger.info(f"💾 Saved phosphene image: {phosphene_path}")
+            # Optionally save phosphene output
+            if save_debug_images:
+                phosphene_filename = f"phosphene_output_{timestamp}.png"
+                phosphene_path = os.path.join(self.output_dir, phosphene_filename)
+                cv2.imwrite(phosphene_path, phosphene_img_scaled)
+                logger.info(f"Saved phosphene image: {phosphene_path}")
             
-            # encoding time
+            # Encode phosphene output
             encode_start = time.time()
-            # Encode phosphene output as PNG for response
             _, buffer = cv2.imencode('.png', phosphene_img_scaled)
-            phosphene_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            if return_bytes:
+                phosphene_output = buffer.tobytes()
+            else:
+                phosphene_output = base64.b64encode(buffer).decode('utf-8')
+            
             encode_time = (time.time() - encode_start) * 1000
             
             # Get selected objects
@@ -243,7 +257,7 @@ class TranslatorService:
                 }
             }
             
-            return phosphene_base64, selected_objects, metadata
+            return phosphene_output, selected_objects, metadata
         
         except Exception as e:
             logger.error(f"Translation error: {e}")
