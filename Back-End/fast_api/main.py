@@ -10,10 +10,13 @@ Date: December 2025
 
 import logging
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+import os
 
-from api import router, set_services
+from api import router, set_services, handle_websocket, set_websocket_services
 from services import DetectorService, TranslatorService
 
 # Configure logging
@@ -35,6 +38,7 @@ logger.info("Services initialization complete.")
 
 # Inject services into routes
 set_services(detector_service, translator_service)
+set_websocket_services(detector_service, translator_service)
 
 
 # ============================================================================
@@ -57,6 +61,28 @@ app.add_middleware(
 )
 
 # Include API routes
+
+# WebSocket endpoint for real-time frame processing
+@app.websocket("/ws/process")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time frame processing
+    
+    Accepts continuous stream of frames and returns processed phosphene images.
+    Handles timing mismatch by skipping frames when processing is slower than input rate.
+    """
+    await handle_websocket(websocket)
+
+
+# Serve test page
+@app.get("/test", response_class=HTMLResponse)
+async def test_page():
+    """Serve WebSocket test page"""
+    test_file = os.path.join(os.path.dirname(__file__), "static", "websocket_test.html")
+    if os.path.exists(test_file):
+        with open(test_file, 'r') as f:
+            return f.read()
+    return "<h1>Test page not found</h1><p>Create static/websocket_test.html</p>"
 app.include_router(router)
 
 
