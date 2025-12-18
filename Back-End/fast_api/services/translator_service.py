@@ -166,60 +166,58 @@ class TranslatorService:
             
             # Measure translator time
             translator_start = time.time()
-            output_path = self.translator.run(output_filename)
+            # Get canvas array directly (no disk I/O)
+            translator_output, _ = self.translator.run(output_filename, save_to_disk=False)
             translator_time = (time.time() - translator_start) * 1000
             
-            # Read and decode translator output
-            with open(output_path, 'rb') as img_file:
-                img_data = img_file.read()
-                # decoding time to ndarray
-                decode_start = time.time()
-                nparr = np.frombuffer(img_data, np.uint8)
-                # binarize the image not grayscale
-                _, translator_output = cv2.threshold(cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE), 127, 255, cv2.THRESH_BINARY)
-                decode_time = (time.time() - decode_start) * 1000
+            # Use canvas array directly (already in memory)
+            decode_start = time.time()
+            # Convert to grayscale and binarize
+            translator_output_gray = cv2.cvtColor(translator_output, cv2.COLOR_BGR2GRAY)
+            _, translator_output_binary = cv2.threshold(translator_output_gray, 127, 255, cv2.THRESH_BINARY)
+            decode_time = (time.time() - decode_start) * 1000
                 
-                # Resize to 128x128 for Pipeline2 (expected input size)
-                resize_start = time.time()
-                if translator_output.shape != (128, 128):
-                    translator_output_resized = cv2.resize(translator_output, (128, 128), interpolation=cv2.INTER_LINEAR)
-                else:
-                    translator_output_resized = translator_output
-                resize_time = (time.time() - resize_start) * 1000
-                
-                # save the output image before phosphene
-                pre_phosphene_filename = f"phosphene_input_{timestamp}.png"
-                pre_phosphene_path = os.path.join(self.output_dir, pre_phosphene_filename)
-                cv2.imwrite(pre_phosphene_path, translator_output_resized)
-                logger.info(f"💾 Saved translator output image: {pre_phosphene_path}")
+            # Resize to 128x128 for Pipeline2 (expected input size)
+            resize_start = time.time()
+            if translator_output_binary.shape != (128, 128):
+                translator_output_resized = cv2.resize(translator_output_binary, (128, 128), interpolation=cv2.INTER_LINEAR)
+            else:
+                translator_output_resized = translator_output_binary
+            resize_time = (time.time() - resize_start) * 1000
+            
+            # Optional: save the output image before phosphene (for debugging)
+            # pre_phosphene_filename = f"phosphene_input_{timestamp}.png"
+            # pre_phosphene_path = os.path.join(self.output_dir, pre_phosphene_filename)
+            # cv2.imwrite(pre_phosphene_path, translator_output_resized)
+            # logger.info(f"💾 Saved translator output image: {pre_phosphene_path}")
 
-                # Normalize to 0-1 range for Pipeline2 (neural network expects normalized input)
-                translator_output_normalized = translator_output_resized.astype(np.float32) / 255.0
-                logger.info(f"📊 Input stats: min={translator_output_normalized.min():.3f}, max={translator_output_normalized.max():.3f}, mean={translator_output_normalized.mean():.3f}")
+            # Normalize to 0-1 range for Pipeline2 (neural network expects normalized input)
+            translator_output_normalized = translator_output_resized.astype(np.float32) / 255.0
+            logger.debug(f"📊 Input stats: min={translator_output_normalized.min():.3f}, max={translator_output_normalized.max():.3f}, mean={translator_output_normalized.mean():.3f}")
 
-                # Pass through Pipeline2 for phosphene simulation
-                phosphene_start = time.time()
-                phosphene_img = self.pipeline2.input2phosphenes(translator_output_normalized)
-                phosphene_time = (time.time() - phosphene_start) * 1000
-                
-                logger.info(f"📊 Output stats: min={phosphene_img.min():.3f}, max={phosphene_img.max():.3f}, mean={phosphene_img.mean():.3f}, dtype={phosphene_img.dtype}")
-                
-                # Scale output back to 0-255 range for visualization
-                phosphene_img_scaled = np.clip(phosphene_img * 255.0, 0, 255).astype(np.uint8)
-                logger.info(f"📊 Scaled output: min={phosphene_img_scaled.min()}, max={phosphene_img_scaled.max()}, mean={phosphene_img_scaled.mean():.1f}")
-                
-                # Save phosphene output image
-                phosphene_filename = f"phosphene_output_{timestamp}.png"
-                phosphene_path = os.path.join(self.output_dir, phosphene_filename)
-                cv2.imwrite(phosphene_path, phosphene_img_scaled)
-                logger.info(f"💾 Saved phosphene image: {phosphene_path}")
-                
-                # encoding time
-                encode_start = time.time()
-                # Encode phosphene output as PNG for response
-                _, buffer = cv2.imencode('.png', phosphene_img_scaled)
-                phosphene_base64 = base64.b64encode(buffer).decode('utf-8')
-                encode_time = (time.time() - encode_start) * 1000
+            # Pass through Pipeline2 for phosphene simulation
+            phosphene_start = time.time()
+            phosphene_img = self.pipeline2.input2phosphenes(translator_output_normalized)
+            phosphene_time = (time.time() - phosphene_start) * 1000
+            
+            logger.debug(f"📊 Output stats: min={phosphene_img.min():.3f}, max={phosphene_img.max():.3f}, mean={phosphene_img.mean():.3f}, dtype={phosphene_img.dtype}")
+            
+            # Scale output back to 0-255 range for visualization
+            phosphene_img_scaled = np.clip(phosphene_img * 255.0, 0, 255).astype(np.uint8)
+            logger.debug(f"📊 Scaled output: min={phosphene_img_scaled.min()}, max={phosphene_img_scaled.max()}, mean={phosphene_img_scaled.mean():.1f}")
+            
+            # Optional: Save phosphene output image (for debugging)
+            # phosphene_filename = f"phosphene_output_{timestamp}.png"
+            # phosphene_path = os.path.join(self.output_dir, phosphene_filename)
+            # cv2.imwrite(phosphene_path, phosphene_img_scaled)
+            # logger.info(f"💾 Saved phosphene image: {phosphene_path}")
+            
+            # encoding time
+            encode_start = time.time()
+            # Encode phosphene output as PNG for response
+            _, buffer = cv2.imencode('.png', phosphene_img_scaled)
+            phosphene_base64 = base64.b64encode(buffer).decode('utf-8')
+            encode_time = (time.time() - encode_start) * 1000
             
             # Get selected objects
             selected_objects = self._get_selected_objects()
@@ -238,10 +236,6 @@ class TranslatorService:
                 },
                 "selected_count": len(selected_objects),
                 "total_objects": len(objects),
-                "output_files": {
-                    "translator_output": output_path,
-                    "phosphene_output": phosphene_path
-                },
                 "thresholds": {
                     "t_min": t_min,
                     "k_min": k_min,

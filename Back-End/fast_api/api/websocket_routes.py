@@ -28,7 +28,7 @@ detector_service = None
 translator_service = None
 
 # Keepalive settings
-KEEPALIVE_INTERVAL = 0.5  # Send ping every 0.5 seconds for more aggressive keepalive
+KEEPALIVE_INTERVAL = 5.0  # Send ping every 5 seconds (must be longer than max processing time)
 
 
 def set_websocket_services(detector, translator):
@@ -147,20 +147,35 @@ class FrameProcessor:
 
 async def keepalive_task(websocket: WebSocket):
     """Background task to send keepalive pings to the client"""
+    ping_count = 0
     try:
         while True:
             await asyncio.sleep(KEEPALIVE_INTERVAL)
+            ping_count += 1
+            
+            # Check connection state before sending
+            if websocket.client_state.name != 'CONNECTED':
+                print(f"[KeepAlive] ⚠️ Connection not CONNECTED (state: {websocket.client_state.name}), stopping keepalive")
+                break
+            
             try:
                 await websocket.send_json({
                     "type": "ping",
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
+                    "ping_count": ping_count
                 })
-                print(f"[KeepAlive] 📍 Sent ping to keep connection alive")
+                print(f"[KeepAlive] 📍 Sent ping #{ping_count}, connection state: {websocket.client_state.name}")
             except Exception as e:
-                print(f"[KeepAlive] ❌ Failed to send ping: {e}")
+                print(f"[KeepAlive] ❌ Failed to send ping #{ping_count}: {type(e).__name__}: {e}")
+                print(f"[KeepAlive] Connection state when ping failed: {websocket.client_state.name}")
                 break
+    except asyncio.CancelledError:
+        print(f"[KeepAlive] 🛑 Keepalive task cancelled (sent {ping_count} pings total)")
+        raise
     except Exception as e:
-        print(f"[KeepAlive] ❌ Keepalive task error: {e}")
+        print(f"[KeepAlive] ❌ Keepalive task error: {type(e).__name__}: {e}")
+    finally:
+        print(f"[KeepAlive] 👋 Keepalive task ending (sent {ping_count} pings total)")
 
 
 async def handle_websocket(websocket: WebSocket):
@@ -176,7 +191,9 @@ async def handle_websocket(websocket: WebSocket):
     - If already processing, queue latest frame and skip intermediate frames
     - Always respond with frame_id so client knows which frame was processed
     """
+    print(f"\n[WS-HANDLER] 🔌 New WebSocket connection attempt from {websocket.client}")
     await websocket.accept()
+    print(f"[WS-HANDLER] ✅ WebSocket accepted, state: {websocket.client_state.name}")
     
     # Start keepalive task AFTER accepting connection
     keepalive = asyncio.create_task(keepalive_task(websocket))
@@ -209,12 +226,14 @@ async def handle_websocket(websocket: WebSocket):
         while True:
             # Receive frame from client
             try:
-                print(f"\n[WebSocket] Waiting to receive frame... (processed: {processor.frames_processed}, skipped: {processor.frames_skipped})")
+                print(f"\n[WS-LOOP] 🔄 Waiting to receive data... (state: {websocket.client_state.name}, processed: {processor.frames_processed}, skipped: {processor.frames_skipped})")
                 data = await websocket.receive_json()
-                print(f"[WebSocket] ✅ Received frame data from client")
+                print(f"[WS-LOOP] ✅ Received JSON data, keys: {list(data.keys())}")
+                print(f"[WS-LOOP] Data type: {data.get('type', 'NO_TYPE')}, has 'frame': {('frame' in data)}")
                 logger.info(f"Received frame data from client")
             except Exception as e:
-                print(f"[WebSocket] ❌ Error receiving data: {e}")
+                print(f"[WS-LOOP] ❌ Error receiving data: {type(e).__name__}: {e}")
+                print(f"[WS-LOOP] WebSocket state: {websocket.client_state.name}")
                 logger.error(f"Error receiving data: {e}", exc_info=True)
                 # Don't break - try to send error and continue
                 try:
@@ -223,8 +242,10 @@ async def handle_websocket(websocket: WebSocket):
                         "error": f"Error receiving data: {str(e)}",
                         "message": "Connection issue, attempting to recover..."
                     })
-                except:
-                    print("[WebSocket] Cannot send error - connection may be closed")
+                    print(f"[WS-LOOP] ⚠️ Sent error message, continuing loop...")
+                except Exception as send_err:
+                    print(f"[WS-LOOP] ❌ Cannot send error (connection likely closed): {type(send_err).__name__}")
+                    print(f"[WS-LOOP] Breaking loop due to send failure")
                     break
                 continue
             
@@ -233,20 +254,23 @@ async def handle_websocket(websocket: WebSocket):
             
             # Extract message type and handle control messages
             msg_type = data.get("type")
+            print(f"[WS-LOOP] Message type: '{msg_type}'")
             
             # Handle client heartbeat and pong messages
             if msg_type == "heartbeat":
-                print("[WebSocket] 💓 Received heartbeat from client")
+                print("[WS-LOOP] 💓 Received heartbeat from client (skipping processing)")
                 continue
             
             if msg_type == "pong":
-                print("[WebSocket] 🏓 Received pong from client")
+                print("[WS-LOOP] 🏓 Received pong from client (skipping processing)")
                 continue
             
             # Extract parameters
             frame_base64 = data.get("frame")
             frame_id = data.get("frame_id", f"frame_{processor.frames_received}")
             params = data.get("params", {})
+            
+            print(f"[WS-LOOP] Extracted - frame_id: {frame_id}, has frame data: {frame_base64 is not None}, frame size: {len(frame_base64) if frame_base64 else 0} bytes")
             
             t_min = params.get("t_min", 0.3)
             k_min = params.get("k_min", 1)
@@ -314,24 +338,24 @@ async def handle_websocket(websocket: WebSocket):
                 result["type"] = "frame_result"
                 
                 # Check if connection is still alive before sending
+                print(f"[WS-SEND] 📤 About to send result for {frame_id}, current state: {websocket.client_state.name}")
                 if websocket.client_state.name == 'CONNECTED':
                     try:
                         await websocket.send_json(result)
-                        print(f"[WebSocket] ✅ Sent result for frame {frame_id}")
+                        print(f"[WS-SEND] ✅ Successfully sent result for frame {frame_id}")
+                        print(f"[WS-SEND] Connection state after send: {websocket.client_state.name}")
                         logger.info(f"Sent result for frame {frame_id}")
                     except Exception as e:
-                        print(f"[WebSocket] ⚠️  Connection closed before sending result: {type(e).__name__}")
+                        print(f"[WS-SEND] ❌ Exception during send: {type(e).__name__}: {e}")
+                        print(f"[WS-SEND] Connection state: {websocket.client_state.name}")
+                        print(f"[WS-SEND] BREAKING LOOP due to send exception")
                         logger.error(f"Connection closed: {e}")
                         break
                 else:
-                    print(f"[WebSocket] ⚠️  Connection not in CONNECTED state: {websocket.client_state.name}")
-                    print(f"[WebSocket] Cannot send result, attempting to recover...")
-                    # Try to reconnect or wait for reconnection
-                    try:
-                        # Give client a moment to potentially reconnect
-                        await asyncio.sleep(0.5)
-                    except:
-                        break
+                    print(f"[WS-SEND] ⚠️ Connection not in CONNECTED state: {websocket.client_state.name}")
+                    print(f"[WS-SEND] NOT BREAKING - will try to continue and wait for next message")
+                    # Don't break immediately - the client might still be able to reconnect
+                    # Just skip this result and continue the loop
                 
                 processor.processing = False
                 processor.last_process_time = time.time()
@@ -388,9 +412,11 @@ async def handle_websocket(websocket: WebSocket):
         except:
             pass
     finally:
+        print(f"[WS-HANDLER] 🔚 Entering finally block, state: {websocket.client_state.name}")
         try:
             await websocket.close()
-            print(f"[WebSocket] Connection closed gracefully")
-        except:
-            print(f"[WebSocket] Connection already closed")
+            print(f"[WS-HANDLER] ✅ Connection closed gracefully")
+        except Exception as close_err:
+            print(f"[WS-HANDLER] ⚠️ Connection already closed or error closing: {type(close_err).__name__}")
         logger.info(f"WebSocket connection closed: {websocket.client}")
+        print(f"[WS-HANDLER] 👋 Handler cleanup complete\n")

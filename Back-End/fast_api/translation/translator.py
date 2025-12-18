@@ -602,7 +602,7 @@ class Translator:
     # MAIN RENDERING PIPELINE
     # =====================================================================================
     
-    def run(self, out_name="frame_simp.png"):
+    def run(self, out_name="frame_simp.png", save_to_disk=False):
         """
         Execute the complete navigation translation pipeline.
         
@@ -611,13 +611,14 @@ class Translator:
         2. Renders free path navigation area
         3. Selects most important objects based on scoring
         4. Renders selected objects with appropriate shapes and colors
-        5. Saves the final simplified navigation image
+        5. Optionally saves the final simplified navigation image
         
         Args:
             out_name (str): Output filename for the rendered image
+            save_to_disk (bool): Whether to save the image to disk (default: False for WebSocket)
             
         Returns:
-            str: Path to the saved output image
+            tuple: (canvas_array, output_path) where canvas_array is the numpy image
         """
         # add timing for each step
         # Create dynamic canvas matching input image dimensions
@@ -648,11 +649,17 @@ class Translator:
             self.draw_shape(canvas, obj)
         render_time = (time.time() - render_start) * 1000
         print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")
-        # Step 5: Save final simplified navigation image
-        out_path = os.path.join(self.output_dir, out_name)
-        cv2.imwrite(out_path, canvas)
-        print(f"Saved simplified image at {out_path}")
-        return out_path
+        
+        # Step 5: Optionally save final simplified navigation image
+        out_path = ""
+        if save_to_disk:
+            out_path = os.path.join(self.output_dir, out_name)
+            cv2.imwrite(out_path, canvas)
+            print(f"Saved simplified image at {out_path}")
+        else:
+            print(f"[Translator] Skipping disk save (WebSocket mode)")
+        
+        return canvas, out_path
 
 
 # =====================================================================================

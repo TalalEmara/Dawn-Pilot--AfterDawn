@@ -394,133 +394,181 @@
         function connectWebSocket() {
             const wsUrl = `ws://${window.location.hostname}:8000/ws/process`;
             log(`Connecting to ${wsUrl}...`, 'info');
-            console.log('[Frontend] Attempting to connect to:', wsUrl);
+            console.log('\n[CLIENT] 🔌 Attempting to connect to:', wsUrl);
+            console.log('[CLIENT] Current camera state:', stream ? 'ACTIVE' : 'INACTIVE');
+            console.log('[CLIENT] Current send interval:', sendInterval ? 'RUNNING' : 'STOPPED');
             
             ws = new WebSocket(wsUrl);
+            console.log('[CLIENT] WebSocket object created, readyState:', ws.readyState, '(0=CONNECTING)');
             
             // Set longer timeout to prevent auto-close during processing
             ws.onopen = () => {
                 log('WebSocket connected!', 'success');
-                console.log('[Frontend] WebSocket opened, readyState:', ws.readyState);
+                console.log('[CLIENT] ✅ WebSocket opened, readyState:', ws.readyState, '(1=OPEN)');
+                console.log('[CLIENT] Camera state on open:', stream ? 'ACTIVE' : 'INACTIVE');
+                console.log('[CLIENT] Send interval on open:', sendInterval ? 'RUNNING' : 'STOPPED');
                 document.getElementById('wsStatus').classList.add('connected');
                 document.getElementById('wsStatusText').textContent = 'Connected';
                 connectBtn.disabled = true;
                 startBtn.disabled = false;
                 reconnectAttempts = 0; // Reset reconnect counter on successful connection
                 
-                // Start client-side heartbeat to keep connection alive
-                if (heartbeatInterval) {
-                    clearInterval(heartbeatInterval);
-                }
-                heartbeatInterval = setInterval(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        try {
-                            ws.send(JSON.stringify({
-                                type: 'heartbeat',
-                                timestamp: Date.now()
-                            }));
-                            console.log('[Frontend] Sent heartbeat to server');
-                        } catch (err) {
-                            console.error('[Frontend] Failed to send heartbeat:', err);
-                        }
-                    }
-                }, 2000); // Send heartbeat every 2 seconds
-                console.log('[Frontend] ✅ Started client-side heartbeat (every 2s)');
+                // DISABLE client-side heartbeat - let server handle keepalive with pings
+                console.log('[CLIENT] ℹ️ Client-side heartbeat disabled - server will send pings');
+                // if (heartbeatInterval) {
+                //     clearInterval(heartbeatInterval);
+                // }
+                // heartbeatInterval = setInterval(() => {
+                //     if (ws && ws.readyState === WebSocket.OPEN) {
+                //         try {
+                //             ws.send(JSON.stringify({
+                //                 type: 'heartbeat',
+                //                 timestamp: Date.now()
+                //             }));
+                //             console.log('[CLIENT] Sent heartbeat to server');
+                //         } catch (err) {
+                //             console.error('[CLIENT] Failed to send heartbeat:', err);
+                //         }
+                //     }
+                // }, 2000);
             };
             
             ws.onmessage = (event) => {
+                console.log('[CLIENT] 📨 Received message from server, size:', event.data.length, 'bytes');
                 try {
                     const data = JSON.parse(event.data);
+                    console.log('[CLIENT] Message type:', data.type || 'NO_TYPE');
                     
                     // Handle ping/pong keepalive
                     if (data.type === 'ping') {
-                        console.log('[Frontend] Received ping, sending pong...');
+                        console.log('[CLIENT] 🏓 Received ping, sending pong...');
                         try {
                             ws.send(JSON.stringify({
                                 type: 'pong',
                                 timestamp: data.timestamp
                             }));
-                            console.log('[Frontend] ✅ Sent pong');
+                            console.log('[CLIENT] ✅ Sent pong');
                         } catch (err) {
-                            console.warn('[Frontend] ❌ Failed to send pong:', err);
+                            console.warn('[CLIENT] ❌ Failed to send pong:', err);
+                            console.warn('[CLIENT] WebSocket state during pong failure:', ws.readyState);
                         }
                         return;
                     }
                     
                     if (data.type === 'pong') {
-                        console.log('[Frontend] Received pong');
+                        console.log('[CLIENT] 🏓 Received pong from server');
                         return;
                     }
                     
                     if (data.type === 'connected') {
                         log('Server ready to process frames', 'success');
+                        console.log('[CLIENT] ✅ Server confirmed ready');
                         return;
                     }
                     
                     if (data.type === 'frame_skipped') {
                         framesSkipped++;
                         updateFrameStats();
+                        console.log('[CLIENT] ⏭️ Frame skipped:', data.frame_id);
                         return;
                     }
                     
                     if (data.type === 'error' || data.type === 'warning') {
                         log(`Server [${data.type.toUpperCase()}]: ${data.error || data.message}`, 'warning');
+                        console.warn('[CLIENT] ⚠️ Server error/warning:', data);
                         return;
                     }
                     
                     if (data.type === 'frame_result') {
                         framesProcessed++;
-                        console.log('[Frontend] Received frame_result:', data.frame_id);
+                        console.log('[CLIENT] ✅ Received frame_result:', data.frame_id, 'processing time:', data.timing?.total_ms + 'ms');
                         
-                        // Update stats
-                        updateFrameStats();
-                        document.getElementById('processingTime').textContent = data.timing?.total_ms || 0;
-                        document.getElementById('detectionsCount').textContent = data.total_detections || 0;
-                        document.getElementById('selectedCount').textContent = data.selected_count || 0;
-                        document.getElementById('detectionTime').textContent = Math.round(data.timing?.detection_ms || 0);
-                        document.getElementById('translationTime').textContent = Math.round(data.timing?.translation_ms || 0);
-                        document.getElementById('fps').textContent = data.stats?.fps?.toFixed(1) || 0;
+                        try {
+                            // Update stats
+                            updateFrameStats();
+                            document.getElementById('processingTime').textContent = data.timing?.total_ms || 0;
+                            document.getElementById('detectionsCount').textContent = data.total_detections || 0;
+                            document.getElementById('selectedCount').textContent = data.selected_count || 0;
+                            document.getElementById('detectionTime').textContent = Math.round(data.timing?.detection_ms || 0);
+                            document.getElementById('translationTime').textContent = Math.round(data.timing?.translation_ms || 0);
+                            document.getElementById('fps').textContent = data.stats?.fps?.toFixed(1) || 0;
+                            
+                            console.log('[CLIENT] 📊 Stats updated successfully');
+                        } catch (statsErr) {
+                            console.error('[CLIENT] ❌ Error updating stats:', statsErr);
+                        }
                         
                         // Display phosphene image
                         if (data.phosphene_image) {
+                            console.log('[CLIENT] 🖼️ Loading phosphene image, base64 size:', data.phosphene_image.length);
                             try {
                                 const img = new Image();
                                 img.onload = () => {
-                                    outputCanvas.width = img.width;
-                                    outputCanvas.height = img.height;
-                                    outputCtx.drawImage(img, 0, 0);
-                                    document.getElementById('outputOverlay').textContent = 
-                                        `Frame ${data.frame_id} | ${Math.round(data.timing.total_ms)}ms`;
+                                    console.log('[CLIENT] ✅ Image loaded successfully:', img.width, 'x', img.height);
+                                    try {
+                                        outputCanvas.width = img.width;
+                                        outputCanvas.height = img.height;
+                                        outputCtx.drawImage(img, 0, 0);
+                                        document.getElementById('outputOverlay').textContent = 
+                                            `Frame ${data.frame_id} | ${Math.round(data.timing.total_ms)}ms`;
+                                        console.log('[CLIENT] ✅ Image drawn to canvas');
+                                    } catch (canvasErr) {
+                                        console.error('[CLIENT] ❌ Error drawing to canvas:', canvasErr);
+                                        log(`Failed to draw image: ${canvasErr.message}`, 'error');
+                                    }
                                 };
-                                img.onerror = () => {
-                                    console.error('[Frontend] Failed to load image');
+                                img.onerror = (imgErr) => {
+                                    console.error('[CLIENT] ❌ Failed to load image:', imgErr);
+                                    console.error('[CLIENT] Image src preview:', ('data:image/png;base64,' + data.phosphene_image).substring(0, 100));
                                     log(`Failed to load phosphene image for frame ${data.frame_id}`, 'error');
                                 };
                                 img.src = 'data:image/png;base64,' + data.phosphene_image;
                             } catch (imgErr) {
-                                console.error('[Frontend] Error processing image:', imgErr);
+                                console.error('[CLIENT] ❌ Error processing image:', imgErr);
+                                console.error('[CLIENT] Stack:', imgErr.stack);
+                                log(`Image processing error: ${imgErr.message}`, 'error');
                             }
+                        } else {
+                            console.log('[CLIENT] ℹ️ No phosphene image in response');
                         }
                         
                         log(`Processed frame ${data.frame_id} (${data.timing.total_ms}ms, ${data.total_detections} detections)`, 'success');
+                        console.log('[CLIENT] ✅ Frame result processed completely');
                     }
                     
                     if (data.error) {
                         log(`Server Error: ${data.error}`, 'error');
+                        console.error('[CLIENT] ❌ Server reported error:', data.error);
                     }
                 } catch (parseErr) {
-                    console.error('[Frontend] Error parsing message:', parseErr);
-                    log(`Error parsing server message: ${parseErr.message}`, 'error');
+                    console.error('[CLIENT] ❌ CRITICAL ERROR in onmessage handler:', parseErr);
+                    console.error('[CLIENT] Error type:', parseErr.constructor.name);
+                    console.error('[CLIENT] Error message:', parseErr.message);
+                    console.error('[CLIENT] Stack trace:', parseErr.stack);
+                    console.error('[CLIENT] Raw message data (first 500 chars):', event.data.substring(0, 500));
+                    log(`CRITICAL: Message handler error: ${parseErr.message}`, 'error');
+                    
+                    // DON'T close the connection - try to continue
+                    console.log('[CLIENT] ⚠️ Continuing despite error (not closing connection)');
                 }
             };
             
             ws.onerror = (error) => {
                 log('WebSocket error occurred', 'error');
-                console.error('[Frontend] WebSocket error:', error, 'readyState:', ws.readyState);
+                console.error('[CLIENT] ❌ WebSocket error event triggered');
+                console.error('[CLIENT] Error object:', error);
+                console.error('[CLIENT] ReadyState:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
+                console.error('[CLIENT] Camera active:', stream ? 'YES' : 'NO');
+                console.error('[CLIENT] Send interval active:', sendInterval ? 'YES' : 'NO');
             };
             
             ws.onclose = (event) => {
-                console.log('[Frontend] WebSocket closed:', event);
+                console.log('\n[CLIENT] ❌ WebSocket closed');
+                console.log('[CLIENT] Close code:', event.code);
+                console.log('[CLIENT] Close reason:', event.reason || 'No reason provided');
+                console.log('[CLIENT] Was clean:', event.wasClean);
+                console.log('[CLIENT] Camera state on close:', stream ? 'ACTIVE' : 'INACTIVE');
+                console.log('[CLIENT] Send interval on close:', sendInterval ? 'RUNNING' : 'STOPPED');
                 log(`WebSocket closed (code: ${event.code}, reason: ${event.reason || 'unknown'})`, 'warning');
                 document.getElementById('wsStatus').classList.remove('connected');
                 document.getElementById('wsStatusText').textContent = 'Disconnected';
@@ -550,6 +598,9 @@
         }
         
         async function startCamera() {
+            console.log('\n[CLIENT] 📹 startCamera() called');
+            console.log('[CLIENT] Current stream state:', stream ? 'EXISTS' : 'NULL');
+            console.log('[CLIENT] Current sendInterval:', sendInterval ? 'EXISTS' : 'NULL');
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
@@ -558,9 +609,9 @@
                     } 
                 });
                 videoElement.srcObject = stream;
+                console.log('[CLIENT] ✅ Camera stream obtained');
                 
                 log('Camera started', 'success');
-                console.log('[Frontend] Camera stream started');
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
                 
@@ -568,8 +619,9 @@
                 const sendFps = parseInt(document.getElementById('sendFps').value);
                 const interval = 1000 / sendFps;
                 
-                console.log('[Frontend] Starting frame send interval:', interval, 'ms');
+                console.log('[CLIENT] 🎬 Starting frame send interval:', interval, 'ms (', sendFps, 'FPS )');
                 sendInterval = setInterval(sendFrame, interval);
+                console.log('[CLIENT] ✅ Send interval started');
                 log(`Sending frames at ${sendFps} FPS (${interval}ms interval)`, 'info');
             } catch (error) {
                 log(`Camera error: ${error.message}`, 'error');
@@ -578,10 +630,12 @@
         }
         
         function sendFrame() {
+            console.log('[CLIENT] 📸 sendFrame() called');
             if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.warn('[Frontend] WebSocket not open, readyState:', ws?.readyState);
+                console.warn('[CLIENT] ⚠️ WebSocket not open, readyState:', ws?.readyState, '(1=OPEN, 0=CONNECTING, 2=CLOSING, 3=CLOSED)');
                 return;
             }
+            console.log('[CLIENT] WebSocket is OPEN, proceeding to capture frame...');
             
             try {
                 // Check video is actually playing
@@ -626,16 +680,30 @@
                         }
                     });
                     
+                    console.log('[CLIENT] 📤 Sending frame', frameCounter, 'size:', msg.length, 'bytes');
                     ws.send(msg);
+                    console.log('[CLIENT] ✅ Frame sent successfully');
                     document.getElementById('inputOverlay').textContent = `Frame ${frameCounter}`;
                     updateFrameStats();
-                    console.log('[Frontend] Sent frame:', frameCounter);
                 } catch (sendErr) {
-                    console.error('[Frontend] Error sending frame:', sendErr);
+                    console.error('[CLIENT] ❌ CRITICAL: Error sending frame:', sendErr);
+                    console.error('[CLIENT] Error type:', sendErr.constructor.name);
+                    console.error('[CLIENT] Error message:', sendErr.message);
+                    console.error('[CLIENT] WebSocket state:', ws.readyState);
+                    console.error('[CLIENT] Stack:', sendErr.stack);
                     log(`Error sending frame: ${sendErr.message}`, 'error');
+                    
+                    // Check if WebSocket is still open
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        console.error('[CLIENT] WebSocket is not OPEN, stopping camera');
+                        stopCamera();
+                    }
                 }
             } catch (error) {
-                console.error('[Frontend] Error in sendFrame:', error);
+                console.error('[CLIENT] ❌ CRITICAL: Error in sendFrame:', error);
+                console.error('[CLIENT] Error type:', error.constructor.name);
+                console.error('[CLIENT] Error message:', error.message);
+                console.error('[CLIENT] Stack:', error.stack);
                 log(`Error capturing frame: ${error.message}`, 'error');
             }
         }
@@ -667,6 +735,39 @@
         connectBtn.onclick = connectWebSocket;
         startBtn.onclick = startCamera;
         stopBtn.onclick = stopCamera;
+        
+        // Global error handler to catch anything that might crash the page
+        window.addEventListener('error', (event) => {
+            console.error('[CLIENT] 🚨 WINDOW ERROR CAUGHT:', event.error);
+            console.error('[CLIENT] Error message:', event.message);
+            console.error('[CLIENT] Error filename:', event.filename);
+            console.error('[CLIENT] Error lineno:', event.lineno);
+            console.error('[CLIENT] Error colno:', event.colno);
+            console.error('[CLIENT] WebSocket state:', ws?.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
+            console.error('[CLIENT] Camera active:', stream ? 'YES' : 'NO');
+            log(`Window error: ${event.message}`, 'error');
+            
+            // Prevent default to avoid page crash
+            event.preventDefault();
+            return true;
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('[CLIENT] 🚨 UNHANDLED PROMISE REJECTION:', event.reason);
+            console.error('[CLIENT] Promise:', event.promise);
+            console.error('[CLIENT] WebSocket state:', ws?.readyState);
+            log(`Unhandled promise rejection: ${event.reason}`, 'error');
+            
+            // Prevent default
+            event.preventDefault();
+        });
+        
+        // Detect when page is about to unload (might close WebSocket)
+        window.addEventListener('beforeunload', (event) => {
+            console.log('[CLIENT] 🚪 Page is about to unload');
+            console.log('[CLIENT] WebSocket state:', ws?.readyState);
+            console.log('[CLIENT] Camera active:', stream ? 'YES' : 'NO');
+        });
         
         // Initial log
         log('Ready to connect. Click "Connect WebSocket" to begin.', 'info');
