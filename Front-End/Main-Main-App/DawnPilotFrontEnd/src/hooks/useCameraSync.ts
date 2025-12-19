@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 // import { SOCKET_URL } from '../config/api';
-const SOCKET_URL = "http://192.168.1.116:5000";
+const SOCKET_URL = "http://192.168.1.107:5000";
 interface CameraState {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };

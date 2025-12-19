@@ -2,14 +2,15 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
+import { useCollisionDetection } from '../../hooks/useCollision';
 
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);
-
+  const hitboxRef = useRef<any>(null);
   const { isConnected, updateCamera } = useCameraSync({
     clientType: 'desktop',
     throttleMs: 16 // ~60fps
@@ -51,6 +52,18 @@ function DesktopViewer() {
     return () => cancelAnimationFrame(animationId);
   }, [updateCamera]);
 
+
+  const handleCollision = useCallback((detail: { obstacleId: string; timestamp: number }) => {
+    console.warn(`💥 HIT DETECTED! Object: ${detail.obstacleId}`);
+    
+    // Example: Send metric to your backend
+    // fetch('http://192.168.1.116:5000/metrics/collision', {
+    //   method: 'POST',
+    //   body: JSON.stringify(detail)
+    // });
+  }, []);
+
+  useCollisionDetection(hitboxRef, handleCollision);
   return (
     <div style={{ background: 'black', width: '100vw', height: '100vh' }}>
       {/* WebSocket Connection Status */}
@@ -128,7 +141,8 @@ function DesktopViewer() {
           const scl = e.Scale || { x: 1, y: 1, z: 1 };
           const color = e.Color?.value || '#fff';
           const url = e.Model?.url;
-
+// Assuming everything except "Light" or "Zone" is an obstacle
+          const isObstacle = e.name !== "Light";
           if (url === 'Aframe') {
             const tag = `a-${e.name.toLowerCase()}`;
             return (
@@ -139,6 +153,7 @@ function DesktopViewer() {
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
                 material={`color: ${color}`}
+                className={isObstacle ? "collidable" : ""}  
               />
             );
           }
@@ -146,6 +161,7 @@ function DesktopViewer() {
           return (
             <Entity
               key={e.id}
+              className={isObstacle ? "collidable" : ""}
               gltf-model={url}
               position={`${pos.x} ${pos.y} ${pos.z}`}
               rotation={`${rot.x} ${rot.y} ${rot.z}`}
@@ -160,7 +176,19 @@ function DesktopViewer() {
           primitive="a-camera"
           look-controls="enabled: false"
           wasd-controls="enabled: true; acceleration: 65"
-        />
+          // ---  Attach component ---
+         
+        >
+          <Entity
+            ref={hitboxRef}
+            primitive="a-box"
+            position="0 -0.8 0" // Shift down to body level
+            scale=".1 1.6 .1"     // Human size
+            material="opacity: 0.5; color: red; wireframe: true" // Visible for debug, set visible={false} later
+            collision-detector="targetSelector: .collidable; cooldown: 1000"
+          />
+            
+          </Entity>
       </Scene>
     </div>
   );
