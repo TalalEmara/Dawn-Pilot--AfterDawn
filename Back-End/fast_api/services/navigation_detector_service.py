@@ -12,6 +12,7 @@ import tempfile
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
+from PIL import Image
 
 # Add object_path_detection to path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'object_path_detection'))
@@ -19,6 +20,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'obj
 from preprocessing.detector import ObjectDetector
 from preprocessing.freepath_detector import FreepathDetector
 from path_planning.occupancy_map import OccupancyMapBuilder
+
+# Import translator and pipeline2 for full pipeline integration
+from services.translator_service import TranslatorService
+from translation.Pipeline2Integration import Pipeline2Integration
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +46,10 @@ class NavigationDetectorService:
         self.freepath_detector = None
         self.is_loaded = False
         
+        # For full pipeline integration
+        self.translator_service = None
+        self.pipeline2 = None
+        
         # Setup output directory (relative path)
         self.base_dir = os.path.dirname(os.path.dirname(__file__))
         print(f"📁 Base directory: {self.base_dir}")
@@ -53,12 +62,19 @@ class NavigationDetectorService:
         print(f"📋 Loading config from: {config_path}")
         self._load_config(config_path)
         
-        # Load models at initialization (startup)
-        print("🔄 Starting model loading...")
+        # Eager loading: Load all models at startup for immediate readiness
+        print("🔄 Starting eager model loading...")
         self._load_models()
+        
+        # Eagerly initialize Translator and Pipeline2 for full pipeline
+        if self.is_loaded:
+            print("🔄 Eagerly loading Translator and Pipeline2...")
+            self.translator_service = TranslatorService(eager_init=True)
+            self.pipeline2 = Pipeline2Integration()
+            print("✅ Translator and Pipeline2 loaded")
+        
         print(f"✓ Initialization complete. is_loaded={self.is_loaded}")
         print("="*60 + "\n")
-        self._load_models()
     
     def _load_config(self, config_path: str):
         """Load model paths from configuration file"""
@@ -461,6 +477,309 @@ class NavigationDetectorService:
         
         logger.debug(f"Debug frames saved for frame {frame_id}")
     
+    def process_full_pipeline(
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray,
+        frame_id: int,
+        stop_at: str = "phosphene",
+        debug_mode: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Process frame through full modular pipeline with stop points
+        
+        Pipeline stages:
+        1. 'detector': Object detection + freepath detection -> RGB with bboxes
+        2. 'translator': Translator simplification -> Simplified image with freepath circle
+        3. 'pre_phosphene': Center crop to 128x128 -> Cropped image ready for phosphene
+        4. 'phosphene': Final phosphene rendering -> Phosphene output
+        
+        Args:
+            rgb: RGB image (H, W, 3)
+            depth: Depth image (H, W)
+            frame_id: Frame identifier
+            stop_at: Stage to stop at ('detector', 'translator', 'pre_phosphene', 'phosphene')
+            debug_mode: If True, save intermediate outputs
+            
+        Returns:
+            dict: Results with output_image (base64), stage info, detections, timing
+        """
+        import time
+        import base64
+        
+        if not self.is_loaded:
+            raise RuntimeError("Navigation detector models not loaded")
+        
+        stage_times = {}
+        result = {
+            "success": False,
+            "stage": stop_at,
+            "output_image": None,
+            "detections": [],
+            "freepath_circle": None,
+            "stats": {},
+            "error": None
+        }
+        
+        try:
+            # STAGE 1: DETECTOR - Object detection + freepath detection
+            stage_start = time.time()
+            
+            # Run navigation detector (existing optimized process_frame)
+            nav_result = self.process_frame(rgb, depth, frame_id, debug_mode=False)
+            
+            if not nav_result["success"]:
+                result["error"] = "Navigation detection failed"
+                return result
+            
+            detections = nav_result["detections"]
+            freepath_circle = nav_result["freepath_circle"]
+            
+            stage_times["detection"] = (time.time() - stage_start) * 1000
+            
+            # Draw bboxes on RGB for detector stage output
+            detector_output = self.draw_detections_on_rgb(rgb, detections)
+            
+            if stop_at == "detector":
+                # Encode detector output (RGB with bboxes)
+                _, buffer = cv2.imencode('.png', cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
+                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                
+                result.update({
+                    "success": True,
+                    "output_image": output_b64,
+                    "detections": detections,
+                    "freepath_circle": freepath_circle,
+                    "stats": stage_times
+                })
+                return result
+            
+            # STAGE 2: TRANSLATOR - Simplify image
+            stage_start = time.time()
+            
+            # Translator already initialized at startup
+            if self.translator_service is None:
+                raise RuntimeError("TranslatorService not initialized")
+            
+            # Convert detections to translator format
+            h, w = rgb.shape[:2]
+            translator_objects = []
+            for det in detections:
+                bbox = det.get('bbox', [])
+                if len(bbox) == 4:
+                    translator_objects.append({
+                        "class": det.get('class', 'unknown'),
+                        "confidence": det.get('confidence', 0.8),
+                        "bbox": bbox,
+                        "centroid_px": det.get('centroid_px', [0, 0]),
+                        "distance_m": det.get('distance_m')
+                    })
+            
+            # Call translator
+            translator_output_b64, selected_objects, translator_meta = self.translator_service.translate(
+                objects=translator_objects,
+                image_width=w,
+                image_height=h,
+                save_debug_images=False,
+                return_bytes=False
+            )
+            
+            stage_times["translator"] = (time.time() - stage_start) * 1000
+            
+            # Decode translator output to draw circle
+            translator_bytes = base64.b64decode(translator_output_b64)
+            translator_np = np.frombuffer(translator_bytes, dtype=np.uint8)
+            translator_img = cv2.imdecode(translator_np, cv2.IMREAD_GRAYSCALE)
+            
+            # Draw freepath circle on translator output
+            translator_with_circle = self.draw_freepath_circle(translator_img, freepath_circle)
+            
+            if stop_at == "translator":
+                # Encode translator output with circle
+                _, buffer = cv2.imencode('.png', translator_with_circle)
+                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                
+                result.update({
+                    "success": True,
+                    "output_image": output_b64,
+                    "detections": detections,
+                    "freepath_circle": freepath_circle,
+                    "stats": stage_times
+                })
+                return result
+            
+            # STAGE 3: PRE_PHOSPHENE - Center crop to 128x128
+            stage_start = time.time()
+            
+            # Center crop translator output (without circle drawing for actual processing)
+            cropped = self.center_crop_128x128(translator_img)
+            
+            stage_times["crop"] = (time.time() - stage_start) * 1000
+            
+            if stop_at == "pre_phosphene":
+                # Encode cropped output
+                _, buffer = cv2.imencode('.png', cropped)
+                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                
+                result.update({
+                    "success": True,
+                    "output_image": output_b64,
+                    "detections": detections,
+                    "freepath_circle": freepath_circle,
+                    "stats": stage_times
+                })
+                return result
+            
+            # STAGE 4: PHOSPHENE - Final rendering
+            stage_start = time.time()
+            
+            # Pipeline2 already initialized at startup
+            if self.pipeline2 is None:
+                raise RuntimeError("Pipeline2Integration not initialized")
+            
+            # Run phosphene rendering
+            phosphene_output = self.pipeline2.input2phosphenes(cropped)  # Returns (H, W) numpy array
+            
+            stage_times["phosphene"] = (time.time() - stage_start) * 1000
+            
+            # Convert phosphene output to image (normalize to 0-255)
+            phosphene_img = (phosphene_output * 255).astype(np.uint8)
+            
+            # Encode phosphene output
+            _, buffer = cv2.imencode('.png', phosphene_img)
+            output_b64 = base64.b64encode(buffer).decode('utf-8')
+            
+            result.update({
+                "success": True,
+                "output_image": output_b64,
+                "detections": detections,
+                "freepath_circle": freepath_circle,
+                "stats": stage_times
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in full pipeline at stage {stop_at}: {e}", exc_info=True)
+            result["error"] = str(e)
+        
+        return result
+    
     def is_ready(self) -> bool:
         """Check if navigation detector service is ready"""
         return self.is_loaded
+    
+    def draw_detections_on_rgb(self, rgb: np.ndarray, detections: List[Dict[str, Any]]) -> np.ndarray:
+        """
+        Draw bounding boxes and labels on RGB image
+        
+        Args:
+            rgb: RGB image as numpy array (H, W, 3)
+            detections: List of detection dictionaries with bbox, class, confidence
+            
+        Returns:
+            np.ndarray: RGB image with drawn detections
+        """
+        # Create a copy to avoid modifying original
+        img_with_boxes = rgb.copy()
+        
+        # Draw each detection
+        for det in detections:
+            bbox = det.get('bbox', [])
+            if len(bbox) == 4:
+                x1, y1, w, h = bbox
+                x2, y2 = x1 + w, y1 + h
+                
+                # Draw rectangle (green)
+                cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Prepare label text
+                class_name = det.get('class', 'unknown')
+                confidence = det.get('confidence', 0.0)
+                label = f"{class_name}: {confidence:.2f}"
+                
+                # Draw label background
+                (text_width, text_height), baseline = cv2.getTextSize(
+                    label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+                )
+                cv2.rectangle(
+                    img_with_boxes,
+                    (x1, y1 - text_height - baseline - 5),
+                    (x1 + text_width, y1),
+                    (0, 255, 0),
+                    -1
+                )
+                
+                # Draw label text (black on green background)
+                cv2.putText(
+                    img_with_boxes,
+                    label,
+                    (x1, y1 - baseline - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 0),
+                    1
+                )
+        
+        return img_with_boxes
+    
+    def draw_freepath_circle(self, simplified_img: np.ndarray, freepath_circle: Dict[str, Any]) -> np.ndarray:
+        """
+        Draw freepath circle on simplified translator image
+        
+        Args:
+            simplified_img: Simplified image from translator (grayscale or BGR)
+            freepath_circle: Dictionary with 'center' (x, y) and 'radius'
+            
+        Returns:
+            np.ndarray: Image with drawn circle
+        """
+        # Create a copy
+        img_with_circle = simplified_img.copy()
+        
+        # Convert to BGR if grayscale for colored circle
+        if len(img_with_circle.shape) == 2:
+            img_with_circle = cv2.cvtColor(img_with_circle, cv2.COLOR_GRAY2BGR)
+        
+        if freepath_circle:
+            center = freepath_circle.get('center')
+            radius = freepath_circle.get('radius')
+            
+            if center and radius:
+                # Draw circle (blue)
+                cv2.circle(img_with_circle, center, radius, (255, 0, 0), 2)
+                # Draw center point (red)
+                cv2.circle(img_with_circle, center, 5, (0, 0, 255), -1)
+        
+        return img_with_circle
+    
+    def center_crop_128x128(self, img: np.ndarray) -> np.ndarray:
+        """
+        Center crop image to 128x128
+        
+        Args:
+            img: Input image (any size)
+            
+        Returns:
+            np.ndarray: Center-cropped 128x128 image
+        """
+        h, w = img.shape[:2]
+        
+        # Calculate center crop coordinates
+        center_x = w // 2
+        center_y = h // 2
+        crop_size = 128
+        half_crop = crop_size // 2
+        
+        # Calculate crop boundaries
+        x1 = max(0, center_x - half_crop)
+        y1 = max(0, center_y - half_crop)
+        x2 = min(w, center_x + half_crop)
+        y2 = min(h, center_y + half_crop)
+        
+        # Crop
+        cropped = img[y1:y2, x1:x2]
+        
+        # Resize to exactly 128x128 if needed (handles edge cases)
+        if cropped.shape[0] != 128 or cropped.shape[1] != 128:
+            cropped = cv2.resize(cropped, (128, 128), interpolation=cv2.INTER_LINEAR)
+        
+        return cropped

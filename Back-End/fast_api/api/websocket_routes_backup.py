@@ -332,20 +332,6 @@ async def handle_websocket(websocket: WebSocket):
 # ============================================================================
 # Navigation WebSocket Handler
 # ============================================================================
-def convert_to_json_serializable(obj):
-    """Convert numpy types to Python native types for JSON serialization"""
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: convert_to_json_serializable(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_to_json_serializable(item) for item in obj]
-    else:
-        return obj
 
 async def handle_navigation_websocket(websocket: WebSocket):
     """
@@ -359,7 +345,20 @@ async def handle_navigation_websocket(websocket: WebSocket):
     freepath detection, and occupancy mapping.
     """
     
-
+    def convert_to_json_serializable(obj):
+        """Convert numpy types to Python native types for JSON serialization"""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: convert_to_json_serializable(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_json_serializable(item) for item in obj]
+        else:
+            return obj
     
     await websocket.accept()
     
@@ -501,84 +500,27 @@ async def handle_navigation_websocket(websocket: WebSocket):
         logger.info(f"Navigation WebSocket closed: {websocket.client}")
 
 
-
 async def handle_navigation_phosphene_websocket(websocket: WebSocket):
-    """WebSocket handler for full navigation pipeline with phosphene rendering"""
+    """
+    WebSocket handler for full navigation pipeline with phosphene rendering
+    
+    Accepts frames with stage selection parameter to stop at different pipeline stages:
+    - 'detector': RGB with bounding boxes
+    - 'translator': Simplified image with freepath circle
+    - 'pre_phosphene': Center-cropped 128x128 image
+    - 'phosphene': Final phosphene rendering
+    
+    Message format:
+    {
+        "type": "frame",
+        "frame_id": "001",
+        "rgb": "<base64_encoded_png>",
+        "depth": "<base64_encoded_png>",
+        "stage": "detector"  // Optional, defaults to "phosphene"
+    }
+    """
     await websocket.accept()
-    logger.info(f"Navigation-Phosphene WebSocket connected: {websocket.client}")
-    
-    if navigation_detector_service is None:
-        await websocket.send_json({"type": "error", "error": "Navigation detector service not available"})
-        await websocket.close()
-        return
-    
-    frames_processed = 0
-    
-    try:
-        while True:
-            message = await websocket.receive_json()
-            
-            if message.get("type") == "frame":
-                frame_id = message.get("frame_id", "unknown")
-                stage = message.get("stage", "phosphene")
-                
-                valid_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
-                if stage not in valid_stages:
-                    await websocket.send_json({"type": "error", "frame_id": frame_id, "error": f"Invalid stage '{stage}'"})
-                    continue
-                
-                try:
-                    rgb_b64 = message.get("rgb")
-                    depth_b64 = message.get("depth")
-                    
-                    if not rgb_b64 or not depth_b64:
-                        await websocket.send_json({"type": "error", "frame_id": frame_id, "error": "Missing rgb or depth image"})
-                        continue
-                    
-                    # Decode RGB image (returns BGR format)
-                    rgb_bgr = decode_base64_image(rgb_b64)
-                    rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
-                    
-                    # Decode depth image (returns BGR format, convert to grayscale)
-                    depth_bgr = decode_base64_image(depth_b64)
-                    depth = cv2.cvtColor(depth_bgr, cv2.COLOR_BGR2GRAY)
-                    
-                    result = navigation_detector_service.process_full_pipeline(
-                        rgb=rgb, depth=depth, frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,
-                        stop_at=stage, debug_mode=False
-                    )
-                    
-                    response = {
-                        "type": "result",
-                        "data": convert_to_json_serializable({
-                            "frame_id": frame_id, "stage": stage, "success": result.get("success", False),
-                            "output_image": result.get("output_image"), "detections": result.get("detections", []),
-                            "freepath_circle": result.get("freepath_circle"), "stats": result.get("stats", {}),
-                            "error": result.get("error")
-                        })
-                    }
-                    
-                    await websocket.send_json(response)
-                    frames_processed += 1
-                    
-                    total_time = sum(result.get("stats", {}).values())
-                    logger.info(f"Processed frame {frame_id} at stage '{stage}' in {total_time:.2f}ms")
-                    
-                except Exception as e:
-                    logger.error(f"Error processing frame {frame_id}: {e}", exc_info=True)
-                    await websocket.send_json({"type": "error", "frame_id": frame_id, "error": str(e)})
-            
-    except WebSocketDisconnect:
-        logger.info(f"Navigation-Phosphene WebSocket disconnected (Processed: {frames_processed} frames)")
-    except Exception as e:
-        logger.error(f"Navigation-Phosphene WebSocket error: {e}", exc_info=True)
-        try:
-            await websocket.send_json({"type": "error", "error": str(e), "message": "Fatal error occurred"})
-        except:
-            pass
-    finally:
-        try:
-            await websocket.close()
-        except:
-            pass
-        logger.info(f"Navigation-Phosphene WebSocket closed")
+    logger.info(f"Navigation-Phosphene WebSocket connected: {websocket.client}")\n    \n    if navigation_detector_service is None:\n        await websocket.send_json({\n            \"type\": \"error\",\n            \"error\": \"Navigation detector service not available\"\n        })\n        await websocket.close()\n        return\n    \n    frames_processed = 0\n    \n    try:\n        while True:\n            # Receive message\n            message = await websocket.receive_json()\n            \n            if message.get(\"type\") == \"frame\":\n                frame_id = message.get(\"frame_id\", \"unknown\")\n                stage = message.get(\"stage\", \"phosphene\")  # Default to full pipeline\n                \n                # Validate stage\n                valid_stages = [\"detector\", \"translator\", \"pre_phosphene\", \"phosphene\"]\n                if stage not in valid_stages:\n                    await websocket.send_json({\n                        \"type\": \"error\",\n                        \"frame_id\": frame_id,\n                        \"error\": f\"Invalid stage '{stage}'. Must be one of {valid_stages}\"\n                    })\n                    continue\n                \n                try:\n                    # Decode RGB and Depth images\n                    rgb_b64 = message.get(\"rgb\")\n                    depth_b64 = message.get(\"depth\")\n                    \n                    if not rgb_b64 or not depth_b64:\n                        await websocket.send_json({\n                            \"type\": \"error\",\n                            \"frame_id\": frame_id,\n                            \"error\": \"Missing rgb or depth image\"\n                        })\n                        continue\n                    \n                    # Decode images\n                    rgb = decode_base64_image(rgb_b64, is_color=True)\n                    depth = decode_base64_image(depth_b64, is_color=False)\n                    
+                    # Process through full pipeline
+                    result = navigation_detector_service.process_full_pipeline(\n                        rgb=rgb,\n                        depth=depth,\n                        frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,\n                        stop_at=stage,\n                        debug_mode=False\n                    )\n                    \n                    # Build response\n                    response = {\n                        \"type\": \"result\",\n                        \"data\": convert_to_json_serializable({\n                            \"frame_id\": frame_id,\n                            \"stage\": stage,\n                            \"success\": result.get(\"success\", False),\n                            \"output_image\": result.get(\"output_image\"),  # Base64 encoded image\n                            \"detections\": result.get(\"detections\", []),\n                            \"freepath_circle\": result.get(\"freepath_circle\"),\n                            \"stats\": result.get(\"stats\", {}),\n                            \"error\": result.get(\"error\")\n                        })\n                    }\n                    \n                    # Send response\n                    await websocket.send_json(response)\n                    frames_processed += 1\n                    \n                    total_time = sum(result.get(\"stats\", {}).values())\n                    logger.info(f\"Processed frame {frame_id} at stage '{stage}' in {total_time:.2f}ms\")\n                    \n                except Exception as e:\n                    logger.error(f\"Error processing frame {frame_id}: {e}\", exc_info=True)\n                    await websocket.send_json({\n                        \"type\": \"error\",\n                        \"frame_id\": frame_id,\n                        \"error\": str(e)\n                    })\n            \n    except WebSocketDisconnect:\n        logger.info(f\"Navigation-Phosphene WebSocket disconnected: {websocket.client} \"\n                   f\"(Processed: {frames_processed} frames)\")\n    except Exception as e:\n        logger.error(f\"Navigation-Phosphene WebSocket error: {e}\", exc_info=True)\n        try:\n            await websocket.send_json({\n                \"type\": \"error\",\n                \"error\": str(e),\n                \"message\": \"Fatal error occurred\"\n            })\n        except:\n            pass\n    finally:\n        try:\n            await websocket.close()\n        except:\n            pass\n        logger.info(f\"Navigation-Phosphene WebSocket closed: {websocket.client}\")
+

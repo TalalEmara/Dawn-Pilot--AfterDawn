@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
-from api import router, set_services, handle_websocket, handle_navigation_websocket, set_websocket_services
+from api import router, set_services, handle_websocket, handle_navigation_websocket, handle_navigation_phosphene_websocket, set_websocket_services
 from services import DetectorService, TranslatorService
 from services.navigation_detector_service import NavigationDetectorService
 
@@ -94,6 +94,17 @@ async def navigation_websocket_endpoint(websocket: WebSocket):
     Accepts RGB+Depth frames and returns detections, freepath, and occupancy map.
     """
     await handle_navigation_websocket(websocket)
+
+# WebSocket endpoint for full navigation + phosphene pipeline
+@app.websocket("/ws/navigation-phosphene")
+async def navigation_phosphene_websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for full navigation pipeline with phosphene rendering
+    
+    Accepts RGB+Depth frames with stage selection and returns output at specified stage.
+    Stages: 'detector', 'translator', 'pre_phosphene', 'phosphene'
+    """
+    await handle_navigation_phosphene_websocket(websocket)
 
 # WebSocket endpoint for real-time frame processing
 @app.websocket("/ws/process")

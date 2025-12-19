@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navigation + Phosphene Pipeline Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .control-group h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-label {
+            display: block;
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .file-input-label:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .file-name {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .stage-selector {
+            margin-bottom: 20px;
+        }
+        
+        .stage-selector label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .stage-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .stage-selector select:hover {
+            border-color: #667eea;
+        }
+        
+        .stage-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+        
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+        
+        .status-processing {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+        
+        .results {
+            margin-top: 30px;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        
+        .result-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .result-panel h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .image-display {
+            width: 100%;
+            border-radius: 6px;
+            border: 2px solid #dee2e6;
+            background: #fff;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .image-display img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .image-placeholder {
+            color: #adb5bd;
+            font-style: italic;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px solid #e9ecef;
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .detections-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .detection-item {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .detection-item:last-child {
+            border-bottom: none;
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .detection-confidence {
+            color: #667eea;
+            font-weight: 500;
+        }
+        
+        .stage-info {
+            background: #e7f3ff;
+            border: 2px solid #b3d9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .stage-info-title {
+            font-weight: 600;
+            color: #0056b3;
+            margin-bottom: 5px;
+        }
+        
+        .stage-info-desc {
+            color: #495057;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 Navigation + Phosphene Pipeline Test</h1>
+            <p>Test the full modular pipeline with stage selection</p>
+        </div>
+        
+        <div class="content">
+            <div class="controls">
+                <!-- File Upload Section -->
+                <div class="control-group">
+                    <h3>📁 Upload Images</h3>
+                    
+                    <div class="file-input-wrapper">
+                        <input type="file" id="rgbInput" accept="image/*">
+                        <label for="rgbInput" class="file-input-label">
+                            Choose RGB Image
+                        </label>
+                    </div>
+                    <div class="file-name" id="rgbFileName">No file selected</div>
+                    
+                    <div class="file-input-wrapper">
+                        <input type="file" id="depthInput" accept="image/*">
+                        <label for="depthInput" class="file-input-label">
+                            Choose Depth Image
+                        </label>
+                    </div>
+                    <div class="file-name" id="depthFileName">No file selected</div>
+                    
+                    <button class="btn btn-primary" id="connectBtn" onclick="connectWebSocket()">
+                        Connect WebSocket
+                    </button>
+                    
+                    <button class="btn btn-primary" id="processBtn" onclick="processFrame()" disabled>
+                        Process Frame
+                    </button>
+                    
+                    <div id="statusBox" class="status-box status-disconnected">
+                        Status: Disconnected
+                    </div>
+                </div>
+                
+                <!-- Stage Selection Section -->
+                <div class="control-group">
+                    <h3>🎯 Pipeline Stage</h3>
+                    
+                    <div class="stage-selector">
+                        <label for="stageSelect">Select Pipeline Stage:</label>
+                        <select id="stageSelect" onchange="updateStageInfo()">
+                            <option value="detector">Detector - Object Detection with Bounding Boxes</option>
+                            <option value="translator">Translator - Simplified Image with Freepath Circle</option>
+                            <option value="pre_phosphene">Pre-Phosphene - Center Cropped 128x128</option>
+                            <option value="phosphene" selected>Phosphene - Final Phosphene Rendering</option>
+                        </select>
+                    </div>
+                    
+                    <div class="stage-info" id="stageInfo">
+                        <div class="stage-info-title">Phosphene Stage</div>
+                        <div class="stage-info-desc">
+                            Full pipeline: Object detection → Translator → Center crop → Phosphene rendering
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-label">Frames Sent</div>
+                            <div class="stat-value" id="framesSent">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Time</div>
+                            <div class="stat-value" id="totalTime">0ms</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Results Section -->
+            <div class="results">
+                <div class="results-grid">
+                    <!-- Output Image -->
+                    <div class="result-panel">
+                        <h3>🖼️ Pipeline Output</h3>
+                        <div class="image-display" id="outputDisplay">
+                            <div class="image-placeholder">Output will appear here</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detections -->
+                    <div class="result-panel">
+                        <h3>🎯 Detections</h3>
+                        <div class="detections-list" id="detectionsList">
+                            <div class="image-placeholder">Detections will appear here</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let ws = null;
+        let rgbImage = null;
+        let depthImage = null;
+        let framesSent = 0;
+        
+        const stageDescriptions = {
+            'detector': {
+                title: 'Detector Stage',
+                desc: 'Object detection using Faster R-CNN with bounding boxes drawn on RGB image'
+            },
+            'translator': {
+                title: 'Translator Stage',
+                desc: 'Simplified canonical shapes with freepath circle indicator'
+            },
+            'pre_phosphene': {
+                title: 'Pre-Phosphene Stage',
+                desc: 'Center-cropped 128x128 image ready for phosphene rendering'
+            },
+            'phosphene': {
+                title: 'Phosphene Stage',
+                desc: 'Full pipeline: Object detection → Translator → Center crop → Phosphene rendering'
+            }
+        };
+        
+        // File input handlers
+        document.getElementById('rgbInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('rgbFileName').textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    rgbImage = event.target.result.split(',')[1]; // Get base64 part
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        document.getElementById('depthInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('depthFileName').textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    depthImage = event.target.result.split(',')[1]; // Get base64 part
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        function updateStageInfo() {
+            const stage = document.getElementById('stageSelect').value;
+            const info = stageDescriptions[stage];
+            document.getElementById('stageInfo').innerHTML = `
+                <div class="stage-info-title">${info.title}</div>
+                <div class="stage-info-desc">${info.desc}</div>
+            `;
+        }
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('WebSocket already connected');
+                return;
+            }
+            
+            updateStatus('Connecting...', 'processing');
+            
+            ws = new WebSocket('ws://localhost:8000/ws/navigation-phosphene');
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                updateStatus('Connected', 'connected');
+                document.getElementById('processBtn').disabled = false;
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+                
+                if (data.type === 'result') {
+                    handleResult(data.data);
+                } else if (data.type === 'error') {
+                    console.error('Error:', data.error);
+                    updateStatus('Error: ' + data.error, 'disconnected');
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateStatus('Connection Error', 'disconnected');
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket closed');
+                updateStatus('Disconnected', 'disconnected');
+                document.getElementById('processBtn').disabled = true;
+            };
+        }
+        
+        function processFrame() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('WebSocket not connected');
+                return;
+            }
+            
+            if (!rgbImage || !depthImage) {
+                alert('Please select both RGB and Depth images');
+                return;
+            }
+            
+            const stage = document.getElementById('stageSelect').value;
+            
+            updateStatus('Processing...', 'processing');
+            
+            const message = {
+                type: 'frame',
+                frame_id: String(framesSent + 1).padStart(3, '0'),
+                rgb: rgbImage,
+                depth: depthImage,
+                stage: stage
+            };
+            
+            ws.send(JSON.stringify(message));
+            framesSent++;
+            document.getElementById('framesSent').textContent = framesSent;
+        }
+        
+        function handleResult(data) {
+            console.log('Processing result:', data);
+            
+            // Update status
+            if (data.success) {
+                updateStatus(`Processed at stage: ${data.stage}`, 'connected');
+            } else {
+                updateStatus('Processing failed: ' + (data.error || 'Unknown error'), 'disconnected');
+                return;
+            }
+            
+            // Display output image
+            if (data.output_image) {
+                document.getElementById('outputDisplay').innerHTML = `
+                    <img src="data:image/png;base64,${data.output_image}" alt="Pipeline Output">
+                `;
+            }
+            
+            // Display detections
+            if (data.detections && data.detections.length > 0) {
+                const detectionsHtml = data.detections.map(det => `
+                    <div class="detection-item">
+                        <span class="detection-class">${det.class}</span>
+                        <span class="detection-confidence">${(det.confidence * 100).toFixed(1)}%</span>
+                    </div>
+                `).join('');
+                document.getElementById('detectionsList').innerHTML = detectionsHtml;
+            } else {
+                document.getElementById('detectionsList').innerHTML = 
+                    '<div class="image-placeholder">No detections</div>';
+            }
+            
+            // Display timing stats
+            if (data.stats) {
+                const totalTime = Object.values(data.stats).reduce((a, b) => a + b, 0);
+                document.getElementById('totalTime').textContent = totalTime.toFixed(0) + 'ms';
+            }
+        }
+        
+        function updateStatus(message, type) {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = 'Status: ' + message;
+            statusBox.className = 'status-box status-' + type;
+        }
+        
+        // Initialize
+        updateStageInfo();
+    </script>
+</body>
+</html>
