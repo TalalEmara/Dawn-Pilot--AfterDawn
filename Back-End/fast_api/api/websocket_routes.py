@@ -443,7 +443,7 @@ async def handle_navigation_websocket(websocket: WebSocket):
                     
                     logger.debug(f"Decoded frame {frame_id}: RGB {rgb.shape}, Depth {depth.shape}")
                     
-                    # Process frame through navigation pipeline
+                    # Process frame through navigation pipeline (optimized - no image outputs)
                     result = navigation_detector_service.process_frame(
                         rgb=rgb,
                         depth=depth,
@@ -451,35 +451,15 @@ async def handle_navigation_websocket(websocket: WebSocket):
                         debug_mode=False
                     )
                     
-                    # Encode output images to base64
-                    freepath_base64 = None
-                    if result.get("freepath_mask") is not None:
-                        freepath_visual = (result["freepath_mask"] > 0).astype(np.uint8) * 255
-                        _, freepath_encoded = cv2.imencode('.png', freepath_visual)
-                        freepath_base64 = base64.b64encode(freepath_encoded.tobytes()).decode('utf-8')
-                    
-                    occupancy_base64 = None
-                    if result.get("occupancy_map") is not None:
-                        occupancy = result["occupancy_map"]
-                        # Convert to visual format
-                        occupancy_visual = np.zeros_like(occupancy, dtype=np.uint8)
-                        occupancy_visual[occupancy == -1] = 128  # Unknown
-                        occupancy_visual[occupancy == 0] = 255   # Free
-                        occupancy_visual[occupancy == 1] = 0     # Occupied
-                        _, occupancy_encoded = cv2.imencode('.png', occupancy_visual)
-                        occupancy_base64 = base64.b64encode(occupancy_encoded.tobytes()).decode('utf-8')
-                    
-                    # Build response with JSON-safe types
+                    # Build response with JSON-safe types (no image encoding for speed)
                     response = {
                         "type": "result",
                         "data": convert_to_json_serializable({
                             "frame_id": frame_id,
                             "success": result.get("success", False),
                             "detections": result.get("detections", []),
-                            "freepath_mask": freepath_base64,
                             "freepath_coordinates": result.get("freepath_coordinates", []),
                             "freepath_circle": result.get("freepath_circle"),
-                            "occupancy_map": occupancy_base64,
                             "processing_time_ms": result.get("processing_time_ms", 0),
                             "stats": result.get("stats", {})
                         })

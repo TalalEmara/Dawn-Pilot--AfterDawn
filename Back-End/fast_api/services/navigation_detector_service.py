@@ -233,7 +233,7 @@ class NavigationDetectorService:
         debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
-        Process a single frame through the navigation pipeline
+        Process a single frame through the navigation pipeline (optimized)
         
         Args:
             rgb: RGB image as numpy array (H, W, 3)
@@ -242,7 +242,7 @@ class NavigationDetectorService:
             debug_mode: If True, save frames to debug output directory
             
         Returns:
-            dict: Processing results including detections, freepath mask, occupancy map, etc.
+            dict: Processing results including detections and freepath centerline
         """
         if not self.is_loaded:
             raise RuntimeError("Navigation detector models not loaded")
@@ -254,40 +254,42 @@ class NavigationDetectorService:
             "frame_id": frame_id,
             "success": False,
             "detections": [],
-            "freepath_mask": None,
             "freepath_coordinates": [],
             "freepath_circle": None,
-            "occupancy_map": None,
             "processing_time_ms": 0,
             "stats": {}
         }
         
         try:
+            detection_start = time.time()
             # 1. Object Detection
             detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.5)
-            logger.debug(f"Frame {frame_id}: Found {len(detections)} detections")
+            detection_time = (time.time() - detection_start) * 1000
+            logger.debug(f"Frame {frame_id}: Found {len(detections)} detections in {detection_time:.2f}ms")
             
+            freepath_start = time.time()
             # 2. Freepath Detection (requires saving RGB to temp file)
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
                 temp_path = temp_file.name
                 cv2.imwrite(temp_path, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
             
             try:
-                freepath_mask, freepath_mask_path = self.freepath_detector.infer_per_frame(
+                # Get freepath mask (don't save to disk unless debug_mode)
+                freepath_mask, _ = self.freepath_detector.infer_per_frame(
                     temp_path, 
                     frame_id=frame_id,
                     save_debug=debug_mode
                 )
                 
-                # Compute centerline coordinates
+                # Compute centerline coordinates (the freepath line)
                 freepath_coordinates = self.freepath_detector.compute_centerline(
-                    freepath_mask,  # Pass mask array instead of path
+                    freepath_mask,
                     half_image=True,
                     save_debug=debug_mode,
                     frame_id=frame_id
                 )
                 
-                # Calculate freepath circle center (bottom half of centerline)
+                # Calculate freepath circle center (bottom half of centerline for translator)
                 freepath_circle = self._calculate_freepath_circle(freepath_coordinates, rgb.shape)
                 
             finally:
@@ -295,19 +297,30 @@ class NavigationDetectorService:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
             
-            # 3. Build Occupancy Map
-            occupancy_builder = OccupancyMapBuilder(
-                img_shape=rgb.shape,
-                detections=detections
-            )
-            occupancy_map, _ = occupancy_builder.build_map()
+            freepath_time = (time.time() - freepath_start) * 1000
+            logger.debug(f"Frame {frame_id}: Freepath computed in {freepath_time:.2f}ms")
             
-            # 4. Convert detections to standard format (matching mock detector)
+            # 3. Convert detections to standard format
             standardized_detections = []
             for det in detections:
-                # Calculate centroid from bbox
                 bbox = det.get("bbox", [0, 0, 0, 0])  # [x, y, w, h]
-                # Convert all to Python int
+                bbox = [int(x) for x in bbox]
+                cx = int(bbox[0] + bbox[2] // 2)
+                cy = int(bbox[1] + bbox[3] // 2)
+                
+                # Use distance as confidence if available
+                confidence = 0.8
+                if det.get("distance_m"):
+                    dist = float(det.get("distance_m"))
+                    confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+                
+                standardized_detections.append({
+                    "class": str(det.get("class", "unknown")),
+                    "confidence": float(confidence),
+                    "bbox": bbox,
+                    "centroid_px": [int(cx), int(cy)],
+                    "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                })
                 bbox = [int(x) for x in bbox]
                 cx = int(bbox[0] + bbox[2] // 2)
                 cy = int(bbox[1] + bbox[3] // 2)
@@ -328,18 +341,13 @@ class NavigationDetectorService:
                     "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
                 })
             
-            # 5. Debug mode: save frames
-            if debug_mode:
-                self._save_debug_frames(rgb, depth, freepath_mask, occupancy_map, frame_id)
-            
-            # Calculate processing time
+            # Calculate total processing time
             processing_time = (time.time() - start_time) * 1000  # ms
             
-            # Build result - ensure all values are JSON serializable
+            # Build result - simplified (no image outputs, only JSON data)
             result.update({
                 "success": True,
                 "detections": standardized_detections,
-                "freepath_mask": freepath_mask,
                 "freepath_coordinates": [[int(x), int(y)] for x, y in freepath_coordinates] if freepath_coordinates else [],
                 "freepath_circle": {
                     k: (
@@ -349,16 +357,17 @@ class NavigationDetectorService:
                     )
                     for k, v in freepath_circle.items()
                 } if freepath_circle else None,
-                "occupancy_map": occupancy_map,
                 "processing_time_ms": float(processing_time),
                 "stats": {
                     "num_detections": int(len(standardized_detections)),
                     "freepath_points": int(len(freepath_coordinates)),
-                    "has_freepath_circle": bool(freepath_circle is not None)
+                    "has_freepath_circle": bool(freepath_circle is not None),
+                    "detection_time_ms": float(detection_time),
+                    "freepath_time_ms": float(freepath_time)
                 }
             })
             
-            logger.debug(f"Frame {frame_id}: Processed in {processing_time:.2f}ms")
+            logger.info(f"Frame {frame_id}: Processed in {processing_time:.2f}ms (detection: {detection_time:.2f}ms, freepath: {freepath_time:.2f}ms)")
             
         except Exception as e:
             logger.error(f"❌ Error processing frame {frame_id}: {e}", exc_info=True)
