@@ -26,16 +26,18 @@ logger = logging.getLogger(__name__)
 # Global services (injected from main)
 detector_service = None
 translator_service = None
+navigation_detector_service = None
 
 # Keepalive settings
 KEEPALIVE_INTERVAL = 5.0  # Send ping every 5 seconds (must be longer than max processing time)
 
 
-def set_websocket_services(detector, translator):
+def set_websocket_services(detector, translator, navigation_detector=None):
     """Set service instances (called from main.py)"""
-    global detector_service, translator_service
+    global detector_service, translator_service, navigation_detector_service
     detector_service = detector
     translator_service = translator
+    navigation_detector_service = navigation_detector
 
 
 class FrameProcessor:
@@ -325,3 +327,178 @@ async def handle_websocket(websocket: WebSocket):
         except:
             pass
         logger.info(f"WebSocket closed: {websocket.client}")
+
+
+# ============================================================================
+# Navigation WebSocket Handler
+# ============================================================================
+
+async def handle_navigation_websocket(websocket: WebSocket):
+    """
+    WebSocket handler for navigation pipeline
+    
+    Protocol:
+    - Client sends: {"type": "frame", "data": {"frame_id": int, "rgb": "base64_png", "depth": "base64_png"}}
+    - Server responds: {"type": "result", "data": {"frame_id": int, "success": bool, "detections": [...], ...}}
+    
+    Processes RGB+Depth frames through the navigation pipeline with object detection,
+    freepath detection, and occupancy mapping.
+    """
+    await websocket.accept()
+    
+    logger.info(f"Navigation WebSocket connected: {websocket.client}")
+    
+    # Check if navigation detector is ready
+    if navigation_detector_service is None:
+        logger.error("Navigation detector service is None")
+        await websocket.send_json({
+            "type": "error",
+            "error": "Navigation detector service not initialized",
+            "message": "Server is not in navigation mode"
+        })
+        await websocket.close()
+        return
+    
+    if not navigation_detector_service.is_ready():
+        logger.error(f"Navigation detector service not ready. is_loaded={navigation_detector_service.is_loaded}")
+        await websocket.send_json({
+            "type": "error",
+            "error": "Navigation detector models not loaded",
+            "message": "Please check server logs for model loading errors"
+        })
+        await websocket.close()
+        return
+    
+    frames_processed = 0
+    
+    try:
+        # Send initial connection success message
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Navigation WebSocket connected successfully",
+            "server_ready": True
+        })
+        
+        while True:
+            # Receive message from client
+            try:
+                message = await websocket.receive_json()
+            except Exception as e:
+                logger.error(f"Error receiving data: {e}")
+                break
+            
+            msg_type = message.get("type")
+            
+            # Handle heartbeat
+            if msg_type == "heartbeat" or msg_type == "pong":
+                continue
+            
+            # Handle frame processing
+            if msg_type == "frame":
+                data = message.get("data", {})
+                frame_id = data.get("frame_id", frames_processed)
+                rgb_base64 = data.get("rgb")
+                depth_base64 = data.get("depth")
+                
+                if not rgb_base64 or not depth_base64:
+                    await websocket.send_json({
+                        "type": "error",
+                        "frame_id": frame_id,
+                        "error": "Missing RGB or Depth data"
+                    })
+                    continue
+                
+                try:
+                    # Decode base64 images to numpy arrays
+                    rgb_bytes = base64.b64decode(rgb_base64)
+                    depth_bytes = base64.b64decode(depth_base64)
+                    
+                    rgb_arr = np.frombuffer(rgb_bytes, dtype=np.uint8)
+                    depth_arr = np.frombuffer(depth_bytes, dtype=np.uint8)
+                    
+                    rgb = cv2.imdecode(rgb_arr, cv2.IMREAD_COLOR)
+                    depth = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
+                    
+                    if rgb is None or depth is None:
+                        raise ValueError("Failed to decode images")
+                    
+                    # Convert BGR to RGB (OpenCV loads as BGR)
+                    rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+                    
+                    logger.debug(f"Decoded frame {frame_id}: RGB {rgb.shape}, Depth {depth.shape}")
+                    
+                    # Process frame through navigation pipeline
+                    result = navigation_detector_service.process_frame(
+                        rgb=rgb,
+                        depth=depth,
+                        frame_id=frame_id,
+                        debug_mode=False
+                    )
+                    
+                    # Encode output images to base64
+                    freepath_base64 = None
+                    if result.get("freepath_mask") is not None:
+                        freepath_visual = (result["freepath_mask"] > 0).astype(np.uint8) * 255
+                        _, freepath_encoded = cv2.imencode('.png', freepath_visual)
+                        freepath_base64 = base64.b64encode(freepath_encoded.tobytes()).decode('utf-8')
+                    
+                    occupancy_base64 = None
+                    if result.get("occupancy_map") is not None:
+                        occupancy = result["occupancy_map"]
+                        # Convert to visual format
+                        occupancy_visual = np.zeros_like(occupancy, dtype=np.uint8)
+                        occupancy_visual[occupancy == -1] = 128  # Unknown
+                        occupancy_visual[occupancy == 0] = 255   # Free
+                        occupancy_visual[occupancy == 1] = 0     # Occupied
+                        _, occupancy_encoded = cv2.imencode('.png', occupancy_visual)
+                        occupancy_base64 = base64.b64encode(occupancy_encoded.tobytes()).decode('utf-8')
+                    
+                    # Build response
+                    response = {
+                        "type": "result",
+                        "data": {
+                            "frame_id": frame_id,
+                            "success": result.get("success", False),
+                            "detections": result.get("detections", []),
+                            "freepath_mask": freepath_base64,
+                            "freepath_coordinates": result.get("freepath_coordinates", []),
+                            "freepath_circle": result.get("freepath_circle"),
+                            "occupancy_map": occupancy_base64,
+                            "processing_time_ms": result.get("processing_time_ms", 0),
+                            "stats": result.get("stats", {})
+                        }
+                    }
+                    
+                    # Send response
+                    await websocket.send_json(response)
+                    frames_processed += 1
+                    
+                    logger.info(f"Processed frame {frame_id} in {result.get('processing_time_ms', 0):.2f}ms")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing frame {frame_id}: {e}", exc_info=True)
+                    await websocket.send_json({
+                        "type": "error",
+                        "frame_id": frame_id,
+                        "error": str(e)
+                    })
+            
+    except WebSocketDisconnect:
+        logger.info(f"Navigation WebSocket disconnected: {websocket.client} "
+                   f"(Processed: {frames_processed} frames)")
+    except Exception as e:
+        logger.error(f"Navigation WebSocket error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error": str(e),
+                "message": "Fatal error occurred"
+            })
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+        logger.info(f"Navigation WebSocket closed: {websocket.client}")

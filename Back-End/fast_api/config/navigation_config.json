@@ -1,0 +1,17 @@
+{
+  "detector_mode": "navigation",
+  "navigation_detector": {
+    "model_type": "faster_rcnn",
+    "model_path": "object_path_detection\\models\\best_yolo.pt",
+    "class_map_path": "object_path_detection\\yolo_class_mapping.json",
+    "freepath_model_path": "object_path_detection\\models\\final_deeplabv3_footpath.pth",
+    "output_dir": "api_output",
+    "debug_mode": false
+  },
+  "testing": {
+    "test_data_path": "D:/Eng/SBE/gp/Dawn-Pilot--AfterDawn/testing_sequence/7",
+    "rgb_folder": "Color",
+    "depth_folder": "Depth",
+    "target_fps": 10
+  }
+}
