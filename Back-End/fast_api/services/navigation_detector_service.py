@@ -554,7 +554,7 @@ class NavigationDetectorService:
                 })
                 return result
             
-            # STAGE 2: TRANSLATOR - Simplify image
+            # STAGE 2: TRANSLATOR - Simplify image to canonical shapes
             stage_start = time.time()
             
             # Translator already initialized at startup
@@ -575,28 +575,59 @@ class NavigationDetectorService:
                         "distance_m": det.get('distance_m')
                     })
             
-            # Call translator
-            translator_output_b64, selected_objects, translator_meta = self.translator_service.translate(
-                objects=translator_objects,
-                image_width=w,
-                image_height=h,
-                save_debug_images=False,
-                return_bytes=False
-            )
+            # Create detection bundle for translator
+            detection_data = {
+                "frame_id": f"nav_frame_{frame_id}",
+                "file_path": "navigation_pipeline",
+                "metadata": {
+                    "image_width": w,
+                    "image_height": h,
+                    "camera_intrinsics": None
+                },
+                "free_path": None,
+                "obstacles": translator_objects
+            }
+            
+            # Get translator instance
+            translator = self.translator_service.translator
+            if translator is None:
+                # Initialize if needed
+                import json
+                import tempfile
+                temp_json = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+                json.dump(detection_data, temp_json)
+                temp_json.close()
+                
+                translator = self.translator_service.translator = self.translator_service.translator.__class__(
+                    temp_json.name,
+                    self.translator_service.shapes_path,
+                    self.translator_service.params_path,
+                    None,
+                    self.translator_service.output_dir
+                )
+            else:
+                # Update existing translator with new data
+                translator.bundle = detection_data
+                translator.input_width = w
+                translator.input_height = h
+                translator.canvas_size = (w, h)
+                translator.params['canvas_size'] = [h, w]
+            
+            # Get simplified canvas output (canonical shapes) - WITHOUT phosphene rendering
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False)
+            
+            # Convert to grayscale and binarize for consistency
+            simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
+            _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
             
             stage_times["translator"] = (time.time() - stage_start) * 1000
             
-            # Decode translator output to draw circle
-            translator_bytes = base64.b64decode(translator_output_b64)
-            translator_np = np.frombuffer(translator_bytes, dtype=np.uint8)
-            translator_img = cv2.imdecode(translator_np, cv2.IMREAD_GRAYSCALE)
-            
-            # Draw freepath circle on translator output
-            translator_with_circle = self.draw_freepath_circle(translator_img, freepath_circle)
+            # Draw freepath circle on simplified image for visualization
+            simplified_with_circle = self.draw_freepath_circle(simplified_binary, freepath_circle)
             
             if stop_at == "translator":
-                # Encode translator output with circle
-                _, buffer = cv2.imencode('.png', translator_with_circle)
+                # Encode simplified canvas with circle
+                _, buffer = cv2.imencode('.png', simplified_with_circle)
                 output_b64 = base64.b64encode(buffer).decode('utf-8')
                 
                 result.update({
@@ -611,8 +642,8 @@ class NavigationDetectorService:
             # STAGE 3: PRE_PHOSPHENE - Center crop to 128x128
             stage_start = time.time()
             
-            # Center crop translator output (without circle drawing for actual processing)
-            cropped = self.center_crop_128x128(translator_img)
+            # Center crop the simplified image (without circle for actual processing)
+            cropped = self.center_crop_128x128(simplified_binary)
             
             stage_times["crop"] = (time.time() - stage_start) * 1000
             
@@ -637,13 +668,16 @@ class NavigationDetectorService:
             if self.pipeline2 is None:
                 raise RuntimeError("Pipeline2Integration not initialized")
             
+            # Normalize cropped image to 0-1 range for Pipeline2 (neural network expects normalized input)
+            cropped_normalized = cropped.astype(np.float32) / 255.0
+            
             # Run phosphene rendering
-            phosphene_output = self.pipeline2.input2phosphenes(cropped)  # Returns (H, W) numpy array
+            phosphene_output = self.pipeline2.input2phosphenes(cropped_normalized)  # Returns (H, W) numpy array
             
             stage_times["phosphene"] = (time.time() - stage_start) * 1000
             
-            # Convert phosphene output to image (normalize to 0-255)
-            phosphene_img = (phosphene_output * 255).astype(np.uint8)
+            # Convert phosphene output to image (scale to 0-255)
+            phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
             
             # Encode phosphene output
             _, buffer = cv2.imencode('.png', phosphene_img)
