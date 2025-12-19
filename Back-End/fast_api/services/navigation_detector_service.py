@@ -307,22 +307,24 @@ class NavigationDetectorService:
             for det in detections:
                 # Calculate centroid from bbox
                 bbox = det.get("bbox", [0, 0, 0, 0])  # [x, y, w, h]
-                cx = bbox[0] + bbox[2] // 2
-                cy = bbox[1] + bbox[3] // 2
+                # Convert all to Python int
+                bbox = [int(x) for x in bbox]
+                cx = int(bbox[0] + bbox[2] // 2)
+                cy = int(bbox[1] + bbox[3] // 2)
                 
                 # Use distance as confidence if available, otherwise use high confidence
                 confidence = 0.8
                 if det.get("distance_m"):
                     # Convert distance to confidence (closer = higher confidence)
                     # Normalize distance (2m-10m range) to confidence (0.5-0.95)
-                    dist = det.get("distance_m")
+                    dist = float(det.get("distance_m"))
                     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
                 
                 standardized_detections.append({
-                    "class": det.get("class", "unknown"),
+                    "class": str(det.get("class", "unknown")),
                     "confidence": float(confidence),
                     "bbox": bbox,
-                    "centroid_px": [cx, cy],
+                    "centroid_px": [int(cx), int(cy)],
                     "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
                 })
             
@@ -333,27 +335,40 @@ class NavigationDetectorService:
             # Calculate processing time
             processing_time = (time.time() - start_time) * 1000  # ms
             
-            # Build result
+            # Build result - ensure all values are JSON serializable
             result.update({
                 "success": True,
                 "detections": standardized_detections,
                 "freepath_mask": freepath_mask,
-                "freepath_coordinates": freepath_coordinates,
-                "freepath_circle": freepath_circle,
+                "freepath_coordinates": [[int(x), int(y)] for x, y in freepath_coordinates] if freepath_coordinates else [],
+                "freepath_circle": {
+                    k: (
+                        [int(x) for x in v] if isinstance(v, (list, tuple, np.ndarray))
+                        else int(v) if isinstance(v, (np.integer, int))
+                        else float(v)
+                    )
+                    for k, v in freepath_circle.items()
+                } if freepath_circle else None,
                 "occupancy_map": occupancy_map,
-                "processing_time_ms": processing_time,
+                "processing_time_ms": float(processing_time),
                 "stats": {
-                    "num_detections": len(standardized_detections),
-                    "freepath_points": len(freepath_coordinates),
-                    "has_freepath_circle": freepath_circle is not None
+                    "num_detections": int(len(standardized_detections)),
+                    "freepath_points": int(len(freepath_coordinates)),
+                    "has_freepath_circle": bool(freepath_circle is not None)
                 }
             })
             
             logger.debug(f"Frame {frame_id}: Processed in {processing_time:.2f}ms")
             
         except Exception as e:
-            logger.error(f"Error processing frame {frame_id}: {e}")
+            logger.error(f"❌ Error processing frame {frame_id}: {e}", exc_info=True)
+            print(f"\n❌ EXCEPTION in process_frame:")
+            print(f"   Error type: {type(e).__name__}")
+            print(f"   Error message: {str(e)}")
+            import traceback
+            traceback.print_exc()
             result["error"] = str(e)
+            result["success"] = False
         
         return result
     

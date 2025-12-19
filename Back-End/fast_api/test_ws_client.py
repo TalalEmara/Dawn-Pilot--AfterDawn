@@ -24,7 +24,7 @@ RGB_FOLDER = "Color"
 DEPTH_FOLDER = "Depth"
 TARGET_FPS = 10
 FRAME_INTERVAL = 1.0 / TARGET_FPS  # 0.1 seconds (100ms)
-SAVE_RESULTS = False  # Set to True to save results to test_output/
+SAVE_RESULTS = True  # Set to True to save results to test_output/
 
 
 def load_frame_pairs(data_path: str) -> List[Tuple[str, str]]:
@@ -155,15 +155,32 @@ async def process_frames(frame_pairs: List[Tuple[str, str]]):
                         stats["processed_frames"] += 1
                         stats["total_processing_time"] += processing_time
                         
-                        print(f"Frame {frame_id:04d}: "
-                              f"Detections={num_detections}, "
-                              f"ProcessTime={processing_time:.2f}ms")
+                        print(f"✅ Frame {frame_id} processed in {processing_time:.2f}ms")
+                        print(f"   Detections: {num_detections}")
+                        print(f"   Freepath points: {data.get('stats', {}).get('freepath_points', 0)}")
                         
-                        # Save results if enabled
+                        # Decode and save output images
                         if SAVE_RESULTS and output_dir:
+                            # Save JSON result
                             result_file = os.path.join(output_dir, f"frame_{frame_id:04d}_result.json")
                             with open(result_file, 'w') as f:
                                 json.dump(data, f, indent=2)
+                            
+                            # Save freepath mask
+                            if data.get("freepath_mask"):
+                                freepath_bytes = base64.b64decode(data["freepath_mask"])
+                                freepath_path = os.path.join(output_dir, f"frame_{frame_id:04d}_freepath.png")
+                                with open(freepath_path, 'wb') as f:
+                                    f.write(freepath_bytes)
+                                print(f"   💾 Saved freepath: {freepath_path}")
+                            
+                            # Save occupancy map
+                            if data.get("occupancy_map"):
+                                occupancy_bytes = base64.b64decode(data["occupancy_map"])
+                                occupancy_path = os.path.join(output_dir, f"frame_{frame_id:04d}_occupancy.png")
+                                with open(occupancy_path, 'wb') as f:
+                                    f.write(occupancy_bytes)
+                                print(f"   💾 Saved occupancy: {occupancy_path}")
                         
                     elif result.get("type") == "error":
                         print(f"❌ Frame {frame_id:04d}: Error - {result.get('error')}")

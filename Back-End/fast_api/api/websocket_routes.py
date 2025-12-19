@@ -344,6 +344,22 @@ async def handle_navigation_websocket(websocket: WebSocket):
     Processes RGB+Depth frames through the navigation pipeline with object detection,
     freepath detection, and occupancy mapping.
     """
+    
+    def convert_to_json_serializable(obj):
+        """Convert numpy types to Python native types for JSON serialization"""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: convert_to_json_serializable(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_json_serializable(item) for item in obj]
+        else:
+            return obj
+    
     await websocket.accept()
     
     logger.info(f"Navigation WebSocket connected: {websocket.client}")
@@ -453,10 +469,10 @@ async def handle_navigation_websocket(websocket: WebSocket):
                         _, occupancy_encoded = cv2.imencode('.png', occupancy_visual)
                         occupancy_base64 = base64.b64encode(occupancy_encoded.tobytes()).decode('utf-8')
                     
-                    # Build response
+                    # Build response with JSON-safe types
                     response = {
                         "type": "result",
-                        "data": {
+                        "data": convert_to_json_serializable({
                             "frame_id": frame_id,
                             "success": result.get("success", False),
                             "detections": result.get("detections", []),
@@ -466,7 +482,7 @@ async def handle_navigation_websocket(websocket: WebSocket):
                             "occupancy_map": occupancy_base64,
                             "processing_time_ms": result.get("processing_time_ms", 0),
                             "stats": result.get("stats", {})
-                        }
+                        })
                     }
                     
                     # Send response

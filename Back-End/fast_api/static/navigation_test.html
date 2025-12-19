@@ -494,34 +494,42 @@
 
         function handleMessage(data) {
             const type = data.type;
+            console.log('Received message type:', type, data);
 
             if (type === 'connected') {
                 log(`✅ ${data.message}`, 'success');
             } 
             else if (type === 'result') {
                 const result = data.data;
+                console.log('Result data:', result);
                 log(`✅ Frame ${result.frame_id} processed in ${result.processing_time_ms.toFixed(2)}ms`, 'success');
                 
                 // Update stats
-                document.getElementById('detectionCount').textContent = result.stats.num_detections || 0;
+                document.getElementById('detectionCount').textContent = result.stats?.num_detections || 0;
                 document.getElementById('processingTime').textContent = `${result.processing_time_ms.toFixed(2)} ms`;
-                document.getElementById('freepathPoints').textContent = result.stats.freepath_points || 0;
+                document.getElementById('freepathPoints').textContent = result.stats?.freepath_points || 0;
                 
                 // Display freepath mask
                 if (result.freepath_mask) {
+                    console.log('Displaying freepath mask, length:', result.freepath_mask.length);
                     displayImage(result.freepath_mask, 'freepathCanvas', 'freepathPlaceholder');
+                } else {
+                    console.log('No freepath_mask in result');
                 }
                 
                 // Display occupancy map
                 if (result.occupancy_map) {
+                    console.log('Displaying occupancy map, length:', result.occupancy_map.length);
                     displayImage(result.occupancy_map, 'occupancyCanvas', 'occupancyPlaceholder');
+                } else {
+                    console.log('No occupancy_map in result');
                 }
                 
                 // Log detections
                 if (result.detections && result.detections.length > 0) {
                     log(`   Detections: ${result.detections.length} objects found`, 'info');
                     result.detections.forEach((det, i) => {
-                        log(`   ${i+1}. ${det.class_name} (depth: ${det.depth_mean?.toFixed(2)}m)`, 'info');
+                        log(`   ${i+1}. ${det.class} (distance: ${det.distance_m?.toFixed(2)}m)`, 'info');
                     });
                 }
                 
@@ -533,6 +541,7 @@
             } 
             else if (type === 'error') {
                 log(`❌ Error: ${data.error}`, 'error');
+                console.error('Server error:', data);
             }
             else if (type === 'ping') {
                 // Ignore ping messages
@@ -540,19 +549,27 @@
         }
 
         function displayImage(base64Data, canvasId, placeholderId) {
+            console.log('displayImage called for', canvasId);
             const canvas = document.getElementById(canvasId);
             const placeholder = document.getElementById(placeholderId);
             const ctx = canvas.getContext('2d');
             
             const img = new Image();
             img.onload = function() {
+                console.log('Image loaded successfully:', img.width, 'x', img.height);
                 canvas.width = img.width;
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
                 canvas.style.display = 'block';
                 placeholder.style.display = 'none';
+                log(`   Displayed ${canvasId} (${img.width}x${img.height})`, 'success');
+            };
+            img.onerror = function(err) {
+                console.error('Failed to load image for', canvasId, err);
+                log(`❌ Failed to display ${canvasId}`, 'error');
             };
             img.src = 'data:image/png;base64,' + base64Data;
+            console.log('Image src set, base64 length:', base64Data.length);
         }
 
         // Initialize
