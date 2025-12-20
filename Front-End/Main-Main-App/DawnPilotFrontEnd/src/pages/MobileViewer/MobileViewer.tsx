@@ -372,9 +372,10 @@ function MobileView() {
             primitive="a-camera"
             look-controls="enabled: true; touchEnabled: true;"
           >
-            {/* ✅ HUD Plane using the AI Stream */}
+            {/* ✅ HUD Plane using the AI Stream - EXCLUDED FROM CAPTURE */}
             <Entity
-              geometry="primitive: plane; width: 5; height: 2.5"
+              className="hud-ignore"
+              geometry="primitive: plane; width: 2; height: 1"
               position="0 0 -1.5"
               canvas-updater="src: #hud-buffer"
               // material="shader: flat; transparent: true; depthTest: false"
