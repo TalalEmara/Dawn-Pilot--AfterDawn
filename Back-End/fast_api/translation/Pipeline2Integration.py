@@ -16,10 +16,13 @@ class Pipeline2Integration:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'ckpt_epoch_6.pth')
         
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        encoder_weights = checkpoint['encoder_state_dict']
+        # checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        # encoder_weights = checkpoint['encoder_state_dict']
         self.encoder = E2E_Simple_Encoder(in_channels=1).to(self.device)
-        self.encoder.load_state_dict(encoder_weights)
+
+        # self.encoder.load_state_dict(encoder_weights)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+        self.encoder.load_state_dict(checkpoint)
         self.encoder.eval()  # Set to evaluation mode
         self.simulator = P2PDifferentiableSimulator().to(self.device)
 
