@@ -27,20 +27,35 @@ export function useBinaryStream(ws: WebSocket | null) {
       try {
         const data = JSON.parse(event.data);
         
+        console.log('📥 Received WebSocket message:', { 
+          type: data.type, 
+          hasOutputImage: !!data.data?.output_image,
+          frameId: data.data?.frame_id,
+          success: data.data?.success,
+          error: data.data?.error || data.error
+        });
+        
         // Handle phosphene result from backend
         if (data.type === 'result' && data.data?.output_image) {
           // Convert base64 to blob
           const base64 = data.data.output_image;
+          console.log(`🖼️ Processing phosphene image: ${base64.length} chars`);
+          
           const binaryString = atob(base64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
           const blob = new Blob([bytes], { type: 'image/png' });
+          console.log(`✅ Created blob: ${blob.size} bytes, type: ${blob.type}`);
           img.src = URL.createObjectURL(blob);
+        } else if (data.type === 'error') {
+          console.error('❌ Backend error:', data.error || data.data?.error);
+        } else {
+          console.warn('⚠️ Unknown message type or missing output_image:', data);
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        console.error('❌ Error parsing WebSocket message:', error, event.data);
       }
     };
 

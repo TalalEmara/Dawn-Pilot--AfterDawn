@@ -136,9 +136,10 @@ function MobileView() {
           stage: "phosphene"  // Full pipeline
         };
         
+        console.log(`📤 Sending frame ${message.frame_id}: RGB=${rgbBase64.length} bytes, Depth=${depthBase64.length} bytes`);
         aiWebSocket.send(JSON.stringify(message));
       } catch (error) {
-        console.error("Error sending frame:", error);
+        console.error("❌ Error sending frame:", error);
       }
     }
   });
@@ -376,7 +377,7 @@ function MobileView() {
               geometry="primitive: plane; width: 5; height: 2.5"
               position="0 0 -1.5"
               canvas-updater="src: #hud-buffer"
-              material="shader: flat; transparent: true; depthTest: false"
+              // material="shader: flat; transparent: true; depthTest: false"
             />
           </Entity>
         </Entity>

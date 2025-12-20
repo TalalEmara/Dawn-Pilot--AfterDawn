@@ -2,10 +2,17 @@ import logging
 import base64
 import cv2
 import numpy as np
+import os
+from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
 from core import decode_base64_image
 
 logger = logging.getLogger(__name__)
+
+# Create debug output directory (absolute path)
+DEBUG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug_websocket")
+os.makedirs(DEBUG_DIR, exist_ok=True)
+print(f"🔍 Debug output directory: {os.path.abspath(DEBUG_DIR)}")
 
 # Global service (injected from websocket_routes)
 navigation_detector_service = None
@@ -68,9 +75,17 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     depth_bgr = decode_base64_image(depth_b64)
                     depth = cv2.cvtColor(depth_bgr, cv2.COLOR_BGR2GRAY)
                     
+                    # 🔍 DEBUG: Save received images
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    debug_prefix = f"{DEBUG_DIR}/frame_{frame_id}_{timestamp}"
+                    cv2.imwrite(f"{debug_prefix}_received_rgb.jpg", rgb_bgr)
+                    cv2.imwrite(f"{debug_prefix}_received_depth.jpg", depth_bgr)
+                    logger.info(f"💾 Saved received images: {debug_prefix}_received_*.jpg")
+                    logger.info(f"📊 RGB shape: {rgb.shape}, Depth shape: {depth.shape}")
+                    
                     result = navigation_detector_service.process_full_pipeline(
                         rgb=rgb, depth=depth, frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,
-                        stop_at=stage, debug_mode=False
+                        stop_at=stage, debug_mode=True  # Enable debug mode
                     )
                     
                     response = {
@@ -83,11 +98,25 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         })
                     }
                     
+                    # 🔍 DEBUG: Save output phosphene image
+                    if result.get("output_image"):
+                        try:
+                            output_b64 = result.get("output_image")
+                            output_bytes = base64.b64decode(output_b64)
+                            output_array = np.frombuffer(output_bytes, dtype=np.uint8)
+                            output_img = cv2.imdecode(output_array, cv2.IMREAD_COLOR)
+                            cv2.imwrite(f"{debug_prefix}_output_phosphene.png", output_img)
+                            logger.info(f"💾 Saved output phosphene: {debug_prefix}_output_phosphene.png")
+                        except Exception as e:
+                            logger.error(f"Failed to save output image: {e}")
+                    else:
+                        logger.warning(f"⚠️ No output_image in result!")
+                    
                     await websocket.send_json(response)
                     frames_processed += 1
                     
                     total_time = sum(result.get("stats", {}).values())
-                    logger.info(f"Processed frame {frame_id} at stage '{stage}' in {total_time:.2f}ms")
+                    logger.info(f"✅ Processed frame {frame_id} at stage '{stage}' in {total_time:.2f}ms")
                     
                 except Exception as e:
                     logger.error(f"Error processing frame {frame_id}: {e}", exc_info=True)

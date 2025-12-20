@@ -604,7 +604,7 @@ class Translator:
     # MAIN RENDERING PIPELINE
     # =====================================================================================
     
-    def run(self, out_name="frame_simp.png", save_to_disk=False):
+    def run(self, out_name="frame_simp.png", save_to_disk=True):
         """
         Execute the complete navigation translation pipeline.
         
