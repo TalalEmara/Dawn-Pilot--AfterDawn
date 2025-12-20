@@ -34,8 +34,8 @@ export const useFrameBuffer = (options?: {
   logInterval?: number;
   logPixelData?: boolean;
   downsamplePercentage?: number;
-  // NEW: Callback to stream the frame
-  onFrame?: (blob: Blob) => void;
+  // NEW: Callback to stream RGB and depth frames
+  onFrame?: (rgbBlob: Blob, depthBlob: Blob | null) => void;
 }) => {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
@@ -132,10 +132,36 @@ export const useFrameBuffer = (options?: {
                       percentage
                     );
 
-                    // NEW: Stream the frame if callback exists
+                    // Read depth buffer
+                    const depthData = readDepthBuffer(
+                      gl,
+                      renderer,
+                      sceneEl,
+                      width,
+                      height,
+                      percentage
+                    );
+
+                    // NEW: Stream both RGB and depth frames if callback exists
                     if (options?.onFrame) {
-                        pixelsToBlob(rgbData.data, rgbData.width, rgbData.height).then(blob => {
-                            if (blob) options.onFrame!(blob);
+                        pixelsToBlob(rgbData.data, rgbData.width, rgbData.height).then(async rgbBlob => {
+                            if (!rgbBlob) return;
+                            
+                            let depthBlob: Blob | null = null;
+                            if (depthData) {
+                                // Convert grayscale depth to RGBA for canvas
+                                const depthRGBA = new Uint8Array(depthData.width * depthData.height * 4);
+                                for (let i = 0; i < depthData.data.length; i++) {
+                                    const val = depthData.data[i];
+                                    depthRGBA[i * 4] = val;
+                                    depthRGBA[i * 4 + 1] = val;
+                                    depthRGBA[i * 4 + 2] = val;
+                                    depthRGBA[i * 4 + 3] = 255;
+                                }
+                                depthBlob = await pixelsToBlob(depthRGBA, depthData.width, depthData.height);
+                            }
+                            
+                            options.onFrame!(rgbBlob, depthBlob);
                         });
                     }
 
@@ -153,16 +179,6 @@ export const useFrameBuffer = (options?: {
                           }
                         }
                         console.log(`🎨 Has visible pixels: ${hasColor}`);
-
-                        // Read depth buffer
-                        const depthData = readDepthBuffer(
-                          gl,
-                          renderer,
-                          sceneEl,
-                          width,
-                          height,
-                          percentage
-                        );
 
                         if (!depthData) {
                           console.log(`Depth not captured`);

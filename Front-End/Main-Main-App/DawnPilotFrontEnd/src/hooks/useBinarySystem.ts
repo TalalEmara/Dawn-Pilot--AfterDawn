@@ -1,15 +1,15 @@
 
 import { useEffect, useRef } from 'react';
 
-export function useBinaryStream(socket: any) {
+export function useBinaryStream(ws: WebSocket | null) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!ws) return;
 
     const img = new Image();
     
-    // When the browser finishes decoding the JPEG blob...
+    // When the browser finishes decoding the JPEG/PNG blob...
     img.onload = () => {
       if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
@@ -23,18 +23,33 @@ export function useBinaryStream(socket: any) {
       URL.revokeObjectURL(img.src);
     };
 
-    const handleFrame = (arrayBuffer: ArrayBuffer) => {
-      // Create a Blob from the raw binary data
-      const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
-      img.src = URL.createObjectURL(blob);
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle phosphene result from backend
+        if (data.type === 'result' && data.data?.output_image) {
+          // Convert base64 to blob
+          const base64 = data.data.output_image;
+          const binaryString = atob(base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'image/png' });
+          img.src = URL.createObjectURL(blob);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
     };
 
-    socket.on('video_frame', handleFrame);
+    ws.addEventListener('message', handleMessage);
 
     return () => {
-      socket.off('video_frame', handleFrame);
+      ws.removeEventListener('message', handleMessage);
     };
-  }, [socket]);
+  }, [ws]);
 
   return canvasRef;
 }

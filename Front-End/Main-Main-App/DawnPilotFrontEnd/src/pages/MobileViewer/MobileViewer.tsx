@@ -10,8 +10,7 @@ import { useFrameBuffer, getFolderHandle } from "../../hooks/useFrameBuffer";
 import { useCameraSync } from "../../hooks/useCameraSync";
 import carImg from "../../assets/frame_159_234589.png.png";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
-import { io, Socket } from "socket.io-client";
-import { URLS } from "../../config/api"; // <--- Import Config
+import { URLS, SERVER_IP } from "../../config";
 // Port 8000 for Phosphene AI (Stream)
 
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
@@ -45,8 +44,9 @@ function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
   
-  // State for the AI socket (separate from the sync socket)
-  const [aiSocket, setAiSocket] = useState<Socket | null>(null);
+  // State for the AI WebSocket (separate from the sync socket)
+  const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
+  const frameIdRef = useRef<number>(0);
 
   const hasReceivedPosition = useRef(false);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
@@ -64,38 +64,81 @@ function MobileView() {
   });
 
   // ---------------------------------------------------------
-  // CONNECTION 2: AI BACKEND (Port 8000)
+  // CONNECTION 2: AI BACKEND (Port 8000) - Native WebSocket
   // ---------------------------------------------------------
   useEffect(() => {
-    // Manually connect to the AI URL from config
-    const socket = io(URLS.AI_STREAM, {
-      transports: ['websocket'],
-      reconnection: true
-    });
+    const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
 
-    socket.on('connect', () => console.log("🟢 AI Stream Connected"));
-    socket.on('disconnect', () => console.log("🔴 AI Stream Disconnected"));
+    ws.onopen = () => {
+      console.log("🟢 AI WebSocket Connected");
+      setAiWebSocket(ws);
+    };
 
-    setAiSocket(socket);
+    ws.onerror = (error) => {
+      console.error("🔴 AI WebSocket Error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("🔴 AI WebSocket Disconnected");
+      setAiWebSocket(null);
+    };
 
     return () => {
-      socket.disconnect();
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     };
   }, []);
   // ---------------------------------------------------------
   // HOOK WIRING
   // ---------------------------------------------------------
   
-  // 1. RECEIVE: Pass the AI socket to the receiver hook
-  const hudCanvasRef = useBinaryStream(aiSocket);
+  // 1. RECEIVE: Pass the WebSocket to the receiver hook
+  const hudCanvasRef = useBinaryStream(aiWebSocket);
 
-  // 2. SEND: Pass the data from FrameBuffer to the AI socket
+  // Helper to convert Blob to base64
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
+        resolve(base64.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // 2. SEND: Capture RGB + depth and send as JSON via WebSocket
   useFrameBuffer({
-    enabled: !!aiSocket?.connected, // Only run when connected
-    logInterval: 66,                // ~15 FPS
-    onFrame: (blob) => {
-      if (aiSocket?.connected) {
-        aiSocket.emit('input_frame', blob);
+    enabled: aiWebSocket?.readyState === WebSocket.OPEN,
+    logInterval: 1000/1,  // ~15 FPS
+    onFrame: async (rgbBlob, depthBlob) => {
+      if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
+      
+      try {
+        const rgbBase64 = await blobToBase64(rgbBlob);
+        const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
+        
+        if (!depthBase64) {
+          console.warn("⚠️ Depth not captured, skipping frame");
+          return;
+        }
+        
+        frameIdRef.current++;
+        
+        const message = {
+          type: "frame",
+          frame_id: String(frameIdRef.current).padStart(3, '0'),
+          rgb: rgbBase64,
+          depth: depthBase64,
+          stage: "phosphene"  // Full pipeline
+        };
+        
+        aiWebSocket.send(JSON.stringify(message));
+      } catch (error) {
+        console.error("Error sending frame:", error);
       }
     }
   });
@@ -190,7 +233,7 @@ function MobileView() {
         />
         
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
-        <div>AI: {aiSocket?.connected ? "🟢" : "🔴"}</div>
+        <div>AI: {aiWebSocket?.readyState === WebSocket.OPEN ? "🟢" : "🔴"}</div>
       </div>
 
       {/* Mobile Label */}
