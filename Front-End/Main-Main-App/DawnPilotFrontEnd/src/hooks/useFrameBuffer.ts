@@ -370,6 +370,10 @@ function readDepthBuffer(
 
     scene.traverse((obj: any) => {
       if (obj.isMesh) {
+
+        if (obj.el && obj.el.classList && obj.el.classList.contains('hud-ignore')) {
+            return;
+        }
         obj.updateMatrixWorld(true);
         originalMaterials.set(obj, obj.material);
 
