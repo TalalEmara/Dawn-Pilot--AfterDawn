@@ -2,7 +2,10 @@ import { useState, useCallback, useRef } from 'react';
 import type { Entity } from './useScenarioWorld';
 
 // const API_BASE_URL = 'http://localhost:5000/scenario';
-const API_BASE_URL = 'http://192.168.1.107:5000/scenario';
+import { URLS } from '../config';
+// const SOCKET_URL = "http://192.168.1.107:5000";
+
+const API_BASE_URL = URLS.SYNC_SOCKET;
 
 
 export function useComponentManager(onEntityUpdate?: (entity: Entity) => void) {
