@@ -20,5 +20,5 @@
   "K_min": 3,
   "K_max": 6,
   "T_min": 0.3,
-  "canvas_size": [540, 960]
+  "canvas_size": [128, 128]
 }

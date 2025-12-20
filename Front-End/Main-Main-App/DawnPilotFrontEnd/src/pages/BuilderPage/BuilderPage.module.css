@@ -13,5 +13,9 @@
   color: var(--text-color);
   font-size: 12px;
   z-index: 10;
-  pointer-events: none; 
+}
+
+.overlayText button {
+  pointer-events: auto;
+  cursor: pointer;
 }

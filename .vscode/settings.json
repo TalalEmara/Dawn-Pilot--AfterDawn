@@ -1,0 +1,9 @@
+{
+    "liveServer.settings.ignoreFiles": [
+        "**/api_output/**",
+        "**/realtime_output/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "**/.git/**"
+    ]
+}

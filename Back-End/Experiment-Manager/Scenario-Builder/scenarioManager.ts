@@ -3,6 +3,13 @@ import { Position, Rotation, Color, Scale, Model } from '../ECS-Pattern/componen
 import { Component } from '../ECS-Pattern/ecsManager';
 import { Entity } from '../ECS-Pattern/types';
 import { ModelDefinitions, getModelDefinition, modelExists } from './modelsDeclare';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // === ECS Manager ===
 const entityManager = new EntityManager();
@@ -285,4 +292,165 @@ export function getAvailableModels(): any {
     description: ModelDefinitions[key].description,
     components: Object.keys(ModelDefinitions[key].components)
   }));
+}
+
+// ========================================
+// Scenario Save/Load System
+// ========================================
+
+const SAVED_SCENARIOS_DIR = path.join(__dirname, '../saved-scenarios');
+
+// Ensure saved-scenarios directory exists
+if (!fs.existsSync(SAVED_SCENARIOS_DIR)) {
+  fs.mkdirSync(SAVED_SCENARIOS_DIR, { recursive: true });
+}
+
+export interface SavedScenario {
+  name: string;
+  description?: string;
+  createdAt: string;
+  entityCount: number;
+  camera?: {
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+  };
+  entities: any[];
+}
+
+/**
+ * Sanitize filename to be filesystem-safe
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Save current scenario world to a JSON file
+ */
+export function saveScenario(
+  name: string,
+  description?: string,
+  camera?: { position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
+): SavedScenario {
+  const world = getScenarioWorld();
+  
+  const scenario: SavedScenario = {
+    name,
+    description,
+    createdAt: new Date().toISOString(),
+    entityCount: world.entities.length,
+    camera,
+    entities: world.entities
+  };
+
+  const sanitizedName = sanitizeFilename(name);
+  const timestamp = new Date().toISOString().split('T')[0];
+  const filename = `${sanitizedName}-${timestamp}.json`;
+  const filepath = path.join(SAVED_SCENARIOS_DIR, filename);
+
+  fs.writeFileSync(filepath, JSON.stringify(scenario, null, 2), 'utf-8');
+  
+  console.log(`✅ Scenario saved: ${filename}`);
+  return scenario;
+}
+
+/**
+ * Load scenario from a JSON file and restore the world state
+ */
+export function loadScenario(filename: string): SavedScenario {
+  const filepath = path.join(SAVED_SCENARIOS_DIR, filename);
+  
+  if (!fs.existsSync(filepath)) {
+    throw new Error(`Scenario file not found: ${filename}`);
+  }
+
+  const content = fs.readFileSync(filepath, 'utf-8');
+  const scenario: SavedScenario = JSON.parse(content);
+
+  // Clear current world
+  createScenarioWorld();
+
+  // Recreate all entities
+  for (const entityData of scenario.entities) {
+    const components: Record<string, any> = {};
+    
+    // Extract components from entity data
+    if (entityData.Position) components.Position = entityData.Position;
+    if (entityData.Rotation) components.Rotation = entityData.Rotation;
+    if (entityData.Scale) components.Scale = entityData.Scale;
+    if (entityData.Color) components.Color = entityData.Color;
+    if (entityData.Model) components.Model = entityData.Model;
+
+    const newEntity = createEntity(components);
+    
+    // Restore metadata (name)
+    if (entityData.name) {
+      metadataMap.set(newEntity.id, { name: entityData.name });
+      newEntity.name = entityData.name;
+    }
+  }
+
+  console.log(`✅ Scenario loaded: ${filename} (${scenario.entityCount} entities)`);
+  return scenario;
+}
+
+/**
+ * List all saved scenarios with metadata
+ */
+export function listSavedScenarios(): Array<{
+  filename: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  entityCount: number;
+}> {
+  if (!fs.existsSync(SAVED_SCENARIOS_DIR)) {
+    return [];
+  }
+
+  const files = fs.readdirSync(SAVED_SCENARIOS_DIR)
+    .filter(file => file.endsWith('.json'));
+
+  return files.map(file => {
+    try {
+      const filepath = path.join(SAVED_SCENARIOS_DIR, file);
+      const content = fs.readFileSync(filepath, 'utf-8');
+      const scenario: SavedScenario = JSON.parse(content);
+      
+      return {
+        filename: file,
+        name: scenario.name,
+        description: scenario.description,
+        createdAt: scenario.createdAt,
+        entityCount: scenario.entityCount
+      };
+    } catch (err) {
+      console.error(`Error reading scenario file ${file}:`, err);
+      return null;
+    }
+  }).filter(s => s !== null) as Array<{
+    filename: string;
+    name: string;
+    description?: string;
+    createdAt: string;
+    entityCount: number;
+  }>;
+}
+
+/**
+ * Delete a saved scenario file
+ */
+export function deleteScenario(filename: string): boolean {
+  const filepath = path.join(SAVED_SCENARIOS_DIR, filename);
+  
+  if (!fs.existsSync(filepath)) {
+    return false;
+  }
+
+  fs.unlinkSync(filepath);
+  console.log(`🗑️ Scenario deleted: ${filename}`);
+  return true;
 }

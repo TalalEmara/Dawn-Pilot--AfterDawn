@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useRef } from 'react';
-import type { Entity } from './useScenarioWorld';
+import { useEffect, useRef } from "react";
+import type { Entity } from "./useScenarioWorld";
 
 interface AFrameSyncOptions {
   onComponentChange?: (
@@ -11,140 +11,167 @@ interface AFrameSyncOptions {
   watchedComponents?: string[];
 }
 
+/**
+ * Helper to check if two values are effectively equal.
+ * This prevents infinite loops where React sets a value -> A-Frame fires event -> React sets value again.
+ */
+const isEffectivelyEqual = (valA: any, valB: any): boolean => {
+  if (valA === valB) return true;
+
+  // Handle Vector3 objects {x, y, z}
+  if (
+    typeof valA === "object" &&
+    valA !== null &&
+    typeof valB === "object" &&
+    valB !== null
+  ) {
+    // Check for A-Frame vector structure
+    if ("x" in valA && "x" in valB) {
+      const epsilon = 0.001; // Tolerance for float precision differences
+      const xDiff = Math.abs(valA.x - valB.x);
+      const yDiff = Math.abs(valA.y - valB.y);
+      const zDiff = Math.abs((valA.z || 0) - (valB.z || 0)); // Handle z being optional sometimes
+      return xDiff < epsilon && yDiff < epsilon && zDiff < epsilon;
+    }
+    
+    // Check for Color objects {value: string}
+    if ("value" in valA && "value" in valB) {
+      return valA.value === valB.value;
+    }
+  }
+  
+  return false;
+};
+
 export function useAFrameSync(
   entities: Entity[],
   options: AFrameSyncOptions = {}
 ) {
   const {
     onComponentChange,
-    debounceMs = 500,
-    watchedComponents = ['position', 'rotation', 'scale', 'color']
+    watchedComponents = ["position", "rotation", "scale", "color"],
   } = options;
 
-  const entityMapRef = useRef<Map<number, string>>(new Map());
+  // Store latest entities in a Ref so event listeners always access fresh data
+  const entitiesRef = useRef<Entity[]>(entities);
+  const onComponentChangeRef = useRef(onComponentChange);
+  const initializedRef = useRef(false);
 
-  /**
-   * Setup listeners for A-Frame component changes
-   */
-  const setupListeners = useCallback(() => {
-    console.log('Setting up A-Frame listeners, entity count:', entities.length);
+  // Update refs whenever props change
+  useEffect(() => {
+    entitiesRef.current = entities;
+  }, [entities]);
+
+  useEffect(() => {
+    onComponentChangeRef.current = onComponentChange;
+  }, [onComponentChange]);
+
+  useEffect(() => {
+    const scene = document.querySelector("a-scene") as any;
     
-    const scene = document.querySelector('a-scene');
-    if (!scene) {
-      console.log('Scene not found');
-      return;
-    }
+    // Cleanup function references for removal later
+    const cleanupMap = new Map<Element, (evt: any) => void>();
 
-    const aframeEntities = document.querySelectorAll('[gltf-model], [primitive]');
-    console.log('Found A-Frame entities:', aframeEntities.length);
-    
-    aframeEntities.forEach((aframeEntity, index) => {
-      // Map A-Frame entity index to backend entity ID
-      if (entities[index]) {
-        entityMapRef.current.set(index, entities[index].id);
-      }
+    const setupListeners = () => {
+      // If already initialized for this entity count, skip (optional safety)
+      // but we allow re-running if entity count changed to bind new elements
+      
+      const aframeEntities = document.querySelectorAll("[ecs-entity]");
+      
+      aframeEntities.forEach((el, index) => {
+        const aframeEntity = el as any;
 
-      function handleComponentChange(evt: unknown) {
-        const componentName = evt.detail.name;
-        
-        if (!watchedComponents.includes(componentName)) {
-          return;
-        }
+        // Skip if we already attached a listener to this specific element
+        // (Note: In a robust app, you might want to remove all and re-add to be safe)
+        if (aframeEntity._ecsSyncAttached) return;
 
-        console.log('Component changed:', componentName, 'on entity', index);
-        
-        const entityId = entityMapRef.current.get(index);
-        if (!entityId) {
-          console.warn('No entity ID mapped for index', index);
-          return;
-        }
+        const handleComponentChange = (evt: any) => {
+          // 1. Get the latest entity state corresponding to this DOM node
+          // We assume DOM order matches the 'entities' array order (React standard behavior)
+          const currentEntity = entitiesRef.current[index];
+          if (!currentEntity) return;
 
-        // Get component data from A-Frame
-        let componentData: unknown;
-        
-        if (componentName === 'position' || componentName === 'rotation' || componentName === 'scale') {
-          const value = aframeEntity.getAttribute(componentName) as unknown as { x: number; y: number; z: number };
-          componentData = { x: value.x, y: value.y, z: value.z };
-        } else if (componentName === 'color') {
-          componentData = { value: aframeEntity.getAttribute('color') as string };
-        } else {
-          componentData = aframeEntity.getAttribute(componentName);
-        }
+          const componentName = evt.detail.name;
+          if (!watchedComponents.includes(componentName)) return;
 
-        // Map A-Frame component names to backend component names
-        const componentNameMap: { [key: string]: string } = {
-          'position': 'Position',
-          'rotation': 'Rotation',
-          'scale': 'Scale',
-          'color': 'Color'
+          // 2. Extract new data from the event/DOM
+          let newData: any;
+          if (["position", "rotation", "scale"].includes(componentName)) {
+            // Read directly from attribute to be safe, or use evt.detail.newData
+            const attr = aframeEntity.getAttribute(componentName);
+            newData = { x: attr.x, y: attr.y, z: attr.z };
+          } else if (componentName === "color") {
+            newData = { value: aframeEntity.getAttribute("color") };
+          } else {
+            newData = aframeEntity.getAttribute(componentName);
+          }
+
+          // 3. Map component name to our Entity interface keys
+          let currentReactState: any;
+          let backendComponentName = componentName;
+
+          if (componentName === "position") {
+            currentReactState = currentEntity.Position;
+            backendComponentName = "Position";
+          } else if (componentName === "rotation") {
+            currentReactState = currentEntity.Rotation;
+            backendComponentName = "Rotation";
+          } else if (componentName === "scale") {
+            currentReactState = currentEntity.Scale;
+            backendComponentName = "Scale";
+          } else if (componentName === "color") {
+            currentReactState = currentEntity.Color;
+            backendComponentName = "Color";
+          }
+
+          // 4. ECHO CANCELLATION:
+          // If the value from A-Frame matches what React already thinks it is,
+          // ignore the event. This stops the loop.
+          if (currentReactState && isEffectivelyEqual(currentReactState, newData)) {
+            return;
+          }
+
+          console.log(`Syncing change for ${currentEntity.id}:`, componentName);
+
+          // 5. Trigger the update
+          if (onComponentChangeRef.current) {
+            onComponentChangeRef.current(
+              currentEntity.id,
+              backendComponentName,
+              newData
+            );
+          }
         };
 
-        const backendComponentName = componentNameMap[componentName] || componentName;
-
-        if (onComponentChange) {
-          onComponentChange(entityId, backendComponentName, componentData);
-        }
-      }
-      
-      // Store the handler so we can remove it later
-      (aframeEntity as any)._handleComponentChange = handleComponentChange;
-      aframeEntity.addEventListener('componentchanged', handleComponentChange);
-    });
-  }, [entities, onComponentChange, watchedComponents]);
-
-  /**
-   * Cleanup listeners
-   */
-  const cleanupListeners = useCallback(() => {
-    console.log('Cleaning up A-Frame listeners');
-    
-    const aframeEntities = document.querySelectorAll('[gltf-model], [primitive]');
-    aframeEntities.forEach(aframeEntity => {
-      if ((aframeEntity as any)._handleComponentChange) {
-        aframeEntity.removeEventListener(
-          'componentchanged',
-          (aframeEntity as any)._handleComponentChange
-        );
-        delete (aframeEntity as any)._handleComponentChange;
-      }
-    });
-    
-    entityMapRef.current.clear();
-  }, []);
-
-  /**
-   * Setup listeners when scene is ready
-   */
-  useEffect(() => {
-    const scene = document.querySelector('a-scene');
-    if (!scene) {
-      console.log('Scene not found');
-      return;
-    }
-
-    const initListeners = () => {
-      console.log('Scene loaded, setting up listeners');
-      setupListeners();
+        // Attach listener
+        aframeEntity.addEventListener("componentchanged", handleComponentChange);
+        aframeEntity._ecsSyncAttached = true; // Mark as attached
+        
+        // Store for cleanup
+        cleanupMap.set(aframeEntity, handleComponentChange);
+      });
     };
 
-    if (scene.hasLoaded) {
-      console.log('Scene already loaded');
-      initListeners();
-    } else {
-      console.log('Waiting for scene to load');
-      scene.addEventListener('loaded', initListeners);
-    }
+    const runSetup = () => {
+       if (scene.hasLoaded) {
+         setupListeners();
+       } else {
+         scene.addEventListener("loaded", setupListeners);
+       }
+    };
 
+    runSetup();
+
+    // Cleanup function
     return () => {
-      cleanupListeners();
+      cleanupMap.forEach((handler, element: any) => {
+        element.removeEventListener("componentchanged", handler);
+        delete element._ecsSyncAttached;
+      });
+      cleanupMap.clear();
       if (scene) {
-        scene.removeEventListener('loaded', initListeners);
+        scene.removeEventListener("loaded", setupListeners);
       }
     };
-  }, [setupListeners, cleanupListeners]);
-
-  return {
-    setupListeners,
-    cleanupListeners
-  };
+  }, [entities.length, watchedComponents]); // Only re-bind if number of entities changes
 }

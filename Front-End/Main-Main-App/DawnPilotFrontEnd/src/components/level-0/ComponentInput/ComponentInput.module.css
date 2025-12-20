@@ -1,0 +1,16 @@
+
+.inputContainer input {
+  max-width: 8vw;  
+  padding: 8px;
+  margin-right: 1vw;
+  margin-left: 1vw;
+  box-sizing: border-box;
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+}
+.inputContainer p {
+  font-size: small;
+  margin-bottom: 5px;
+  font-style: italic;
+  color : var(--background-color);
+}

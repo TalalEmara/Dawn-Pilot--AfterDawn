@@ -1,0 +1,67 @@
+{
+  "name": "cara balaa",
+  "description": "look from the back of the car",
+  "createdAt": "2025-11-29T00:43:10.096Z",
+  "entityCount": 2,
+  "camera": {
+    "position": {
+      "x": 0.01198450362261203,
+      "y": 2,
+      "z": -16.657490456440463
+    },
+    "rotation": {
+      "x": -10.886198107485647,
+      "y": 177.50232493152924,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1764376930254-5pya2e143",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#ff0000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Sphere"
+    },
+    {
+      "id": "entity-1764376930254-390f782s8",
+      "Position": {
+        "x": 0,
+        "y": 2,
+        "z": -6
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.1,
+        "y": 0.1,
+        "z": 0.1
+      },
+      "Model": {
+        "url": "/car.glb"
+      },
+      "name": "Car"
+    }
+  ]
+}

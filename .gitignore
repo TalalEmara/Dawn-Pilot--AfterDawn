@@ -138,4 +138,27 @@ dist
 
 Back-End/fast_api/venv
 Back-End/fast_api/__pycache__
+Back-End/fast_api/utils/__pycache__
 Back-End/fast_api/api_output
+
+testing_sequence/
+
+venv
+Back-End/test.py
+Back-End/fast_api/core/__pycache__/
+Back-End/fast_api/api/__pycache__/
+Back-End/fast_api/translation/utils/__pycache__/
+Back-End/fast_api/translation/__pycache__/
+Back-End/fast_api/translation/utils/__pycache__/
+Back-End/fast_api/models/__pycache__/
+Back-End/fast_api/services/__pycache__/
+Back-End/fast_api/detection/__pycache__/
+
+Back-End/fast_api/object_path_detection/preprocessing/__pycache__/
+Back-End/fast_api/object_path_detection/dataset/__pycache__/
+Back-End/fast_api/object_path_detection/utils/__pycache__/
+Back-End/fast_api/object_path_detection/path_planning/__pycache__/
+Back-End/fast_api/object_path_detection/__pycache__/
+
+Back-End/fast_api/object_path_detection/models/best_yolo.pt
+Back-End/fast_api/object_path_detection/models/final_deeplabv3_footpath.pth

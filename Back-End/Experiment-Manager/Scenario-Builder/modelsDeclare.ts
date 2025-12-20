@@ -34,9 +34,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
     }
   },
 
-  // ========================================
-  // Sphere
-  // ========================================
+ 
   Sphere: {
     name: "Sphere",
     description: "A spherical object",
@@ -45,6 +43,20 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
       Color: { value: "#ff0000" },
+      Model: { url: "Aframe" }
+    }
+  },
+   // ========================================
+  // Torus
+  // ========================================
+  Torus: {
+    name: "Torus",
+    description: "A ring object",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Color: { value: "#ffaa00" },
       Model: { url: "Aframe" }
     }
   },
@@ -57,7 +69,8 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
     description: "A light source (no model, just position and color)",
     components: {
       Position: { x: 0, y: 10, z: 0 },
-      Color: { value: "#ffffff" }
+      Color: { value: "#ffffff" },
+      Model: { url: "Aframe" }
     }
   },
 
@@ -74,105 +87,16 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Model: { url: "/car.glb" }
     }
   },
-
-  // ========================================
-  // Obstacle
-  // ========================================
-  Obstacle: {
-    name: "Obstacle",
-    description: "An obstacle in the scene",
-    components: {
-      Position: { x: 0, y: 0, z: 0 },
-      Rotation: { x: 0, y: 0, z: 0 },
-      Scale: { x: 2, y: 2, z: 2 },
-      Color: { value: "#888888" },
-      Model: { url: "/models/obstacle.glb" }
-    }
-  },
-
-  // ========================================
-  // Collectible Item
-  // ========================================
-  Collectible: {
-    name: "Collectible",
-    description: "A collectible item",
-    components: {
-      Position: { x: 0, y: 1, z: 0 },
-      Rotation: { x: 0, y: 0, z: 0 },
-      Scale: { x: 0.5, y: 0.5, z: 0.5 },
-      Color: { value: "#ffff00" },
-      Model: { url: "/models/coin.glb" }
-    }
-  },
-
-  // ========================================
-  // Building
-  // ========================================
-  Building: {
-    name: "Building",
-    description: "A large building structure",
-    components: {
-      Position: { x: 0, y: 0, z: 0 },
-      Rotation: { x: 0, y: 0, z: 0 },
-      Scale: { x: 10, y: 20, z: 10 },
-      Color: { value: "#8b4513" },
-      Model: { url: "/models/building.glb" }
-    }
-  },
-
-  // ========================================
-  // Vehicle
-  // ========================================
-  Vehicle: {
-    name: "Vehicle",
-    description: "A vehicle (car, truck, etc.)",
+  TreeTrunk: {
+    name: "Tree Trunk",
+    description: "tree trunk model",
     components: {
       Position: { x: 0, y: 0, z: 0 },
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
-      Color: { value: "#0000ff" },
-      Model: { url: "/models/vehicle.glb" }
+      Model: { url: "/treeTrunk.glb" }
     }
   },
-
-  // ========================================
-  // Tree
-  // ========================================
-  Tree: {
-    name: "Tree",
-    description: "A tree for environment",
-    components: {
-      Position: { x: 0, y: 0, z: 0 },
-      Scale: { x: 3, y: 5, z: 3 },
-      Color: { value: "#228b22" },
-      Model: { url: "/models/tree.glb" }
-    }
-  },
-
-  // ========================================
-  // Camera Point
-  // ========================================
-  CameraPoint: {
-    name: "Camera Point",
-    description: "A camera position marker (no visible model)",
-    components: {
-      Position: { x: 0, y: 5, z: 10 },
-      Rotation: { x: 0, y: 0, z: 0 }
-    }
-  },
-
-  // ========================================
-  // Spawn Point
-  // ========================================
-  SpawnPoint: {
-    name: "Spawn Point",
-    description: "A spawn point marker",
-    components: {
-      Position: { x: 0, y: 0, z: 0 },
-      Rotation: { x: 0, y: 0, z: 0 },
-      Color: { value: "#00ff00" }
-    }
-  }
 
 };
 

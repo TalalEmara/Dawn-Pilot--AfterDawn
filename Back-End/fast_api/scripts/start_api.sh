@@ -20,7 +20,10 @@ source venv/bin/activate
 # Install/upgrade dependencies
 echo ""
 echo "Installing dependencies..."
-pip install -r requirements.txt
+pip install -r ../requirements.txt
+
+# Change to parent directory
+cd ..
 
 # Start the server
 echo ""
@@ -30,4 +33,4 @@ echo "API Docs: http://localhost:8000/docs"
 echo "========================================"
 echo ""
 
-python phosphene_api.py
+python main.py

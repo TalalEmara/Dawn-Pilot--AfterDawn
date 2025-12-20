@@ -1,0 +1,67 @@
+{
+  "name": "initial test",
+  "description": "car and a ball and looking from the side",
+  "createdAt": "2025-11-29T00:28:51.963Z",
+  "entityCount": 2,
+  "camera": {
+    "position": {
+      "x": -7.119514450054658,
+      "y": 2,
+      "z": 2.454740188608603
+    },
+    "rotation": {
+      "x": 0.11459155902616425,
+      "y": -41.138369690393134,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1764375793356-vrtjx0jnw",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#ff0000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Sphere"
+    },
+    {
+      "id": "entity-1764375863277-9l24fs8yx",
+      "Position": {
+        "x": 0,
+        "y": 2,
+        "z": -6
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.1,
+        "y": 0.1,
+        "z": 0.1
+      },
+      "Model": {
+        "url": "/car.glb"
+      },
+      "name": "Car"
+    }
+  ]
+}
