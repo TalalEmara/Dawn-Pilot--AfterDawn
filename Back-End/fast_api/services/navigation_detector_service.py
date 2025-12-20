@@ -778,8 +778,8 @@ class NavigationDetectorService:
             radius = freepath_circle.get('radius')
             
             if center and radius:
-                # Draw circle (blue)
-                cv2.circle(img_with_circle, center, radius, (255, 0, 0), 2)
+                # Draw filled circle (blue)
+                cv2.circle(img_with_circle, center, radius, (255, 0, 0), -1)
                 # Draw center point (red)
                 cv2.circle(img_with_circle, center, 5, (0, 0, 255), -1)
         

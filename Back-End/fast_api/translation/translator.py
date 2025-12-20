@@ -327,7 +327,9 @@ class Translator:
             obj (dict): Object data containing class, bbox, centroid_px, etc.
         """
         object_class = obj.get("class", "")
-        shape_def = self.shapes.get(object_class, None)
+        # Make class name lookup case-insensitive by converting to lowercase
+        object_class_lower = object_class.lower()
+        shape_def = self.shapes.get(object_class_lower, None)
         
         # Handle missing shape definitions with intelligent fallback
         if shape_def is None:
