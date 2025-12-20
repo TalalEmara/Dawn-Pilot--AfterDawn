@@ -11,9 +11,8 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import carImg from "../../assets/frame_159_234589.png.png";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { io, Socket } from "socket.io-client";
-
+import { URLS } from "../../config/api"; // <--- Import Config
 // Port 8000 for Phosphene AI (Stream)
-const PHOSPHERE_API_URL = "http://192.168.1.107:8000";
 
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
@@ -55,22 +54,27 @@ function MobileView() {
   const { world, loadWorld } = useScenarioWorld();
   const { clearAllTimers } = useComponentManager();
 
-  // 1. Position Sync (Port 5000 - Handled internally by useCameraSync)
+ // ---------------------------------------------------------
+  // CONNECTION 1: SYNC BACKEND (Port 5000)
+  // ---------------------------------------------------------
+  // useCameraSync imports the URL internally from config/api.ts
   const { isConnected: isSyncConnected, setOnCameraUpdate } = useCameraSync({
     clientType: "mobile",
     throttleMs: 16,
   });
 
-  // 2. AI Stream Connection (Port 8000)
+  // ---------------------------------------------------------
+  // CONNECTION 2: AI BACKEND (Port 8000)
+  // ---------------------------------------------------------
   useEffect(() => {
-    const socket = io(PHOSPHERE_API_URL, {
+    // Manually connect to the AI URL from config
+    const socket = io(URLS.AI_STREAM, {
       transports: ['websocket'],
       reconnection: true
     });
 
-    socket.on('connect', () => {
-      console.log("🟢 Connected to Phosphene AI Server");
-    });
+    socket.on('connect', () => console.log("🟢 AI Stream Connected"));
+    socket.on('disconnect', () => console.log("🔴 AI Stream Disconnected"));
 
     setAiSocket(socket);
 
@@ -78,16 +82,17 @@ function MobileView() {
       socket.disconnect();
     };
   }, []);
-
-  // 3. Receive Stream: Listen for processed frames from AI socket
+  // ---------------------------------------------------------
+  // HOOK WIRING
+  // ---------------------------------------------------------
+  
+  // 1. RECEIVE: Pass the AI socket to the receiver hook
   const hudCanvasRef = useBinaryStream(aiSocket);
 
-  // 4. Send Stream: Capture A-Frame view and emit to AI socket
+  // 2. SEND: Pass the data from FrameBuffer to the AI socket
   useFrameBuffer({
-    enabled: !!aiSocket?.connected, // Only capture if connected
-    logInterval: 66,                // ~15 FPS (Adjust to 33 for 30 FPS)
-    downsamplePercentage: 50,       // Send smaller frames to save network
-    logPixelData: false,            // Disable disk saving
+    enabled: !!aiSocket?.connected, // Only run when connected
+    logInterval: 66,                // ~15 FPS
     onFrame: (blob) => {
       if (aiSocket?.connected) {
         aiSocket.emit('input_frame', blob);
