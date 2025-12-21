@@ -4,6 +4,9 @@ Phosphene Vision FastAPI Service - Main Application
 
 Clean, organized entry point for the phosphene vision API.
 
+PRODUCTION ENDPOINT: /ws/navigation-phosphene
+Full modular pipeline: Object Detection → Freepath → Translator → Phosphene Rendering
+
 Author: Dawn Pilot Team
 Date: December 2025
 """
@@ -17,7 +20,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
-from api import router, set_services, handle_websocket, handle_navigation_websocket, handle_navigation_phosphene_websocket, set_websocket_services
+from api import router, set_services, handle_navigation_phosphene_websocket
+from api.nav_phosphene_ws import navigation_detector_service as nav_detector_module
 from services import DetectorService, TranslatorService
 from services.navigation_detector_service import NavigationDetectorService
 
@@ -61,7 +65,10 @@ logger.info("Services initialization complete.")
 
 # Inject services into routes
 set_services(detector_service, translator_service)
-set_websocket_services(detector_service, translator_service, navigation_detector_service)
+
+# Inject navigation detector service into WebSocket handler
+import api.nav_phosphene_ws as nav_ws
+nav_ws.navigation_detector_service = navigation_detector_service
 
 
 # ============================================================================
@@ -83,39 +90,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routes
+# Include API routes (REST endpoints)
+app.include_router(router)
 
-# WebSocket endpoint for navigation pipeline
-@app.websocket("/ws/navigation")
-async def navigation_websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for navigation pipeline
-    
-    Accepts RGB+Depth frames and returns detections, freepath, and occupancy map.
-    """
-    await handle_navigation_websocket(websocket)
+# ============================================================================
+# WebSocket Endpoints
+# ============================================================================
 
-# WebSocket endpoint for full navigation + phosphene pipeline
+# PRODUCTION ENDPOINT - Full navigation + phosphene pipeline
 @app.websocket("/ws/navigation-phosphene")
 async def navigation_phosphene_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for full navigation pipeline with phosphene rendering
     
-    Accepts RGB+Depth frames with stage selection and returns output at specified stage.
-    Stages: 'detector', 'translator', 'pre_phosphene', 'phosphene'
+    MAIN PRODUCTION ENDPOINT
+    
+    Protocol:
+    - Client sends: {"type": "frame", "frame_id": str, "rgb": base64, "depth": base64, 
+                     "stage": str, "debug": bool}
+    - Server responds: {"type": "result", "data": {...}}
+    
+    Pipeline Stages:
+    1. 'detector' - Object detection with bounding boxes
+    2. 'translator' - Simplified canonical shapes
+    3. 'pre_phosphene' - Center cropped 128x128
+    4. 'phosphene' - Final phosphene rendering (full pipeline)
+    
+    Features:
+    - Optimized RGB color space throughout
+    - Minimal image transformations
+    - Optional debug mode for saving intermediate outputs
+    - Stage-by-stage processing for testing
     """
     await handle_navigation_phosphene_websocket(websocket)
 
-# WebSocket endpoint for real-time frame processing
-@app.websocket("/ws/process")
-async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time frame processing
-    
-    Accepts continuous stream of frames and returns processed phosphene images.
-    Handles timing mismatch by skipping frames when processing is slower than input rate.
-    """
-    await handle_websocket(websocket)
+# Legacy endpoints removed - see old_experiments/legacy_websockets.py if needed
 
 
 # Serve test page

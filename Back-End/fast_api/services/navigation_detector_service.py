@@ -246,7 +246,7 @@ class NavigationDetectorService:
         rgb: np.ndarray, 
         depth: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
         Process a single frame through the navigation pipeline (optimized)
@@ -255,10 +255,15 @@ class NavigationDetectorService:
             rgb: RGB image as numpy array (H, W, 3)
             depth: Depth image as numpy array (H, W) or (H, W, 1)
             frame_id: Frame identifier
-            debug_mode: If True, save frames to debug output directory
+            debug_mode: If True, save intermediate outputs to disk
             
         Returns:
             dict: Processing results including detections and freepath centerline
+            
+        Notes:
+            - Optimized to work with RGB directly (no BGR conversions)
+            - Removed tempfile usage - detectors now work with numpy arrays
+            - Debug images only saved when debug_mode=True
         """
         if not self.is_loaded:
             raise RuntimeError("Navigation detector models not loaded")
@@ -278,23 +283,26 @@ class NavigationDetectorService:
         
         try:
             detection_start = time.time()
-            # 1. Object Detection
+            # 1. Object Detection (works with RGB numpy array directly)
             detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.5)
             detection_time = (time.time() - detection_start) * 1000
             logger.debug(f"Frame {frame_id}: Found {len(detections)} detections in {detection_time:.2f}ms")
             
             freepath_start = time.time()
-            # 2. Freepath Detection (requires saving RGB to temp file)
+            # 2. Freepath Detection (optimized - no file I/O)
+            # Note: FreepathDetector still needs a file path, so we create a temp file only when needed
+            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
                 temp_path = temp_file.name
+                # Convert RGB to BGR for cv2.imwrite
                 cv2.imwrite(temp_path, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
             
             try:
-                # Get freepath mask (don't save to disk unless debug_mode)
+                # Get freepath mask (save debug only if requested)
                 freepath_mask, _ = self.freepath_detector.infer_per_frame(
                     temp_path, 
                     frame_id=frame_id,
-                    save_debug=debug_mode
+                    save_debug=debug_mode  # Only save if debug enabled
                 )
                 
                 # Compute centerline coordinates (the freepath line)
@@ -483,10 +491,10 @@ class NavigationDetectorService:
         depth: np.ndarray,
         frame_id: int,
         stop_at: str = "phosphene",
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
-        Process frame through full modular pipeline with stop points
+        Process frame through full modular pipeline with stop points (optimized)
         
         Pipeline stages:
         1. 'detector': Object detection + freepath detection -> RGB with bboxes
@@ -499,13 +507,19 @@ class NavigationDetectorService:
             depth: Depth image (H, W)
             frame_id: Frame identifier
             stop_at: Stage to stop at ('detector', 'translator', 'pre_phosphene', 'phosphene')
-            debug_mode: If True, save intermediate outputs
+            debug_mode: If True, save intermediate outputs (default False for speed)
             
         Returns:
             dict: Results with output_image (base64), stage info, detections, timing
+            
+        Notes:
+            - Works in RGB color space throughout
+            - Debug saves only when debug_mode=True
+            - Uses optimized encode_ndarray_to_base64
         """
         import time
         import base64
+        from core import encode_ndarray_to_base64
         
         if not self.is_loaded:
             raise RuntimeError("Navigation detector models not loaded")
@@ -522,19 +536,21 @@ class NavigationDetectorService:
         }
         
         try:
-            # 💾 HARDCODED DEBUG: Save input images
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%H%M%S")
-            debug_input_prefix = f"{self.debug_output_dir}/pipeline_{frame_id}_{timestamp}"
-            cv2.imwrite(f"{debug_input_prefix}_01_input_rgb.jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-            cv2.imwrite(f"{debug_input_prefix}_02_input_depth.jpg", depth)
-            print(f"💾 Saved INPUT images: {debug_input_prefix}_01_input_*.jpg")
+            # Optional debug: Save input images only if debug_mode=True
+            debug_input_prefix = None
+            if debug_mode:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H%M%S")
+                debug_input_prefix = f"{self.debug_output_dir}/pipeline_{frame_id}_{timestamp}"
+                cv2.imwrite(f"{debug_input_prefix}_01_input_rgb.jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+                cv2.imwrite(f"{debug_input_prefix}_02_input_depth.jpg", depth)
+                logger.info(f"💾 Saved INPUT images: {debug_input_prefix}_01_input_*.jpg")
             
             # STAGE 1: DETECTOR - Object detection + freepath detection
             stage_start = time.time()
             
-            # Run navigation detector (existing optimized process_frame)
-            nav_result = self.process_frame(rgb, depth, frame_id, debug_mode=True)
+            # Run navigation detector (pass debug_mode through)
+            nav_result = self.process_frame(rgb, depth, frame_id, debug_mode=debug_mode)
             
             if not nav_result["success"]:
                 result["error"] = "Navigation detection failed"
@@ -548,14 +564,14 @@ class NavigationDetectorService:
             # Draw bboxes on RGB for detector stage output
             detector_output = self.draw_detections_on_rgb(rgb, detections)
             
-            # 💾 HARDCODED DEBUG: Save detector output
-            cv2.imwrite(f"{debug_input_prefix}_03_detector_output.jpg", cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
-            print(f"💾 Saved DETECTOR output: {debug_input_prefix}_03_detector_output.jpg")
+            # Optional debug: Save detector output
+            if debug_mode and debug_input_prefix:
+                cv2.imwrite(f"{debug_input_prefix}_03_detector_output.jpg", cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
+                logger.info(f"💾 Saved DETECTOR output")
             
             if stop_at == "detector":
-                # Encode detector output (RGB with bboxes)
-                _, buffer = cv2.imencode('.png', cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
-                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                # Encode detector output (RGB with bboxes) - optimized single encode
+                output_b64 = encode_ndarray_to_base64(detector_output, color_space='RGB')
                 
                 result.update({
                     "success": True,
@@ -632,9 +648,10 @@ class NavigationDetectorService:
             simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
             _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
             
-            # 💾 HARDCODED DEBUG: Save translator output
-            cv2.imwrite(f"{debug_input_prefix}_04_translator_output.jpg", simplified_binary)
-            print(f"💾 Saved TRANSLATOR output: {debug_input_prefix}_04_translator_output.jpg")
+            # Optional debug: Save translator output
+            if debug_mode and debug_input_prefix:
+                cv2.imwrite(f"{debug_input_prefix}_04_translator_output.jpg", simplified_binary)
+                logger.info(f"💾 Saved TRANSLATOR output")
             
             stage_times["translator"] = (time.time() - stage_start) * 1000
             
@@ -642,9 +659,8 @@ class NavigationDetectorService:
             simplified_with_circle = self.draw_freepath_circle(simplified_binary, freepath_circle)
             
             if stop_at == "translator":
-                # Encode simplified canvas with circle
-                _, buffer = cv2.imencode('.png', simplified_with_circle)
-                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                # Encode simplified canvas with circle - optimized
+                output_b64 = encode_ndarray_to_base64(simplified_with_circle, color_space='BGR')
                 
                 result.update({
                     "success": True,
@@ -661,16 +677,16 @@ class NavigationDetectorService:
             # Center crop the simplified image (without circle for actual processing)
             cropped = self.center_crop_128x128(simplified_binary)
             
-            # 💾 HARDCODED DEBUG: Save cropped image
-            cv2.imwrite(f"{debug_input_prefix}_05_cropped_128x128.jpg", cropped)
-            print(f"💾 Saved CROPPED image: {debug_input_prefix}_05_cropped_128x128.jpg")
+            # Optional debug: Save cropped image
+            if debug_mode and debug_input_prefix:
+                cv2.imwrite(f"{debug_input_prefix}_05_cropped_128x128.jpg", cropped)
+                logger.info(f"💾 Saved CROPPED image")
             
             stage_times["crop"] = (time.time() - stage_start) * 1000
             
             if stop_at == "pre_phosphene":
-                # Encode cropped output
-                _, buffer = cv2.imencode('.png', cropped)
-                output_b64 = base64.b64encode(buffer).decode('utf-8')
+                # Encode cropped output - optimized
+                output_b64 = encode_ndarray_to_base64(cropped, color_space='BGR')
                 
                 result.update({
                     "success": True,
@@ -699,13 +715,13 @@ class NavigationDetectorService:
             # Convert phosphene output to image (scale to 0-255)
             phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
             
-            # 💾 HARDCODED DEBUG: Save phosphene output
-            cv2.imwrite(f"{debug_input_prefix}_06_phosphene_output.png", phosphene_img)
-            print(f"💾 Saved PHOSPHENE output: {debug_input_prefix}_06_phosphene_output.png")
+            # Optional debug: Save phosphene output
+            if debug_mode and debug_input_prefix:
+                cv2.imwrite(f"{debug_input_prefix}_06_phosphene_output.png", phosphene_img)
+                logger.info(f"💾 Saved PHOSPHENE output")
             
-            # Encode phosphene output
-            _, buffer = cv2.imencode('.png', phosphene_img)
-            output_b64 = base64.b64encode(buffer).decode('utf-8')
+            # Encode phosphene output - optimized (grayscale, no color space needed)
+            output_b64 = encode_ndarray_to_base64(phosphene_img, color_space='BGR')
             
             result.update({
                 "success": True,
