@@ -65,6 +65,13 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
         await websocket.close()
         return
     
+    # Send welcome message to confirm connection is ready
+    await websocket.send_json({
+        "type": "connected",
+        "message": "Navigation-Phosphene WebSocket ready",
+        "service_ready": navigation_detector_service.is_loaded
+    })
+    
     frames_processed = 0
     
     try:
