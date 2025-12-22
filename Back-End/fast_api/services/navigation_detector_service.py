@@ -691,22 +691,35 @@ class NavigationDetectorService:
                 translator.canvas_size = (w, h)
                 translator.params['canvas_size'] = [h, w]
             
-            # Get simplified canvas output (canonical shapes) - WITHOUT phosphene rendering
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True)
+            # Get simplified canvas output (canonical shapes) - NOW RETURNS 128x128 WITH RETINOTOPIC MAPPING
+            # No center crop needed - full field of view preserved through coordinate normalization
+            simplified_canvas_128, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(128, 128))
             
             # Convert to grayscale and binarize for consistency
-            simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
-            _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
+            simplified_gray = cv2.cvtColor(simplified_canvas_128, cv2.COLOR_BGR2GRAY)
+            _, simplified_binary_128 = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
             
-            # Optional debug: Save translator output
+            # Optional debug: Save translator output (already 128x128)
             if debug_mode and debug_input_prefix:
-                cv2.imwrite(f"{debug_input_prefix}_04_translator_output.jpg", simplified_binary)
-                logger.info(f"💾 Saved TRANSLATOR output")
+                cv2.imwrite(f"{debug_input_prefix}_04_translator_output_128x128.jpg", simplified_binary_128)
+                logger.info(f"💾 Saved TRANSLATOR output (128x128 with retinotopic mapping)")
             
             stage_times["translator"] = (time.time() - stage_start) * 1000
             
-            # Draw freepath circle on simplified image for visualization
-            simplified_with_circle = self.draw_freepath_circle(simplified_binary, freepath_circle)
+            # Draw freepath circle on simplified image for visualization (needs scaling to 128x128)
+            freepath_circle_scaled = None
+            if freepath_circle and freepath_circle.get("center") and freepath_circle.get("radius"):
+                # Scale freepath circle coordinates to 128x128
+                orig_center = freepath_circle["center"]
+                orig_radius = freepath_circle["radius"]
+                scale_x = 128 / w
+                scale_y = 128 / h
+                freepath_circle_scaled = {
+                    "center": (int(orig_center[0] * scale_x), int(orig_center[1] * scale_y)),
+                    "radius": int(orig_radius * min(scale_x, scale_y))
+                }
+            
+            simplified_with_circle = self.draw_freepath_circle(simplified_binary_128, freepath_circle_scaled)
             
             if stop_at == "translator":
                 # Encode simplified canvas with circle - optimized
@@ -721,22 +734,23 @@ class NavigationDetectorService:
                 })
                 return result
             
-            # STAGE 3: PRE_PHOSPHENE - Center crop to 128x128
+            # STAGE 3: PRE_PHOSPHENE - No center crop needed anymore!
+            # Translator now outputs 128x128 directly with retinotopic mapping
             stage_start = time.time()
             
-            # Center crop the simplified image (without circle for actual processing)
-            cropped = self.center_crop_128x128(simplified_binary)
+            # Use the 128x128 output directly (no cropping)
+            pre_phosphene_128 = simplified_with_circle
             
-            # Optional debug: Save cropped image
+            # Optional debug: Save pre-phosphene image (now just pass-through)
             if debug_mode and debug_input_prefix:
-                cv2.imwrite(f"{debug_input_prefix}_05_cropped_128x128.jpg", cropped)
-                logger.info(f"💾 Saved CROPPED image")
+                cv2.imwrite(f"{debug_input_prefix}_05_pre_phosphene_128x128.jpg", pre_phosphene_128)
+                logger.info(f"💾 Saved PRE_PHOSPHENE image (no crop - retinotopic mapping)")
             
-            stage_times["crop"] = (time.time() - stage_start) * 1000
+            stage_times["pre_phosphene"] = (time.time() - stage_start) * 1000
             
             if stop_at == "pre_phosphene":
-                # Encode cropped output - optimized
-                output_b64 = encode_ndarray_to_base64(cropped, color_space='BGR')
+                # Encode pre-phosphene output - optimized
+                output_b64 = encode_ndarray_to_base64(pre_phosphene_128, color_space='BGR')
                 
                 result.update({
                     "success": True,
@@ -754,11 +768,11 @@ class NavigationDetectorService:
             if self.pipeline2 is None:
                 raise RuntimeError("Pipeline2Integration not initialized")
             
-            # Normalize cropped image to 0-1 range for Pipeline2 (neural network expects normalized input)
-            cropped_normalized = cropped.astype(np.float32) / 255.0
+            # Normalize 128x128 image to 0-1 range for Pipeline2 (neural network expects normalized input)
+            pre_phosphene_normalized = pre_phosphene_128.astype(np.float32) / 255.0
             
             # Run phosphene rendering
-            phosphene_output = self.pipeline2.input2phosphenes(cropped_normalized)  # Returns (H, W) numpy array
+            phosphene_output = self.pipeline2.input2phosphenes(pre_phosphene_normalized)  # Returns (H, W) numpy array
             
             stage_times["phosphene"] = (time.time() - stage_start) * 1000
             
