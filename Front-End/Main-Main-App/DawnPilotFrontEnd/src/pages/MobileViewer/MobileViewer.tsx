@@ -43,7 +43,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
-  
+
   // State for the AI WebSocket (separate from the sync socket)
   const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
   const frameIdRef = useRef<number>(0);
@@ -54,7 +54,7 @@ function MobileView() {
   const { world, loadWorld } = useScenarioWorld();
   const { clearAllTimers } = useComponentManager();
 
- // ---------------------------------------------------------
+  // ---------------------------------------------------------
   // CONNECTION 1: SYNC BACKEND (Port 5000)
   // ---------------------------------------------------------
   // useCameraSync imports the URL internally from config/api.ts
@@ -92,7 +92,7 @@ function MobileView() {
   // ---------------------------------------------------------
   // HOOK WIRING
   // ---------------------------------------------------------
-  
+
   // 1. RECEIVE: Pass the WebSocket to the receiver hook
   const hudCanvasRef = useBinaryStream(aiWebSocket);
 
@@ -103,7 +103,7 @@ function MobileView() {
       reader.onloadend = () => {
         const base64 = reader.result as string;
         // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
-        resolve(base64.split(',')[1]);
+        resolve(base64.split(",")[1]);
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
@@ -113,35 +113,37 @@ function MobileView() {
   // 2. SEND: Capture RGB + depth and send as JSON via WebSocket
   useFrameBuffer({
     enabled: aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 1000/1,  // ~15 FPS
+    logInterval: 1000 / 1, // ~15 FPS
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
-      
+
       try {
         const rgbBase64 = await blobToBase64(rgbBlob);
         const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
-        
+
         if (!depthBase64) {
           console.warn("⚠️ Depth not captured, skipping frame");
           return;
         }
-        
+
         frameIdRef.current++;
-        
+
         const message = {
           type: "frame",
-          frame_id: String(frameIdRef.current).padStart(3, '0'),
+          frame_id: String(frameIdRef.current).padStart(3, "0"),
           rgb: rgbBase64,
           depth: depthBase64,
-          stage: "phosphene"  // Full pipeline
+          stage: "phosphene", // Full pipeline
         };
-        
-        console.log(`📤 Sending frame ${message.frame_id}: RGB=${rgbBase64.length} bytes, Depth=${depthBase64.length} bytes`);
+
+        console.log(
+          `📤 Sending frame ${message.frame_id}: RGB=${rgbBase64.length} bytes, Depth=${depthBase64.length} bytes`
+        );
         aiWebSocket.send(JSON.stringify(message));
       } catch (error) {
         console.error("❌ Error sending frame:", error);
       }
-    }
+    },
   });
 
   // Load world logic
@@ -221,7 +223,7 @@ function MobileView() {
           borderRadius: "4px",
           fontSize: "12px",
           fontFamily: "monospace",
-          textAlign: "right"
+          textAlign: "right",
         }}
       >
         {/* Hidden Buffer Canvas for HUD Texture */}
@@ -232,9 +234,11 @@ function MobileView() {
           height="360"
           style={{ display: "none" }}
         />
-        
+
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
-        <div>AI: {aiWebSocket?.readyState === WebSocket.OPEN ? "🟢" : "🔴"}</div>
+        <div>
+          AI: {aiWebSocket?.readyState === WebSocket.OPEN ? "🟢" : "🔴"}
+        </div>
       </div>
 
       {/* Mobile Label */}
@@ -314,7 +318,10 @@ function MobileView() {
 
         <Entity primitive="a-sky" color="#87CEEB" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
+        <Entity
+          light={{ type: "directional", color: "#ffffff", intensity: 1.0 }}
+          position="5 10 2"
+        />
 
         <Entity
           primitive="a-plane"
@@ -373,13 +380,91 @@ function MobileView() {
             look-controls="enabled: true; touchEnabled: true;"
           >
             {/* ✅ HUD Plane using the AI Stream - EXCLUDED FROM CAPTURE */}
+
+            {/* Big black plane */}
+            <Entity
+              geometry="primitive: plane; width: 5; height: 4"
+              position="0 0 -0.1"
+              material={{
+                color: "black",
+                shader: "flat",
+                transparent: true, // enable alpha
+                alphaTest: 0.1, // discards pixels with opacity < 0.1
+              }}
+            />
             <Entity
               className="hud-ignore"
-              geometry="primitive: plane; width: 2; height: 1"
-              position="0 0 -1.5"
+              geometry={{
+                primitive: "plane",
+                width: (() => {
+                  const degToRad = (deg) => (deg * Math.PI) / 180;
+                  const depth = 0.1;
+                  const fovWidth = 17;
+                  return 2 * depth * Math.tan(degToRad(fovWidth / 2));
+                })(),
+                height: (() => {
+                  const degToRad = (deg) => (deg * Math.PI) / 180;
+                  const depth = 0.1;
+                  const fovHeight = 17;
+                  return 2 * depth * Math.tan(degToRad(fovHeight / 2));
+                })(),
+              }}
+              position="0 0 -0.1"
               canvas-updater="src: #hud-buffer"
               // material="shader: flat; transparent: true; depthTest: false"
             />
+{/* Test Normal View with FOV */}
+            {/* Top plane */}
+            {/* <Entity
+              geometry={{
+                primitive: "plane",
+                width: 5,
+                height: (4 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
+              }}
+              position={`0 ${
+                (4 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
+              } -0.11`}
+              material={{ color: "black", shader: "flat" }}
+            /> */}
+
+            {/* Bottom plane */}
+            {/* <Entity
+              geometry={{
+                primitive: "plane",
+                width: 5,
+                height: (4 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
+              }}
+              position={`0 ${
+                -(4 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
+              } -0.11`}
+              material={{ color: "black", shader: "flat" }}
+            /> */}
+
+            {/* Left plane */}
+            {/* <Entity
+              geometry={{
+                primitive: "plane",
+                width: (5 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
+                height: 2 * 0.1 * Math.tan((17 * Math.PI) / 360),
+              }}
+              position={`${
+                -(5 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
+              } 0 -0.11`}
+              material={{ color: "black", shader: "flat" }}
+            /> */}
+
+            {/* Right plane */}
+            {/* <Entity
+              geometry={{
+                primitive: "plane",
+                width: (5 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
+                height: 2 * 0.1 * Math.tan((17 * Math.PI) / 360),
+              }}
+              position={`${
+                (5 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
+              } 0 -0.11`}
+              material={{ color: "black", shader: "flat" }}
+            /> */}
           </Entity>
         </Entity>
       </Scene>
