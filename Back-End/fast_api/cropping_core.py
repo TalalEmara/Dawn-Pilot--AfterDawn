@@ -239,16 +239,21 @@ def create_test_image(width: int = 1280, height: int = 720) -> np.ndarray:
     return image
 
 
-def test_cropping_functionality():
+def test_cropping_functionality(debug: bool = False):
     """
     Comprehensive test of the cropping functionality.
+    
+    Args:
+        debug: If True, print detailed test output
     """
-    print("🧪 Testing Cropping Functionality")
-    print("=" * 50)
+    if debug:
+        print("🧪 Testing Cropping Functionality")
+        print("=" * 50)
 
     # Create test image
     test_image = create_test_image()
-    print(f"✅ Created test image: {test_image.shape}")
+    if debug:
+        print(f"✅ Created test image: {test_image.shape}")
 
     # Test configurations
     configs = [
@@ -280,15 +285,18 @@ def test_cropping_functionality():
 
     # Test cropping
     for i, config in enumerate(configs):
-        print(f"\n📋 Test {i+1}: {config['type']} (offset: {config.get('offset_y_ratio', 'N/A')})")
+        if debug:
+            print(f"\n📋 Test {i+1}: {config['type']} (offset: {config.get('offset_y_ratio', 'N/A')})")
 
         # Calculate crop region
         region = calculate_crop_region((720, 1280), config)
-        print(f"   Crop region: {region}")
+        if debug:
+            print(f"   Crop region: {region}")
 
         # Perform crop
         cropped = crop_image(test_image, config)
-        print(f"   Cropped shape: {cropped.shape}")
+        if debug:
+            print(f"   Cropped shape: {cropped.shape}")
 
         # Verify size
         if config['type'] == 'central_crop':
@@ -297,8 +305,9 @@ def test_cropping_functionality():
             assert cropped.shape[:2] == (720, 1280), f"Expected (720, 1280), got {cropped.shape[:2]}"
 
     # Test freepath positioning
-    print("\n🎯 Testing Freepath Ball Positioning")
-    print("-" * 30)
+    if debug:
+        print("\n🎯 Testing Freepath Ball Positioning")
+        print("-" * 30)
 
     freepath_scenarios = [
         # Points in center crop region (ball at bottom with X from lowest point)
@@ -317,63 +326,78 @@ def test_cropping_functionality():
     }
 
     for i, freepath_coords in enumerate(freepath_scenarios):
-        print(f"   Scenario {i+1}: {len(freepath_coords)} points")
+        if debug:
+            print(f"   Scenario {i+1}: {len(freepath_coords)} points")
         ball_pos = calculate_freepath_ball_position(freepath_coords, (720, 1280), central_config)
-        print(f"   Ball position: {ball_pos}")
+        if debug:
+            print(f"   Ball position: {ball_pos}")
 
         if len(freepath_coords) > 0:
             if i == 1:  # Scenario 2: points outside crop, expect None
                 assert ball_pos is None, f"Expected None for points outside crop, got {ball_pos}"
-                print("   ✅ Correctly returned None for points outside crop")
+                if debug:
+                    print("   ✅ Correctly returned None for points outside crop")
             else:
                 # Check bounds - scenarios with points in crop should return valid positions
                 assert ball_pos is not None, f"Expected valid position for {len(freepath_coords)} points"
                 assert 0 <= ball_pos[0] < 128, f"X position {ball_pos[0]} out of bounds"
                 assert 0 <= ball_pos[1] < 128, f"Y position {ball_pos[1]} out of bounds"
-                print("   ✅ Position within bounds")
+                if debug:
+                    print("   ✅ Position within bounds")
         else:
             assert ball_pos is None, "Expected None for empty freepath"
-            print("   ✅ Correctly returned None for empty freepath")
+            if debug:
+                print("   ✅ Correctly returned None for empty freepath")
 
     # Test ball drawing
-    print("\n🎨 Testing Ball Drawing")
-    print("-" * 20)
+    if debug:
+        print("\n🎨 Testing Ball Drawing")
+        print("-" * 20)
 
     test_crop = np.zeros((128, 128, 3), dtype=np.uint8)
     ball_pos = (64, 64)  # Center
 
     result = draw_freepath_ball(test_crop, ball_pos)
-    print(f"   Drew ball at {ball_pos}")
+    if debug:
+        print(f"   Drew ball at {ball_pos}")
 
     # Check that image changed (ball was drawn)
     diff = cv2.absdiff(result, test_crop)
     has_changes = np.any(diff > 0)
     assert has_changes, "Ball drawing didn't modify the image"
-    print("   ✅ Ball successfully drawn on image")
+    if debug:
+        print("   ✅ Ball successfully drawn on image")
 
     # Test phosphene input preparation
-    print("\n🧠 Testing Phosphene Input Preparation")
-    print("-" * 30)
+    if debug:
+        print("\n🧠 Testing Phosphene Input Preparation")
+        print("-" * 30)
 
     # Create BGR image with freepath ball (like simplified_with_circle)
     bgr_test_img = np.zeros((128, 128, 3), dtype=np.uint8)
     cv2.circle(bgr_test_img, (64, 64), 8, (0, 255, 0), -1)  # Green ball
 
-    print(f"   Input BGR image shape: {bgr_test_img.shape}")
+    if debug:
+        print(f"   Input BGR image shape: {bgr_test_img.shape}")
 
     # Prepare for phosphene pipeline
     phosphene_ready = prepare_phosphene_input(bgr_test_img)
-    print(f"   Phosphene-ready shape: {phosphene_ready.shape}")
-    print(f"   Value range: {phosphene_ready.min():.3f} - {phosphene_ready.max():.3f}")
+    if debug:
+        print(f"   Phosphene-ready shape: {phosphene_ready.shape}")
+        print(f"   Value range: {phosphene_ready.min():.3f} - {phosphene_ready.max():.3f}")
 
     # Verify correct shape and range
     assert phosphene_ready.shape == (128, 128), f"Expected (128, 128), got {phosphene_ready.shape}"
     assert 0.0 <= phosphene_ready.min() <= phosphene_ready.max() <= 1.0, "Values should be in [0, 1] range"
-    print("   ✅ Phosphene input preparation successful!")
+    if debug:
+        print("   ✅ Phosphene input preparation successful!")
 
-    print("\n🎉 All tests passed!")
-    print("=" * 50)
+    if debug:
+        print("\n🎉 All tests passed!")
+        print("=" * 50)
 
 
 if __name__ == "__main__":
-    test_cropping_functionality()
+    import sys
+    debug = len(sys.argv) > 1 and sys.argv[1] == "--debug"
+    test_cropping_functionality(debug=debug)

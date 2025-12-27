@@ -373,15 +373,11 @@ class NavigationDetectorService:
                 }
             })
             
-            logger.info(f"Frame {frame_id}: Processed in {processing_time:.2f}ms (detection: {detection_time:.2f}ms, freepath: {freepath_time:.2f}ms)")
+            if debug_mode:
+                logger.info(f"Frame {frame_id}: Processed in {processing_time:.2f}ms (detection: {detection_time:.2f}ms, freepath: {freepath_time:.2f}ms)")
             
         except Exception as e:
             logger.error(f"❌ Error processing frame {frame_id}: {e}", exc_info=True)
-            print(f"\n❌ EXCEPTION in process_frame:")
-            print(f"   Error type: {type(e).__name__}")
-            print(f"   Error message: {str(e)}")
-            import traceback
-            traceback.print_exc()
             result["error"] = str(e)
             result["success"] = False
         
@@ -516,7 +512,8 @@ class NavigationDetectorService:
         freepath_coordinates: List[List[int]], 
         original_size: Tuple[int, int],
         cropping_config: Dict[str, Any],
-        frame_id: int
+        frame_id: int,
+        debug_mode: bool = False
     ) -> Optional[Tuple[int, int]]:
         """
         Calculate the best freepath ball position for the cropped region
@@ -571,8 +568,9 @@ class NavigationDetectorService:
             crop_x2 = min(orig_w, center_x + half_w)
             crop_y2 = min(orig_h, center_y + half_h)
             
-            logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
-            logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
+                logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
 
             # Find freepath points within crop region
             points_in_crop = [
@@ -580,7 +578,8 @@ class NavigationDetectorService:
                 if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
             ]
             
-            logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
 
             if points_in_crop:
                 # Find the lowest point (highest Y) in the freepath within crop region
@@ -592,10 +591,12 @@ class NavigationDetectorService:
                 # Position ball at the BOTTOM of the cropped image (highest Y in crop coordinates)
                 crop_y = crop_h - 1
                 
-                logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
             else:
                 # No points in crop region, don't draw the ball
-                logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
                 return None
         
         # Ensure within bounds
@@ -894,11 +895,13 @@ class NavigationDetectorService:
                     freepath_coordinates, 
                     (h, w),  # original image size
                     effective_cropping_config,
-                    frame_id
+                    frame_id,
+                    debug_mode
                 )
-                logger.info(f"🎯 Frame {frame_id}: Freepath coordinates: {freepath_coordinates}")
-                logger.info(f"🎯 Frame {frame_id}: Ball position: {freepath_ball_position}")
-                logger.info(f"🎯 Frame {frame_id}: Crop config: {effective_cropping_config}")
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: Freepath coordinates: {freepath_coordinates}")
+                    logger.info(f"🎯 Frame {frame_id}: Ball position: {freepath_ball_position}")
+                    logger.info(f"🎯 Frame {frame_id}: Crop config: {effective_cropping_config}")
             
             # Draw freepath ball on cropped image
             if freepath_ball_position:
@@ -1091,7 +1094,7 @@ class NavigationDetectorService:
         Args:
             img: Input image
             crop_size: [width, height] of crop
-            offset_y_ratio: Vertical offset as ratio of crop height (0.5 = center, 1.0 = bottom)
+            offset_y_ratio: Vertical offset as ratio of image height (0.5 = center, 1.0 = bottom)
             
         Returns:
             np.ndarray: Cropped image
@@ -1101,8 +1104,7 @@ class NavigationDetectorService:
         
         # Calculate center position with offset
         center_x = w // 2
-        # Offset the center downward by offset_y_ratio * crop_h
-        center_y = h // 2 + int(offset_y_ratio * crop_h)
+        center_y = int(h * offset_y_ratio)
         
         # Calculate crop boundaries
         half_crop_w = crop_w // 2

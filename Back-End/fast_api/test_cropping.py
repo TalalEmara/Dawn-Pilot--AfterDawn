@@ -44,7 +44,7 @@ def test_cropping():
     original_size = (720, 1280)
 
     ball_pos = service._calculate_freepath_ball_position(
-        freepath_coords, original_size, service.cropping_config, 0
+        freepath_coords, original_size, service.cropping_config, 0, False
     )
 
     print(f"Freepath coordinates: {freepath_coords}")
