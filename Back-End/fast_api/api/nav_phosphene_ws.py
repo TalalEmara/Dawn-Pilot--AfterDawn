@@ -82,6 +82,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 frame_id = message.get("frame_id", "unknown")
                 stage = message.get("stage", "phosphene")
                 debug_mode = message.get("debug", False)  # Get debug flag from client
+                cropping_config = message.get("cropping_config")  # Optional cropping override
                 
                 valid_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
                 if stage not in valid_stages:
@@ -123,7 +124,8 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         depth=depth,
                         frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,
                         stop_at=stage,
-                        debug_mode=debug_mode  # Pass debug flag to service
+                        debug_mode=debug_mode,  # Pass debug flag to service
+                        cropping_config=cropping_config  # Pass cropping config override
                     )
                     
                     response = {
@@ -134,6 +136,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                             "success": result.get("success", False),
                             "output_image": result.get("output_image"),
                             "detections": result.get("detections", []),
+                            "freepath_coordinates": result.get("freepath_coordinates", []),
                             "freepath_circle": result.get("freepath_circle"),
                             "stats": result.get("stats", {}),
                             "error": result.get("error")

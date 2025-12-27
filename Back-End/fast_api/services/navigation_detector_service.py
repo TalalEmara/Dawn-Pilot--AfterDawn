@@ -87,6 +87,14 @@ class NavigationDetectorService:
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
         self.debug_mode = False
         
+        # Default cropping config
+        self.cropping_config = {
+            "type": "retinotopic",
+            "size": [128, 128],
+            "offset_y_ratio": 0.5,
+            "freepath_fallback": "none"
+        }
+        
         # Load from config if exists
         if os.path.exists(config_path):
             try:
@@ -111,10 +119,16 @@ class NavigationDetectorService:
                     
                     self.debug_mode = nav_config.get("debug_mode", False)
                     
+                    # Load cropping config
+                    cropping_config = config.get("cropping", {})
+                    if cropping_config:
+                        self.cropping_config.update(cropping_config)
+                    
                     logger.info(f"Loaded navigation config from: {config_path}")
-                    logger.info(f"YOLO model path: {self.yolo_model_path}")
+                    logger.info(f"Model path: {self.model_path}")
                     logger.info(f"Freepath model path: {self.freepath_model_path}")
                     logger.info(f"Debug mode: {self.debug_mode}")
+                    logger.info(f"Cropping config: {self.cropping_config}")
             except Exception as e:
                 logger.warning(f"Failed to load config from {config_path}: {e}")
                 logger.info("Using default model paths")
@@ -497,6 +511,130 @@ class NavigationDetectorService:
             "radius": radius
         }
     
+    def _calculate_freepath_ball_position(
+        self, 
+        freepath_coordinates: List[List[int]], 
+        original_size: Tuple[int, int],
+        cropping_config: Dict[str, Any]
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Calculate the best freepath ball position for the cropped region
+        
+        Args:
+            freepath_coordinates: List of [x, y] freepath centerline points
+            original_size: (height, width) of original image
+            cropping_config: Cropping configuration
+            
+        Returns:
+            (x, y) position for freepath ball in cropped coordinates, or None
+        """
+        if not freepath_coordinates or len(freepath_coordinates) == 0:
+            return None
+            
+        crop_type = cropping_config.get("type", "central_crop")
+        crop_size = cropping_config.get("size", [128, 128])
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        
+        orig_h, orig_w = original_size
+        crop_w, crop_h = crop_size
+        
+        crop_type = cropping_config.get("type", "central_crop")
+        crop_size = cropping_config.get("size", [128, 128])
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+
+        orig_h, orig_w = original_size
+        crop_w, crop_h = crop_size
+
+        if crop_type == "retinotopic":
+            # For retinotopic mapping, use simple scaling
+            xs = [x for x, y in freepath_coordinates]
+            ys = [y for x, y in freepath_coordinates]
+            center_x = sum(xs) / len(xs) if xs else orig_w // 2
+            center_y = sum(ys) / len(ys) if ys else orig_h // 2
+
+            scale_x = crop_w / orig_w
+            scale_y = crop_h / orig_h
+            crop_x = int(center_x * scale_x)
+            crop_y = int(center_y * scale_y)
+
+        else:  # central_crop
+            # For central_crop, find points within the crop region and map to canvas coordinates
+            center_x = orig_w // 2
+            center_y = int(orig_h * offset_y_ratio)
+
+            half_w = crop_w // 2
+            half_h = crop_h // 2
+
+            crop_x1 = max(0, center_x - half_w)
+            crop_y1 = max(0, center_y - half_h)
+            crop_x2 = min(orig_w, center_x + half_w)
+            crop_y2 = min(orig_h, center_y + half_h)
+
+            # Find freepath points within crop region
+            points_in_crop = [
+                (x, y) for x, y in freepath_coordinates
+                if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
+            ]
+
+            if points_in_crop:
+                # Use center of points in crop region
+                xs = [x for x, y in points_in_crop]
+                ys = [y for x, y in points_in_crop]
+                center_x = sum(xs) / len(xs)
+                center_y = sum(ys) / len(ys)
+
+                # Map to canvas coordinates (0-127)
+                crop_x = int((center_x - crop_x1) * crop_w / (crop_x2 - crop_x1))
+                crop_y = int((center_y - crop_y1) * crop_h / (crop_y2 - crop_y1))
+            else:
+                # No points in crop region, use center of crop
+                crop_x = crop_w // 2
+                crop_y = crop_h // 2
+        
+        # Ensure within bounds
+        crop_x = max(0, min(crop_w - 1, crop_x))
+        crop_y = max(0, min(crop_h - 1, crop_y))
+        
+        return (crop_x, crop_y)
+    
+    def draw_freepath_ball(
+        self, 
+        img: np.ndarray, 
+        ball_position: Optional[Tuple[int, int]], 
+        crop_size: Tuple[int, int] = (128, 128)
+    ) -> np.ndarray:
+        """
+        Draw freepath ball on image at specified position
+        
+        Args:
+            img: Input image
+            ball_position: (x, y) position to draw ball, or None to skip
+            crop_size: Size of cropped image
+            
+        Returns:
+            Image with freepath ball drawn
+        """
+        if ball_position is None:
+            return img
+            
+        img_copy = img.copy()
+        if len(img_copy.shape) == 2:
+            img_copy = cv2.cvtColor(img_copy, cv2.COLOR_GRAY2BGR)
+            
+        x, y = ball_position
+        crop_w, crop_h = crop_size
+        
+        # Ensure position is within bounds
+        x = max(5, min(x, crop_w - 5))
+        y = max(5, min(y, crop_h - 5))
+        
+        # Draw white circle for freepath ball (will survive binarization)
+        cv2.circle(img_copy, (x, y), 4, (255, 255, 255), -1)  # Filled white circle
+        
+        return img_copy
+    
+
+    
     def _save_debug_frames(
         self,
         rgb: np.ndarray,
@@ -541,7 +679,8 @@ class NavigationDetectorService:
         depth: np.ndarray,
         frame_id: int,
         stop_at: str = "phosphene",
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        cropping_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process frame through full modular pipeline with stop points (optimized)
@@ -549,7 +688,7 @@ class NavigationDetectorService:
         Pipeline stages:
         1. 'detector': Object detection + freepath detection -> RGB with bboxes
         2. 'translator': Translator simplification -> Simplified image with freepath circle
-        3. 'pre_phosphene': Center crop to 128x128 -> Cropped image ready for phosphene
+        3. 'pre_phosphene': Crop/resize to target size -> Image ready for phosphene
         4. 'phosphene': Final phosphene rendering -> Phosphene output
         
         Args:
@@ -558,6 +697,7 @@ class NavigationDetectorService:
             frame_id: Frame identifier
             stop_at: Stage to stop at ('detector', 'translator', 'pre_phosphene', 'phosphene')
             debug_mode: If True, save intermediate outputs (default False for speed)
+            cropping_config: Override cropping configuration (optional)
             
         Returns:
             dict: Results with output_image (base64), stage info, detections, timing
@@ -574,12 +714,16 @@ class NavigationDetectorService:
         if not self.is_loaded:
             raise RuntimeError("Navigation detector models not loaded")
         
+        # Use provided cropping config or default
+        effective_cropping_config = cropping_config or self.cropping_config.copy()
+        
         stage_times = {}
         result = {
             "success": False,
             "stage": stop_at,
             "output_image": None,
             "detections": [],
+            "freepath_coordinates": [],
             "freepath_circle": None,
             "stats": {},
             "error": None
@@ -608,6 +752,8 @@ class NavigationDetectorService:
             
             detections = nav_result["detections"]
             freepath_circle = nav_result["freepath_circle"]
+            freepath_coordinates = nav_result.get("freepath_coordinates", [])
+            freepath_coordinates = nav_result.get("freepath_coordinates", [])
             
             stage_times["detection"] = (time.time() - stage_start) * 1000
             
@@ -627,6 +773,7 @@ class NavigationDetectorService:
                     "success": True,
                     "output_image": output_b64,
                     "detections": detections,
+                    "freepath_coordinates": freepath_coordinates,
                     "freepath_circle": freepath_circle,
                     "stats": stage_times
                 })
@@ -662,7 +809,10 @@ class NavigationDetectorService:
                     "image_height": h,
                     "camera_intrinsics": None
                 },
-                "free_path": None,
+                "free_path": {
+                    "center_px": freepath_circle["center"] if freepath_circle else None,
+                    "corridor_width_px": freepath_circle["radius"] if freepath_circle else None
+                } if freepath_circle else None,
                 "obstacles": translator_objects
             }
             
@@ -691,71 +841,77 @@ class NavigationDetectorService:
                 translator.canvas_size = (w, h)
                 translator.params['canvas_size'] = [h, w]
             
-            # Get simplified canvas output (canonical shapes) - NOW RETURNS 128x128 WITH RETINOTOPIC MAPPING
-            # No center crop needed - full field of view preserved through coordinate normalization
-            simplified_canvas_128, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(128, 128))
+            # Get simplified canvas output - ALWAYS output full-sized image for translator stage
+            crop_type = effective_cropping_config.get("type", "central_crop")
+            crop_size = effective_cropping_config.get("size", [128, 128])
+            
+            # Translator ALWAYS outputs to full image size with retinotopic mapping
+            translator.params['canvas_size'] = [h, w]
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h))
             
             # Convert to grayscale and binarize for consistency
-            simplified_gray = cv2.cvtColor(simplified_canvas_128, cv2.COLOR_BGR2GRAY)
-            _, simplified_binary_128 = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
+            simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
+            _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
             
-            # Optional debug: Save translator output (already 128x128)
+            # Optional debug: Save translator output
             if debug_mode and debug_input_prefix:
-                cv2.imwrite(f"{debug_input_prefix}_04_translator_output_128x128.jpg", simplified_binary_128)
-                logger.info(f"💾 Saved TRANSLATOR output (128x128 with retinotopic mapping)")
+                cv2.imwrite(f"{debug_input_prefix}_04_translator_output_full.jpg", simplified_binary)
+                logger.info(f"💾 Saved TRANSLATOR output (full size {w}x{h})")
             
             stage_times["translator"] = (time.time() - stage_start) * 1000
             
-            # Draw freepath circle on simplified image for visualization (needs scaling to 128x128)
-            freepath_circle_scaled = None
-            if freepath_circle and freepath_circle.get("center") and freepath_circle.get("radius"):
-                # Scale freepath circle coordinates to 128x128
-                orig_center = freepath_circle["center"]
-                orig_radius = freepath_circle["radius"]
-                scale_x = 128 / w
-                scale_y = 128 / h
-                freepath_circle_scaled = {
-                    "center": (int(orig_center[0] * scale_x), int(orig_center[1] * scale_y)),
-                    "radius": int(orig_radius * min(scale_x, scale_y))
-                }
-            
-            simplified_with_circle = self.draw_freepath_circle(simplified_binary_128, freepath_circle_scaled)
-            
             if stop_at == "translator":
-                # Encode simplified canvas with circle - optimized
-                output_b64 = encode_ndarray_to_base64(simplified_with_circle, color_space='BGR')
+                # Encode full-sized simplified canvas - NO cropping, NO freepath ball
+                output_b64 = encode_ndarray_to_base64(simplified_binary, color_space='BGR')
                 
                 result.update({
                     "success": True,
                     "output_image": output_b64,
                     "detections": detections,
+                    "freepath_coordinates": freepath_coordinates,
                     "freepath_circle": freepath_circle,
                     "stats": stage_times
                 })
                 return result
             
-            # STAGE 3: PRE_PHOSPHENE - No center crop needed anymore!
-            # Translator now outputs 128x128 directly with retinotopic mapping
+            # STAGE 3: PRE_PHOSPHENE - Apply cropping and add freepath ball
             stage_start = time.time()
             
-            # Use the 128x128 output directly (no cropping)
-            pre_phosphene_128 = simplified_with_circle
+            # Apply cropping to the full-sized translator output
+            if crop_type == "central_crop":
+                cropped_image = self._central_crop_with_offset(simplified_binary, crop_size, effective_cropping_config.get("offset_y_ratio", 0.5))
+            else:  # retinotopic
+                cropped_image = cv2.resize(simplified_binary, tuple(crop_size), interpolation=cv2.INTER_LINEAR)
             
-            # Optional debug: Save pre-phosphene image (now just pass-through)
+            # Calculate and draw freepath ball on the cropped image
+            freepath_ball_position = None
+            if freepath_coordinates and len(freepath_coordinates) > 0:
+                freepath_ball_position = self._calculate_freepath_ball_position(
+                    freepath_coordinates, 
+                    (h, w),  # original image size
+                    effective_cropping_config
+                )
+            
+            # Draw freepath ball on cropped image
+            if freepath_ball_position:
+                cropped_image = self.draw_freepath_ball(cropped_image, freepath_ball_position, crop_size)
+            
+            # Optional debug: Save pre-phosphene image
             if debug_mode and debug_input_prefix:
-                cv2.imwrite(f"{debug_input_prefix}_05_pre_phosphene_128x128.jpg", pre_phosphene_128)
-                logger.info(f"💾 Saved PRE_PHOSPHENE image (no crop - retinotopic mapping)")
+                cv2.imwrite(f"{debug_input_prefix}_05_pre_phosphene_{crop_size[0]}x{crop_size[1]}.jpg", cropped_image)
+                logger.info(f"💾 Saved PRE_PHOSPHENE image ({crop_size[0]}x{crop_size[1]} with {crop_type} mapping and freepath ball)")
             
             stage_times["pre_phosphene"] = (time.time() - stage_start) * 1000
             
             if stop_at == "pre_phosphene":
-                # Encode pre-phosphene output - optimized
-                output_b64 = encode_ndarray_to_base64(pre_phosphene_128, color_space='BGR')
+                # Encode cropped image with freepath ball
+                output_b64 = encode_ndarray_to_base64(cropped_image, color_space='BGR')
                 
                 result.update({
                     "success": True,
                     "output_image": output_b64,
                     "detections": detections,
+                    "freepath_coordinates": freepath_coordinates,
                     "freepath_circle": freepath_circle,
                     "stats": stage_times
                 })
@@ -769,7 +925,14 @@ class NavigationDetectorService:
                 raise RuntimeError("Pipeline2Integration not initialized")
             
             # Normalize 128x128 image to 0-1 range for Pipeline2 (neural network expects normalized input)
-            pre_phosphene_normalized = pre_phosphene_128.astype(np.float32) / 255.0
+            # Pipeline2 expects grayscale input, so convert if necessary
+            if len(cropped_image.shape) == 3:
+                # Convert BGR/RGB to grayscale
+                pre_phosphene_gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+            else:
+                pre_phosphene_gray = cropped_image
+
+            pre_phosphene_normalized = pre_phosphene_gray.astype(np.float32) / 255.0
             
             # Run phosphene rendering
             phosphene_output = self.pipeline2.input2phosphenes(pre_phosphene_normalized)  # Returns (H, W) numpy array
@@ -791,6 +954,7 @@ class NavigationDetectorService:
                 "success": True,
                 "output_image": output_b64,
                 "detections": detections,
+                "freepath_coordinates": freepath_coordinates,
                 "freepath_circle": freepath_circle,
                 "stats": stage_times
             })
@@ -859,65 +1023,139 @@ class NavigationDetectorService:
         
         return img_with_boxes
     
-    def draw_freepath_circle(self, simplified_img: np.ndarray, freepath_circle: Dict[str, Any]) -> np.ndarray:
+    def draw_freepath_ball(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int]) -> np.ndarray:
         """
-        Draw freepath circle on simplified translator image
+        Draw freepath ball on simplified translator image
         
         Args:
             simplified_img: Simplified image from translator (grayscale or BGR)
-            freepath_circle: Dictionary with 'center' (x, y) and 'radius'
+            ball_position: (x, y) position for ball in cropped coordinates, or None
+            crop_size: [width, height] of cropped image
             
         Returns:
-            np.ndarray: Image with drawn circle
+            np.ndarray: Image with drawn ball
         """
         # Create a copy
-        img_with_circle = simplified_img.copy()
+        img_with_ball = simplified_img.copy()
         
-        # Convert to BGR if grayscale for colored circle
-        if len(img_with_circle.shape) == 2:
-            img_with_circle = cv2.cvtColor(img_with_circle, cv2.COLOR_GRAY2BGR)
+        # Convert to BGR if grayscale for colored ball
+        if len(img_with_ball.shape) == 2:
+            img_with_ball = cv2.cvtColor(img_with_ball, cv2.COLOR_GRAY2BGR)
         
-        if freepath_circle:
-            center = freepath_circle.get('center')
-            radius = freepath_circle.get('radius')
+        if ball_position:
+            x, y = ball_position
+            # Ensure position is within image bounds
+            h, w = img_with_ball.shape[:2]
+            x = max(0, min(w - 1, x))
+            y = max(0, min(h - 1, y))
             
-            if center and radius:
-                # Draw filled circle (blue)
-                cv2.circle(img_with_circle, center, radius, (255, 0, 0), -1)
-                # Draw center point (red)
-                cv2.circle(img_with_circle, center, 5, (0, 0, 255), -1)
+            # Draw ball (filled circle, blue)
+            ball_radius = max(3, min(crop_size) // 32)  # Adaptive radius based on crop size
+            cv2.circle(img_with_ball, (x, y), ball_radius, (255, 0, 0), -1)
+            # Draw center point (red)
+            cv2.circle(img_with_ball, (x, y), 2, (0, 0, 255), -1)
         
-        return img_with_circle
+        return img_with_ball
     
-    def center_crop_128x128(self, img: np.ndarray) -> np.ndarray:
+    def crop_image(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
         """
-        Center crop image to 128x128
+        Crop image according to cropping configuration
         
         Args:
-            img: Input image (any size)
+            img: Input image
+            cropping_config: Cropping configuration
             
         Returns:
-            np.ndarray: Center-cropped 128x128 image
+            np.ndarray: Cropped image
+        """
+        crop_type = cropping_config.get("type", "retinotopic")
+        crop_size = cropping_config.get("size", [128, 128])
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        
+        if crop_type == "retinotopic":
+            # For retinotopic, we shouldn't reach here, but just in case
+            return cv2.resize(img, tuple(crop_size), interpolation=cv2.INTER_LINEAR)
+        else:  # central_crop
+            return self._central_crop_with_offset(img, crop_size, offset_y_ratio)
+    
+    def _central_crop_with_offset(self, img: np.ndarray, crop_size: List[int], offset_y_ratio: float) -> np.ndarray:
+        """
+        Central crop with vertical offset
+        
+        Args:
+            img: Input image
+            crop_size: [width, height] of crop
+            offset_y_ratio: Vertical offset as ratio of crop height (0.5 = center, 1.0 = bottom)
+            
+        Returns:
+            np.ndarray: Cropped image
         """
         h, w = img.shape[:2]
+        crop_w, crop_h = crop_size
         
-        # Calculate center crop coordinates
+        # Calculate center position with offset
         center_x = w // 2
-        center_y = h // 2
-        crop_size = 128
-        half_crop = crop_size // 2
+        # Offset the center downward by offset_y_ratio * crop_h
+        center_y = h // 2 + int(offset_y_ratio * crop_h)
         
         # Calculate crop boundaries
-        x1 = max(0, center_x - half_crop)
-        y1 = max(0, center_y - half_crop)
-        x2 = min(w, center_x + half_crop)
-        y2 = min(h, center_y + half_crop)
+        half_crop_w = crop_w // 2
+        half_crop_h = crop_h // 2
+        
+        x1 = max(0, center_x - half_crop_w)
+        y1 = max(0, center_y - half_crop_h)
+        x2 = min(w, center_x + half_crop_w)
+        y2 = min(h, center_y + half_crop_h)
         
         # Crop
         cropped = img[y1:y2, x1:x2]
         
-        # Resize to exactly 128x128 if needed (handles edge cases)
-        if cropped.shape[0] != 128 or cropped.shape[1] != 128:
-            cropped = cv2.resize(cropped, (128, 128), interpolation=cv2.INTER_LINEAR)
+        # Resize to exact crop size if needed (handles edge cases)
+        if cropped.shape[0] != crop_h or cropped.shape[1] != crop_w:
+            cropped = cv2.resize(cropped, (crop_w, crop_h), interpolation=cv2.INTER_LINEAR)
         
         return cropped
+    
+    def crop_image(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
+        """
+        Crop image according to cropping configuration
+        
+        Args:
+            img: Input image
+            cropping_config: Cropping configuration dict
+            
+        Returns:
+            np.ndarray: Cropped image
+        """
+        crop_type = cropping_config.get("type", "central_crop")
+        crop_size = cropping_config.get("size", [128, 128])
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        
+        h, w = img.shape[:2]
+        target_w, target_h = crop_size
+        
+        if crop_type == "retinotopic":
+            # This shouldn't be called for retinotopic, but fallback to resize
+            return cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        else:  # central_crop with offset
+            # Calculate crop center with vertical offset
+            center_x = w // 2
+            center_y = int(h * offset_y_ratio)  # Offset from top by ratio
+            
+            # Calculate crop boundaries
+            half_w = target_w // 2
+            half_h = target_h // 2
+            
+            x1 = max(0, center_x - half_w)
+            y1 = max(0, center_y - half_h)
+            x2 = min(w, center_x + half_w)
+            y2 = min(h, center_y + half_h)
+            
+            # Crop
+            cropped = img[y1:y2, x1:x2]
+            
+            # Resize to exact target size if needed
+            if cropped.shape[0] != target_h or cropped.shape[1] != target_w:
+                cropped = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+            
+            return cropped

@@ -497,8 +497,8 @@ class Translator:
             cx = max(scaled_radius, min(cx, W - scaled_radius))
             cy = max(scaled_radius, min(cy, H - scaled_radius))
             
-            # Draw blue circle for free-path indicator
-            cv2.circle(canvas, (cx, cy), scaled_radius, (255, 0, 0), -1)
+            # Draw white circle for free-path indicator (survives binarization)
+            cv2.circle(canvas, (cx, cy), scaled_radius, (255, 255, 255), -1)
 
     # ---------------- debugging methods ----------------
     def visualize_bboxes(self, save_path="bbox_overlay.png"):

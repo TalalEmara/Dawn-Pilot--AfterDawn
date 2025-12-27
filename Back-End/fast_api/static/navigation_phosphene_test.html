@@ -356,7 +356,7 @@
                 
                 <!-- Stage Selection Section -->
                 <div class="control-group">
-                    <h3>🎯 Pipeline Stage</h3>
+                    <h3>🎯 Pipeline Configuration</h3>
                     
                     <div class="stage-selector">
                         <label for="stageSelect">Select Pipeline Stage:</label>
@@ -372,6 +372,43 @@
                         <div class="stage-info-title">Phosphene Stage</div>
                         <div class="stage-info-desc">
                             Full pipeline: Object detection → Translator → Center crop → Phosphene rendering
+                        </div>
+                    </div>
+                    
+                    <!-- Cropping Configuration -->
+                    <div class="cropping-config" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                        <h4 style="color: #495057; margin-bottom: 15px; font-size: 1rem;">✂️ Cropping Configuration</h4>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label for="cropTypeSelect" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">Crop Type:</label>
+                            <select id="cropTypeSelect" style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
+                                <option value="central_crop">Central Crop (with offset)</option>
+                                <option value="retinotopic">Retinotopic Mapping</option>
+                            </select>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div>
+                                <label for="cropWidth" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500; font-size: 0.9rem;">Width:</label>
+                                <input type="number" id="cropWidth" value="128" min="32" max="512" step="32" 
+                                       style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
+                            </div>
+                            <div>
+                                <label for="cropHeight" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500; font-size: 0.9rem;">Height:</label>
+                                <input type="number" id="cropHeight" value="128" min="32" max="512" step="32" 
+                                       style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label for="offsetRatio" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">Vertical Offset Ratio:</label>
+                            <input type="range" id="offsetRatio" min="0" max="1" step="0.1" value="0.5" 
+                                   style="width: 100%; margin-bottom: 5px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6c757d;">
+                                <span>Top (0.0)</span>
+                                <span id="offsetValue">Center (0.5)</span>
+                                <span>Bottom (1.0)</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -523,6 +560,17 @@
             
             const stage = document.getElementById('stageSelect').value;
             
+            // Get cropping configuration
+            const croppingConfig = {
+                type: document.getElementById('cropTypeSelect').value,
+                size: [
+                    parseInt(document.getElementById('cropWidth').value),
+                    parseInt(document.getElementById('cropHeight').value)
+                ],
+                offset_y_ratio: parseFloat(document.getElementById('offsetRatio').value),
+                freepath_fallback: "none"
+            };
+            
             updateStatus('Processing...', 'processing');
             
             const message = {
@@ -530,7 +578,8 @@
                 frame_id: String(framesSent + 1).padStart(3, '0'),
                 rgb: rgbImage,
                 depth: depthImage,
-                stage: stage
+                stage: stage,
+                cropping_config: croppingConfig
             };
             
             ws.send(JSON.stringify(message));
@@ -556,18 +605,40 @@
                 `;
             }
             
-            // Display detections
+            // Display detections and freepath info
+            let contentHtml = '';
+            
             if (data.detections && data.detections.length > 0) {
-                const detectionsHtml = data.detections.map(det => `
+                contentHtml += '<h4 style="margin-bottom: 10px; color: #495057;">Detections:</h4>';
+                contentHtml += data.detections.map(det => `
                     <div class="detection-item">
                         <span class="detection-class">${det.class}</span>
                         <span class="detection-confidence">${(det.confidence * 100).toFixed(1)}%</span>
                     </div>
                 `).join('');
-                document.getElementById('detectionsList').innerHTML = detectionsHtml;
+            }
+            
+            if (data.freepath_coordinates && data.freepath_coordinates.length > 0) {
+                contentHtml += '<h4 style="margin: 15px 0 10px 0; color: #495057;">Freepath:</h4>';
+                contentHtml += `<div style="font-size: 0.9rem; color: #6c757d; margin-bottom: 10px;">
+                    ${data.freepath_coordinates.length} points detected
+                </div>`;
+            }
+            
+            if (data.freepath_circle) {
+                contentHtml += '<h4 style="margin: 15px 0 10px 0; color: #495057;">Freepath Circle:</h4>';
+                contentHtml += `<div style="font-size: 0.9rem; color: #6c757d;">
+                    Center: (${data.freepath_circle.center ? data.freepath_circle.center[0].toFixed(1) : 'N/A'}, 
+                           ${data.freepath_circle.center ? data.freepath_circle.center[1].toFixed(1) : 'N/A'})<br>
+                    Radius: ${data.freepath_circle.radius ? data.freepath_circle.radius.toFixed(1) : 'N/A'}
+                </div>`;
+            }
+            
+            if (contentHtml) {
+                document.getElementById('detectionsList').innerHTML = contentHtml;
             } else {
                 document.getElementById('detectionsList').innerHTML = 
-                    '<div class="image-placeholder">No detections</div>';
+                    '<div class="image-placeholder">No detections or freepath data</div>';
             }
             
             // Display timing stats
@@ -585,6 +656,21 @@
         
         // Initialize
         updateStageInfo();
+        
+        // Add event listener for offset ratio slider
+        document.getElementById('offsetRatio').addEventListener('input', function(e) {
+            const value = parseFloat(e.target.value);
+            const display = document.getElementById('offsetValue');
+            if (value === 0) {
+                display.textContent = 'Top (0.0)';
+            } else if (value === 0.5) {
+                display.textContent = 'Center (0.5)';
+            } else if (value === 1) {
+                display.textContent = 'Bottom (1.0)';
+            } else {
+                display.textContent = value.toFixed(1);
+            }
+        });
     </script>
 </body>
 </html>

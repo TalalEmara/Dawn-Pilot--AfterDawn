@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cropping Configuration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .config-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .output { margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Cropping Configuration Test</h1>
+
+    <div class="config-section">
+        <h3>✂️ Cropping Configuration</h3>
+
+        <div style="margin-bottom: 15px;">
+            <label for="cropTypeSelect">Crop Type:</label><br>
+            <select id="cropTypeSelect">
+                <option value="central_crop">Central Crop (with offset)</option>
+                <option value="retinotopic">Retinotopic Mapping</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label for="cropWidth">Width:</label>
+            <input type="number" id="cropWidth" value="128" min="32" max="512" step="32">
+            <label for="cropHeight">Height:</label>
+            <input type="number" id="cropHeight" value="128" min="32" max="512" step="32">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label for="offsetRatio">Vertical Offset Ratio:</label><br>
+            <input type="range" id="offsetRatio" min="0" max="1" step="0.1" value="0.5">
+            <span id="offsetValue">Center (0.5)</span>
+        </div>
+
+        <button onclick="generateConfig()">Generate Config</button>
+    </div>
+
+    <div class="output">
+        <h3>Generated Configuration:</h3>
+        <pre id="configOutput">Click "Generate Config" to see the configuration object</pre>
+    </div>
+
+    <script>
+        // Add event listener for offset ratio slider
+        document.getElementById('offsetRatio').addEventListener('input', function(e) {
+            const value = parseFloat(e.target.value);
+            const display = document.getElementById('offsetValue');
+            if (value === 0) {
+                display.textContent = 'Top (0.0)';
+            } else if (value === 0.5) {
+                display.textContent = 'Center (0.5)';
+            } else if (value === 1) {
+                display.textContent = 'Bottom (1.0)';
+            } else {
+                display.textContent = value.toFixed(1);
+            }
+        });
+
+        function generateConfig() {
+            const croppingConfig = {
+                type: document.getElementById('cropTypeSelect').value,
+                size: [
+                    parseInt(document.getElementById('cropWidth').value),
+                    parseInt(document.getElementById('cropHeight').value)
+                ],
+                offset_y_ratio: parseFloat(document.getElementById('offsetRatio').value),
+                freepath_fallback: "none"
+            };
+
+            document.getElementById('configOutput').textContent = JSON.stringify(croppingConfig, null, 2);
+        }
+
+        // Initialize
+        document.getElementById('offsetRatio').dispatchEvent(new Event('input'));
+    </script>
+</body>
+</html></content>
+<parameter name="filePath">d:\Eng\SBE\gp\Dawn-Pilot--AfterDawn\Back-End\fast_api\static\cropping_test.html
