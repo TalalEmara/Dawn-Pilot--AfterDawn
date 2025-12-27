@@ -515,7 +515,8 @@ class NavigationDetectorService:
         self, 
         freepath_coordinates: List[List[int]], 
         original_size: Tuple[int, int],
-        cropping_config: Dict[str, Any]
+        cropping_config: Dict[str, Any],
+        frame_id: int
     ) -> Optional[Tuple[int, int]]:
         """
         Calculate the best freepath ball position for the cropped region
@@ -569,27 +570,33 @@ class NavigationDetectorService:
             crop_y1 = max(0, center_y - half_h)
             crop_x2 = min(orig_w, center_x + half_w)
             crop_y2 = min(orig_h, center_y + half_h)
+            
+            logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
+            logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
 
             # Find freepath points within crop region
             points_in_crop = [
                 (x, y) for x, y in freepath_coordinates
                 if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
             ]
+            
+            logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
 
             if points_in_crop:
-                # Use center of points in crop region
-                xs = [x for x, y in points_in_crop]
-                ys = [y for x, y in points_in_crop]
-                center_x = sum(xs) / len(xs)
-                center_y = sum(ys) / len(ys)
+                # Find the lowest point (highest Y) in the freepath within crop region
+                lowest_point = max(points_in_crop, key=lambda p: p[1])  # p[1] is Y coordinate
+                center_x, center_y = lowest_point
 
-                # Map to canvas coordinates (0-127)
+                # Map X coordinate to canvas coordinates (0-127)
                 crop_x = int((center_x - crop_x1) * crop_w / (crop_x2 - crop_x1))
-                crop_y = int((center_y - crop_y1) * crop_h / (crop_y2 - crop_y1))
+                # Position ball at the BOTTOM of the cropped image (highest Y in crop coordinates)
+                crop_y = crop_h - 1
+                
+                logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
             else:
-                # No points in crop region, use center of crop
-                crop_x = crop_w // 2
-                crop_y = crop_h // 2
+                # No points in crop region, don't draw the ball
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
+                return None
         
         # Ensure within bounds
         crop_x = max(0, min(crop_w - 1, crop_x))
@@ -800,7 +807,7 @@ class NavigationDetectorService:
                         "distance_m": det.get('distance_m')
                     })
             
-            # Create detection bundle for translator
+            # Create detection bundle for translator - exclude freepath for clean canonical shapes
             detection_data = {
                 "frame_id": f"nav_frame_{frame_id}",
                 "file_path": "navigation_pipeline",
@@ -809,10 +816,7 @@ class NavigationDetectorService:
                     "image_height": h,
                     "camera_intrinsics": None
                 },
-                "free_path": {
-                    "center_px": freepath_circle["center"] if freepath_circle else None,
-                    "corridor_width_px": freepath_circle["radius"] if freepath_circle else None
-                } if freepath_circle else None,
+                "free_path": None,  # Exclude freepath data for clean translator output
                 "obstacles": translator_objects
             }
             
@@ -847,7 +851,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h))
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h), draw_freepath=False)
             
             # Convert to grayscale and binarize for consistency
             simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
@@ -889,8 +893,12 @@ class NavigationDetectorService:
                 freepath_ball_position = self._calculate_freepath_ball_position(
                     freepath_coordinates, 
                     (h, w),  # original image size
-                    effective_cropping_config
+                    effective_cropping_config,
+                    frame_id
                 )
+                logger.info(f"🎯 Frame {frame_id}: Freepath coordinates: {freepath_coordinates}")
+                logger.info(f"🎯 Frame {frame_id}: Ball position: {freepath_ball_position}")
+                logger.info(f"🎯 Frame {frame_id}: Crop config: {effective_cropping_config}")
             
             # Draw freepath ball on cropped image
             if freepath_ball_position:
@@ -1049,11 +1057,9 @@ class NavigationDetectorService:
             x = max(0, min(w - 1, x))
             y = max(0, min(h - 1, y))
             
-            # Draw ball (filled circle, blue)
-            ball_radius = max(3, min(crop_size) // 32)  # Adaptive radius based on crop size
-            cv2.circle(img_with_ball, (x, y), ball_radius, (255, 0, 0), -1)
-            # Draw center point (red)
-            cv2.circle(img_with_ball, (x, y), 2, (0, 0, 255), -1)
+            # Draw ball (filled white circle, larger radius for better visibility)
+            ball_radius = 10  # Larger radius for better visibility on 128x128 images
+            cv2.circle(img_with_ball, (x, y), ball_radius, (255, 255, 255), -1)
         
         return img_with_ball
     

@@ -633,14 +633,14 @@ class Translator:
     # MAIN RENDERING PIPELINE
     # =====================================================================================
     
-    def run(self, out_name="frame_simp.png", save_to_disk=True, target_canvas_size=(128, 128)):
+    def run(self, out_name="frame_simp.png", save_to_disk=True, target_canvas_size=(128, 128), draw_freepath=True):
         """
         Execute the complete navigation translation pipeline with retinotopic mapping.
         
         This is the main method that orchestrates the entire process:
         1. Creates 128x128 canvas directly (no center crop needed)
         2. Applies retinotopic coordinate mapping: normalizes from original resolution to 128x128
-        3. Renders free path navigation area with coordinate transformation
+        3. Renders free path navigation area with coordinate transformation (optional)
         4. Selects most important objects based on scoring
         5. Renders selected objects with retinotopic mapping and minimum draw size
         6. Optionally saves the final simplified navigation image
@@ -649,6 +649,7 @@ class Translator:
             out_name (str): Output filename for the rendered image
             save_to_disk (bool): Whether to save the image to disk (default: False for WebSocket)
             target_canvas_size (tuple): Target output dimensions (width, height), default (128, 128)
+            draw_freepath (bool): Whether to draw the freepath area (default: True)
             
         Returns:
             tuple: (canvas_array, output_path) where canvas_array is 128x128 numpy image
@@ -663,8 +664,9 @@ class Translator:
 
         
         start_time = time.time()
-        # Step 1: Draw free path navigation area (background element)
-        self.draw_freepath(canvas)
+        # Step 1: Draw free path navigation area (background element) - optional
+        if draw_freepath:
+            self.draw_freepath(canvas)
         free_path_time = (time.time() - start_time) * 1000
 
         # Step 2: Select most important objects for navigation
