@@ -1,12 +1,18 @@
 {
   "detector_mode": "navigation",
   "navigation_detector": {
-    "model_type": "faster_rcnn",
-    "model_path": "object_path_detection\\models\\best_yolo.pt",
+    "model_type": "yolo",
+    "model_path": "object_path_detection\\models\\yolo_syn_100.pt",
     "class_map_path": "object_path_detection\\yolo_class_mapping.json",
     "freepath_model_path": "object_path_detection\\models\\final_deeplabv3_footpath.pth",
     "output_dir": "api_output",
     "debug_mode": false
+  },
+  "cropping": {
+    "type": "central_crop",
+    "size": [128, 128],
+    "offset_y_ratio": 0.5,
+    "freepath_fallback": "none"
   },
   "testing": {
     "test_data_path": "D:/Eng/SBE/gp/Dawn-Pilot--AfterDawn/testing_sequence/7",

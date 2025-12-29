@@ -160,5 +160,4 @@ Back-End/fast_api/object_path_detection/utils/__pycache__/
 Back-End/fast_api/object_path_detection/path_planning/__pycache__/
 Back-End/fast_api/object_path_detection/__pycache__/
 
-Back-End/fast_api/object_path_detection/models/best_yolo.pt
-Back-End/fast_api/object_path_detection/models/final_deeplabv3_footpath.pth
+Back-End/fast_api/object_path_detection/models/
