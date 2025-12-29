@@ -11,6 +11,7 @@ import logging
 import tempfile
 import cv2
 import numpy as np
+import torch
 from typing import List, Dict, Any, Optional, Tuple
 from PIL import Image
 
@@ -72,6 +73,17 @@ class NavigationDetectorService:
             self.translator_service = TranslatorService(eager_init=True)
             self.pipeline2 = Pipeline2Integration()
             print("✅ Translator and Pipeline2 loaded")
+            
+            # GPU warmup to reduce first-inference latency
+            print("🔄 Warming up GPU models...")
+            self._warmup_models()
+            print("✅ GPU warmup complete")
+            
+            # Apply GPU memory optimizations if enabled
+            if self.gpu_memory_optimization and torch.cuda.is_available():
+                print("🔄 Applying GPU memory optimizations...")
+                torch.cuda.empty_cache()
+                print("✅ GPU memory optimized")
         
         print(f"✓ Initialization complete. is_loaded={self.is_loaded}")
         print("="*60 + "\n")
@@ -118,6 +130,10 @@ class NavigationDetectorService:
                         self.freepath_model_path = os.path.join(self.base_dir, freepath_path)
                     
                     self.debug_mode = nav_config.get("debug_mode", False)
+                    
+                    # Performance optimization settings
+                    self.parallel_processing = nav_config.get("parallel_processing", True)
+                    self.gpu_memory_optimization = nav_config.get("gpu_memory_optimization", True)
                     
                     # Load cropping config
                     cropping_config = config.get("cropping", {})
@@ -208,6 +224,28 @@ class NavigationDetectorService:
             logger.error(f"❌ Failed to load navigation models: {str(e)}", exc_info=True)
             logger.info("Service will not be available until models are properly configured")
             self.is_loaded = False
+    
+    def _warmup_models(self):
+        """Warm up GPU models to reduce first-inference latency variability"""
+        try:
+            # Create dummy input for warmup
+            dummy_rgb = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+            dummy_depth = np.random.rand(480, 640).astype(np.float32)
+            
+            # Warm up object detector
+            print("  Warming up object detector...")
+            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=0.5)
+            
+            # Warm up freepath detector
+            print("  Warming up freepath detector...")
+            self._infer_freepath_from_array(dummy_rgb, 0, save_debug=False)
+            
+            # Force GPU synchronization
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+                
+        except Exception as e:
+            print(f"  Warning: Model warmup failed: {e}")
     
     def detect(self, frame: np.ndarray, depth: Optional[np.ndarray] = None) -> List[Dict[str, Any]]:
         """
@@ -301,21 +339,27 @@ class NavigationDetectorService:
             parallel_start = time.time()
             
             # PARALLEL EXECUTION: Object detection and Freepath detection run simultaneously
-            # These are independent operations that both use RGB+Depth
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                # Submit both tasks in parallel
-                object_detection_future = executor.submit(
-                    self._run_object_detection, rgb, depth, frame_id
-                )
-                freepath_detection_future = executor.submit(
-                    self._run_freepath_detection, rgb, frame_id, debug_mode
-                )
+            # Can be disabled for debugging or single-threaded environments
+            if self.parallel_processing:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="detection") as executor:
+                    # Submit both tasks in parallel
+                    object_detection_future = executor.submit(
+                        self._run_object_detection, rgb, depth, frame_id
+                    )
+                    freepath_detection_future = executor.submit(
+                        self._run_freepath_detection, rgb, frame_id, debug_mode
+                    )
+                    
+                    # Wait for both to complete and get results
+                    detections, detection_time = object_detection_future.result()
+                    freepath_data, freepath_time = freepath_detection_future.result()
                 
-                # Wait for both to complete and get results
-                detections, detection_time = object_detection_future.result()
-                freepath_data, freepath_time = freepath_detection_future.result()
-            
-            parallel_time = (time.time() - parallel_start) * 1000
+                parallel_time = (time.time() - parallel_start) * 1000
+            else:
+                # Sequential processing for debugging or constrained environments
+                detections, detection_time = self._run_object_detection(rgb, depth, frame_id)
+                freepath_data, freepath_time = self._run_freepath_detection(rgb, frame_id, debug_mode)
+                parallel_time = detection_time + freepath_time
             
             # Unpack freepath results
             freepath_mask, freepath_coordinates, freepath_circle = freepath_data
@@ -323,6 +367,13 @@ class NavigationDetectorService:
             logger.debug(f"Frame {frame_id}: Parallel execution completed in {parallel_time:.2f}ms "
                         f"(detection: {detection_time:.2f}ms, freepath: {freepath_time:.2f}ms)")
             logger.debug(f"Frame {frame_id}: Found {len(detections)} detections")
+            
+            # Add timing stats to result for performance monitoring
+            result["timing"] = {
+                "parallel_total_ms": parallel_time,
+                "object_detection_ms": detection_time,
+                "freepath_detection_ms": freepath_time
+            }
             
             # Convert detections to standard format
             standardized_detections = []
@@ -381,6 +432,18 @@ class NavigationDetectorService:
             result["error"] = str(e)
             result["success"] = False
         
+        # Periodic GPU memory cleanup if optimization is enabled
+        if self.gpu_memory_optimization and torch.cuda.is_available():
+            # Clear cache every 100 frames to prevent memory buildup
+            if hasattr(self, '_frame_count'):
+                self._frame_count += 1
+            else:
+                self._frame_count = 1
+            
+            if self._frame_count % 100 == 0:
+                torch.cuda.empty_cache()
+                logger.debug(f"GPU cache cleared at frame {frame_id}")
+        
         return result
     
     def _run_object_detection(
@@ -430,24 +493,9 @@ class NavigationDetectorService:
         import time
         start = time.time()
         
-        # Save RGB to temp file for freepath detector
-        temp_path = None
         try:
-            if debug_mode:
-                # Use debug output directory for persistent storage
-                temp_path = os.path.join(self.debug_output_dir, f"frame_{frame_id:04d}_rgb.png")
-            else:
-                # Use temporary file that will be auto-deleted
-                temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-                temp_path = temp_file.name
-                temp_file.close()
-            
-            # Save RGB (already in RGB format, convert to BGR for cv2.imwrite)
-            bgr_for_save = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(temp_path, bgr_for_save)
-            
-            # Run freepath detection (using correct method names)
-            freepath_mask, _ = self.freepath_detector.infer_per_frame(temp_path, frame_id, save_debug=debug_mode)
+            # Use optimized direct array processing (no file I/O)
+            freepath_mask, _ = self._infer_freepath_from_array(rgb, frame_id, save_debug=debug_mode)
             freepath_coordinates = self.freepath_detector.compute_centerline(freepath_mask, half_image=False, save_debug=debug_mode, frame_id=frame_id)
             
             # Calculate freepath circle for visualization and navigation
@@ -460,10 +508,75 @@ class NavigationDetectorService:
             
             return (freepath_mask, freepath_coordinates, freepath_circle), elapsed_ms
             
-        finally:
-            # Clean up temp file only if not in debug mode
-            if temp_path and not debug_mode and os.path.exists(temp_path):
-                os.remove(temp_path)
+        except Exception as e:
+            logger.error(f"Optimized freepath detection failed for frame {frame_id}: {e}")
+            # Fallback to file-based method
+            temp_path = None
+            try:
+                if debug_mode:
+                    temp_path = os.path.join(self.debug_output_dir, f"frame_{frame_id:04d}_rgb.png")
+                else:
+                    temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    temp_path = temp_file.name
+                    temp_file.close()
+                
+                bgr_for_save = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(temp_path, bgr_for_save)
+                
+                freepath_mask, _ = self.freepath_detector.infer_per_frame(temp_path, frame_id, save_debug=debug_mode)
+                freepath_coordinates = self.freepath_detector.compute_centerline(freepath_mask, half_image=False, save_debug=debug_mode, frame_id=frame_id)
+                freepath_circle = self._calculate_freepath_circle(freepath_coordinates, rgb.shape) if freepath_coordinates else None
+                
+                elapsed_ms = (time.time() - start) * 1000
+                return (freepath_mask, freepath_coordinates, freepath_circle), elapsed_ms
+                
+            finally:
+                if temp_path and not debug_mode and os.path.exists(temp_path):
+                    os.remove(temp_path)
+    
+    def _infer_freepath_from_array(self, rgb_array: np.ndarray, frame_id: int, save_debug: bool = False):
+        """
+        Optimized freepath inference directly from numpy array (no file I/O)
+        
+        Args:
+            rgb_array: RGB image as numpy array
+            frame_id: Frame identifier
+            save_debug: Whether to save debug outputs
+            
+        Returns:
+            Tuple of (mask, mask_path)
+        """
+        from PIL import Image
+        import torchvision.transforms as transforms
+        
+        # Convert numpy array to PIL Image
+        rgb_pil = Image.fromarray(rgb_array)
+        original_size = rgb_pil.size
+        
+        # Apply inference transforms
+        infer_tf = transforms.Compose([
+            transforms.Resize((256, 256), interpolation=Image.BILINEAR),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        
+        img_t = infer_tf(rgb_pil).unsqueeze(0).to(self.freepath_detector.device, non_blocking=True)
+        
+        with torch.no_grad():
+            pred = self.freepath_detector.model(img_t)['out']
+            mask = torch.argmax(pred[0], dim=0).detach().cpu().numpy()
+        
+        # Resize mask back to original size
+        mask_resized = cv2.resize(mask.astype(np.uint8), original_size, interpolation=cv2.INTER_NEAREST)
+        binary_mask = (mask_resized > 0).astype(np.uint8) * 255
+        
+        # Only save mask if debug mode is enabled
+        freepath_mask_path = None
+        if save_debug:
+            freepath_mask_path = os.path.join(self.freepath_detector.mask_output_dir, f"{frame_id:04d}.png")
+            cv2.imwrite(freepath_mask_path, binary_mask)
+        
+        return mask_resized, freepath_mask_path
     
     def _calculate_freepath_circle(
         self, 
