@@ -101,10 +101,19 @@ class NavigationDetectorService:
         
         # Default cropping config
         self.cropping_config = {
-            "type": "retinotopic",
-            "size": [128, 128],
-            "offset_y_ratio": 0.5,
-            "freepath_fallback": "none"
+            "type": "fov_based",
+            "fov_degrees": 30,
+            "camera_intrinsics": {
+                "fx": 696.0,
+                "fy": 649.5,
+                "cx": 640.0,
+                "cy": 360.0,
+                "width": 1280,
+                "height": 720,
+                "horizontal_fov": 85.2,
+                "vertical_fov": 58.0
+            },
+            "freepath_fallback": "clamp_with_warning"
         }
         
         # Load from config if exists
@@ -629,12 +638,17 @@ class NavigationDetectorService:
         debug_mode: bool = False
     ) -> Optional[Tuple[int, int]]:
         """
-        Calculate the best freepath ball position for the cropped region
+        Calculate freepath ball position using fast FoV-based selection
+        
+        Fast O(n) approach: Scan freepath points and pick first valid one in FoV.
+        Only draws ball when freepath is visible in the FoV region.
         
         Args:
             freepath_coordinates: List of [x, y] freepath centerline points
             original_size: (height, width) of original image
-            cropping_config: Cropping configuration
+            cropping_config: Cropping configuration with FoV and camera intrinsics
+            frame_id: Frame ID for logging
+            debug_mode: Enable debug logging
             
         Returns:
             (x, y) position for freepath ball in cropped coordinates, or None
@@ -642,81 +656,107 @@ class NavigationDetectorService:
         if not freepath_coordinates or len(freepath_coordinates) == 0:
             return None
             
-        crop_type = cropping_config.get("type", "central_crop")
-        crop_size = cropping_config.get("size", [128, 128])
-        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        import math
         
-        orig_h, orig_w = original_size
+        crop_type = cropping_config.get("type", "fov_based")
+        crop_size = cropping_config.get("size", [128, 128])
         crop_w, crop_h = crop_size
         
-        crop_type = cropping_config.get("type", "central_crop")
-        crop_size = cropping_config.get("size", [128, 128])
+        if crop_type != "fov_based":
+            # Fallback to legacy logic for non-FoV cropping
+            return self._calculate_freepath_ball_position_legacy(
+                freepath_coordinates, original_size, cropping_config, frame_id, debug_mode
+            )
+        
+        # Get camera intrinsics for FoV calculation
+        intrinsics = cropping_config.get("camera_intrinsics", {})
+        fx = intrinsics.get("fx", 696.0)
+        fy = intrinsics.get("fy", 649.5)
+        cx = intrinsics.get("cx", 640.0)
+        cy = intrinsics.get("cy", 360.0)
+        
+        # Get FoV with clamping
+        requested_fov = cropping_config.get("fov_degrees", 30)
+        max_h_fov = intrinsics.get("horizontal_fov", 85.2)
+        max_v_fov = intrinsics.get("vertical_fov", 58.0)
         offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
-
+        fov_deg = min(requested_fov, max_h_fov, max_v_fov)
+        
+        # Calculate square crop boundaries
         orig_h, orig_w = original_size
-        crop_w, crop_h = crop_size
-
-        if crop_type == "retinotopic":
-            # For retinotopic mapping, use simple scaling
-            xs = [x for x, y in freepath_coordinates]
-            ys = [y for x, y in freepath_coordinates]
-            center_x = sum(xs) / len(xs) if xs else orig_w // 2
-            center_y = sum(ys) / len(ys) if ys else orig_h // 2
-
-            scale_x = crop_w / orig_w
-            scale_y = crop_h / orig_h
-            crop_x = int(center_x * scale_x)
-            crop_y = int(center_y * scale_y)
-
-        else:  # central_crop
-            # For central_crop, find points within the crop region and map to canvas coordinates
-            center_x = orig_w // 2
-            center_y = int(orig_h * offset_y_ratio)
-
-            half_w = crop_w // 2
-            half_h = crop_h // 2
-
-            crop_x1 = max(0, center_x - half_w)
-            crop_y1 = max(0, center_y - half_h)
-            crop_x2 = min(orig_w, center_x + half_w)
-            crop_y2 = min(orig_h, center_y + half_h)
+        square_size = min(orig_h, orig_w)
+        crop_x1 = (orig_w - square_size) // 2
+        crop_x2 = crop_x1 + square_size
+        crop_y1 = (orig_h - square_size) // 2
+        crop_y2 = crop_y1 + square_size
+        
+        # Calculate FoV boundaries in square coordinates
+        half_fov_rad = math.radians(fov_deg / 2)
+        tan_half = math.tan(half_fov_rad)
+        left_px = tan_half * fx
+        right_px = tan_half * fx
+        top_px = tan_half * fy
+        bottom_px = tan_half * fy
+        
+        # Adjust camera center for square crop
+        new_cx = cx - crop_x1
+        new_cy = cy - crop_y1
+        
+        # Apply vertical offset to FoV center
+        offset_cy = new_cy + (offset_y_ratio - 0.5) * square_size * 0.5  # Shift by up to half the square size
+        
+        # FoV region in square coordinates
+        fov_x1 = new_cx - left_px
+        fov_x2 = new_cx + right_px
+        fov_y1 = offset_cy - top_px
+        fov_y2 = offset_cy + bottom_px
+        
+        if debug_mode:
+            logger.info(f"🎯 Frame {frame_id}: FoV region in square: x={fov_x1:.0f}-{fov_x2:.0f}, y={fov_y1:.0f}-{fov_y2:.0f}")
+            logger.info(f"🎯 Frame {frame_id}: Freepath points: {len(freepath_coordinates)}")
+        
+        # Fast O(n) selection: iterate and pick first valid point
+        selected_point = None
+        GAP_THRESHOLD = 50  # Prefer points with gap from bottom
+        
+        for point in freepath_coordinates:
+            px, py = point
             
-            if debug_mode:
-                logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
-                logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
-
-            # Find freepath points within crop region
-            points_in_crop = [
-                (x, y) for x, y in freepath_coordinates
-                if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
-            ]
+            # Convert to square coordinates
+            square_px = px - crop_x1
+            square_py = py - crop_y1
             
+            # Check if point is within FoV
+            if fov_x1 <= square_px <= fov_x2 and fov_y1 <= square_py <= fov_y2:
+                # Optional: prefer points with bottom gap
+                gap_from_bottom = square_size - square_py
+                if gap_from_bottom >= GAP_THRESHOLD:
+                    selected_point = (square_px, square_py)
+                    break
+                elif selected_point is None:
+                    # Take first valid point if no gap-preferred found yet
+                    selected_point = (square_px, square_py)
+        
+        if selected_point is None:
             if debug_mode:
-                logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
-
-            if points_in_crop:
-                # Find the lowest point (highest Y) in the freepath within crop region
-                lowest_point = max(points_in_crop, key=lambda p: p[1])  # p[1] is Y coordinate
-                center_x, center_y = lowest_point
-
-                # Map X coordinate to canvas coordinates (0-127)
-                crop_x = int((center_x - crop_x1) * crop_w / (crop_x2 - crop_x1))
-                # Position ball at the BOTTOM of the cropped image (highest Y in crop coordinates)
-                crop_y = crop_h - 1
-                
-                if debug_mode:
-                    logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
-            else:
-                # No points in crop region, don't draw the ball
-                if debug_mode:
-                    logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
-                return None
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in FoV, not drawing ball")
+            return None
+        
+        # Convert to final crop coordinates (variable FoV size)
+        square_px, square_py = selected_point
+        crop_w = fov_x2 - fov_x1
+        crop_h = fov_y2 - fov_y1
+        final_x = int((square_px - fov_x1) * crop_w / (fov_x2 - fov_x1))
+        final_y = int((square_py - fov_y1) * crop_h / (fov_y2 - fov_y1))
         
         # Ensure within bounds
-        crop_x = max(0, min(crop_w - 1, crop_x))
-        crop_y = max(0, min(crop_h - 1, crop_y))
+        final_x = max(0, min(crop_w - 1, final_x))
+        final_y = max(0, min(crop_h - 1, final_y))
         
-        return (crop_x, crop_y)
+        if debug_mode:
+            logger.info(f"🎯 Frame {frame_id}: Selected point {selected_point} -> ({final_x}, {final_y})")
+        
+        return (final_x, final_y)
     
     def draw_freepath_ball(
         self, 
@@ -996,9 +1036,15 @@ class NavigationDetectorService:
             stage_start = time.time()
             
             # Apply cropping to the full-sized translator output
-            if crop_type == "central_crop":
+            if crop_type == "fov_based":
+                cropped_image = self._fov_based_crop(simplified_binary, effective_cropping_config)
+                # Get actual crop size for freepath ball positioning
+                crop_size = [cropped_image.shape[1], cropped_image.shape[0]]  # [width, height]
+            elif crop_type == "central_crop":
+                crop_size = effective_cropping_config.get("size", [128, 128])
                 cropped_image = self._central_crop_with_offset(simplified_binary, crop_size, effective_cropping_config.get("offset_y_ratio", 0.5))
             else:  # retinotopic
+                crop_size = effective_cropping_config.get("size", [128, 128])
                 cropped_image = cv2.resize(simplified_binary, tuple(crop_size), interpolation=cv2.INTER_LINEAR)
             
             # Calculate and draw freepath ball on the cropped image
@@ -1022,8 +1068,9 @@ class NavigationDetectorService:
             
             # Optional debug: Save pre-phosphene image
             if debug_mode and debug_input_prefix:
-                cv2.imwrite(f"{debug_input_prefix}_05_pre_phosphene_{crop_size[0]}x{crop_size[1]}.jpg", cropped_image)
-                logger.info(f"💾 Saved PRE_PHOSPHENE image ({crop_size[0]}x{crop_size[1]} with {crop_type} mapping and freepath ball)")
+                crop_info = f"{crop_size[0]}x{crop_size[1]}" if crop_type == "fov_based" else f"{crop_size[0]}x{crop_size[1]}"
+                cv2.imwrite(f"{debug_input_prefix}_05_pre_phosphene_{crop_info}_{crop_type}.jpg", cropped_image)
+                logger.info(f"💾 Saved PRE_PHOSPHENE image ({crop_info} with {crop_type} mapping and freepath ball)")
             
             stage_times["pre_phosphene"] = (time.time() - stage_start) * 1000
             
@@ -1190,14 +1237,17 @@ class NavigationDetectorService:
         Returns:
             np.ndarray: Cropped image
         """
-        crop_type = cropping_config.get("type", "retinotopic")
-        crop_size = cropping_config.get("size", [128, 128])
-        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        crop_type = cropping_config.get("type", "fov_based")
         
-        if crop_type == "retinotopic":
+        if crop_type == "fov_based":
+            return self._fov_based_crop(img, cropping_config)
+        elif crop_type == "retinotopic":
             # For retinotopic, we shouldn't reach here, but just in case
+            crop_size = cropping_config.get("size", [128, 128])
             return cv2.resize(img, tuple(crop_size), interpolation=cv2.INTER_LINEAR)
-        else:  # central_crop
+        else:  # central_crop (legacy)
+            crop_size = cropping_config.get("size", [128, 128])
+            offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
             return self._central_crop_with_offset(img, crop_size, offset_y_ratio)
     
     def _central_crop_with_offset(self, img: np.ndarray, crop_size: List[int], offset_y_ratio: float) -> np.ndarray:
@@ -1280,3 +1330,171 @@ class NavigationDetectorService:
                 cropped = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
             
             return cropped
+    
+    def _fov_based_crop(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
+        """
+        FoV-based cropping with square pre-cropping - VARIABLE SIZE OUTPUT
+        
+        Steps:
+        1. Pre-crop to square (720x720 from 1280x720)
+        2. Calculate FoV boundaries within square coordinates
+        3. Crop to FoV region - NO RESIZING (variable output size)
+        
+        Args:
+            img: Input image (H, W, 3) or (H, W)
+            cropping_config: Configuration with fov_degrees and camera_intrinsics
+            
+        Returns:
+            np.ndarray: Cropped image (variable size based on FoV)
+        """
+        import math
+        
+        h, w = img.shape[:2]
+        
+        # Get camera intrinsics
+        intrinsics = cropping_config.get("camera_intrinsics", {})
+        fx = intrinsics.get("fx", 696.0)
+        fy = intrinsics.get("fy", 649.5)
+        cx = intrinsics.get("cx", 640.0)
+        cy = intrinsics.get("cy", 360.0)
+        cam_w = intrinsics.get("width", 1280)
+        cam_h = intrinsics.get("height", 720)
+        max_h_fov = intrinsics.get("horizontal_fov", 85.2)
+        max_v_fov = intrinsics.get("vertical_fov", 58.0)
+        
+        # Get requested FoV with clamping
+        requested_fov = cropping_config.get("fov_degrees", 30)
+        fallback_mode = cropping_config.get("freepath_fallback", "clamp_with_warning")
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        
+        # Clamp FoV to camera limits
+        fov_deg = min(requested_fov, max_h_fov, max_v_fov)
+        if fov_deg != requested_fov and fallback_mode == "clamp_with_warning":
+            logger.warning(f"Requested FoV {requested_fov}° clamped to {fov_deg}° (camera limit)")
+        
+        # Pre-compute trigonometry for speed
+        half_fov_rad = math.radians(fov_deg / 2)
+        tan_half = math.tan(half_fov_rad)
+        fov_px_h = tan_half * fx  # horizontal FoV in pixels
+        fov_px_v = tan_half * fy  # vertical FoV in pixels
+        
+        # Step 1: Pre-crop to square (720x720 centered) - FAST array slicing
+        square_size = min(h, w)
+        crop_x1 = (w - square_size) // 2
+        crop_x2 = crop_x1 + square_size
+        crop_y1 = (h - square_size) // 2
+        crop_y2 = crop_y1 + square_size
+        
+        square_img = img[crop_y1:crop_y2, crop_x1:crop_x2]
+        
+        # Step 2: Calculate FoV boundaries within square coordinates
+        # Adjust camera center for square crop
+        new_cx = cx - crop_x1
+        new_cy = cy - crop_y1
+        
+        # Apply vertical offset to FoV center
+        offset_cy = new_cy + (offset_y_ratio - 0.5) * square_size * 0.5  # Shift by up to half the square size
+        
+        # FoV boundaries in square coordinate system
+        fov_x1 = max(0, int(new_cx - fov_px_h))
+        fov_x2 = min(square_size, int(new_cx + fov_px_h))
+        fov_y1 = max(0, int(offset_cy - fov_px_v))
+        fov_y2 = min(square_size, int(offset_cy + fov_px_v))
+        
+        # Step 3: Crop to FoV region - NO RESIZING for variable output
+        fov_crop = square_img[fov_y1:fov_y2, fov_x1:fov_x2]
+        
+        return fov_crop
+    
+    def _calculate_freepath_ball_position_legacy(
+        self, 
+        freepath_coordinates: List[List[int]], 
+        original_size: Tuple[int, int],
+        cropping_config: Dict[str, Any],
+        frame_id: int,
+        debug_mode: bool = False
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Legacy freepath ball calculation for non-FoV cropping modes
+        
+        Args:
+            freepath_coordinates: List of [x, y] freepath centerline points
+            original_size: (height, width) of original image
+            cropping_config: Cropping configuration
+            frame_id: Frame ID for logging
+            debug_mode: Enable debug logging
+            
+        Returns:
+            (x, y) position for freepath ball in cropped coordinates, or None
+        """
+        if not freepath_coordinates or len(freepath_coordinates) == 0:
+            return None
+            
+        crop_type = cropping_config.get("type", "central_crop")
+        crop_size = cropping_config.get("size", [128, 128])
+        offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
+        
+        orig_h, orig_w = original_size
+        crop_w, crop_h = crop_size
+
+        if crop_type == "retinotopic":
+            # For retinotopic mapping, use simple scaling
+            xs = [x for x, y in freepath_coordinates]
+            ys = [y for x, y in freepath_coordinates]
+            center_x = sum(xs) / len(xs) if xs else orig_w // 2
+            center_y = sum(ys) / len(ys) if ys else orig_h // 2
+
+            scale_x = crop_w / orig_w
+            scale_y = crop_h / orig_h
+            crop_x = int(center_x * scale_x)
+            crop_y = int(center_y * scale_y)
+
+        else:  # central_crop
+            # For central_crop, find points within the crop region and map to canvas coordinates
+            center_x = orig_w // 2
+            center_y = int(orig_h * offset_y_ratio)
+
+            half_w = crop_w // 2
+            half_h = crop_h // 2
+
+            crop_x1 = max(0, center_x - half_w)
+            crop_y1 = max(0, center_y - half_h)
+            crop_x2 = min(orig_w, center_x + half_w)
+            crop_y2 = min(orig_h, center_y + half_h)
+            
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
+                logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
+
+            # Find freepath points within crop region
+            points_in_crop = [
+                (x, y) for x, y in freepath_coordinates
+                if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
+            ]
+            
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
+
+            if points_in_crop:
+                # Find the lowest point (highest Y) in the freepath within crop region
+                lowest_point = max(points_in_crop, key=lambda p: p[1])  # p[1] is Y coordinate
+                center_x, center_y = lowest_point
+
+                # Map X coordinate to canvas coordinates (0-127)
+                crop_x = int((center_x - crop_x1) * crop_w / (crop_x2 - crop_x1))
+                # Position ball at the BOTTOM of the cropped image (highest Y in crop coordinates)
+                crop_y = crop_h - 1
+                
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
+            else:
+                # No points in crop region, don't draw the ball
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
+                return None
+        
+        # Ensure within bounds
+        crop_x = max(0, min(crop_w - 1, crop_x))
+        crop_y = max(0, min(crop_h - 1, crop_y))
+        
+        return (crop_x, crop_y)
