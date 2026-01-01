@@ -382,7 +382,7 @@ function MobileView() {
             {/* ✅ HUD Plane using the AI Stream - EXCLUDED FROM CAPTURE */}
 
             {/* Big black plane */}
-            <Entity
+            {/* <Entity
               geometry="primitive: plane; width: 5; height: 4"
               position="0 0 -0.1"
               material={{
@@ -412,10 +412,10 @@ function MobileView() {
               position="0 0 -0.1"
               canvas-updater="src: #hud-buffer"
               // material="shader: flat; transparent: true; depthTest: false"
-            />
+            /> */}
 {/* Test Normal View with FOV */}
             {/* Top plane */}
-            {/* <Entity
+            <Entity
               geometry={{
                 primitive: "plane",
                 width: 5,
@@ -425,10 +425,10 @@ function MobileView() {
                 (4 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
               } -0.11`}
               material={{ color: "black", shader: "flat" }}
-            /> */}
+            />
 
             {/* Bottom plane */}
-            {/* <Entity
+            <Entity
               geometry={{
                 primitive: "plane",
                 width: 5,
@@ -438,10 +438,10 @@ function MobileView() {
                 -(4 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
               } -0.11`}
               material={{ color: "black", shader: "flat" }}
-            /> */}
+            />
 
             {/* Left plane */}
-            {/* <Entity
+            <Entity
               geometry={{
                 primitive: "plane",
                 width: (5 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
@@ -451,10 +451,10 @@ function MobileView() {
                 -(5 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
               } 0 -0.11`}
               material={{ color: "black", shader: "flat" }}
-            /> */}
+            />
 
             {/* Right plane */}
-            {/* <Entity
+            <Entity
               geometry={{
                 primitive: "plane",
                 width: (5 - 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 2,
@@ -464,7 +464,7 @@ function MobileView() {
                 (5 + 2 * 0.1 * Math.tan((17 * Math.PI) / 360)) / 4
               } 0 -0.11`}
               material={{ color: "black", shader: "flat" }}
-            /> */}
+            />
           </Entity>
         </Entity>
       </Scene>

@@ -2,7 +2,7 @@
 
 // 1. Run 'ipconfig' (Windows) or 'ifconfig' (Mac/Linux) to find your PC's IP.
 // 2. Paste it here.
-export const SERVER_IP = "192.168.1.106"; 
+export const SERVER_IP = "192.168.1.110"; 
 
 export const URLS = {
   // Backend 1: Camera Sync & World Data (Flask/Node)

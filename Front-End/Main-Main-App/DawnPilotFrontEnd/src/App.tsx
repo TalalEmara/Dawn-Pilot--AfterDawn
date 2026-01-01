@@ -10,7 +10,9 @@ function App() {
     <Routes>
       <Route path="/desktop" element={<DesktopViewer />} />
       <Route path="/mobile" element={<MobileViewer />} />
-      <Route path="/builder" element={<BuilderPage />} />
+      <Route path="/builder" element={<BuilderPage onModelSelect={function (modelName: string): void {
+        throw new Error('Function not implemented.')
+      } } />} />
       <Route path="/" element={<MobileViewer />} />
     </Routes>
   )
