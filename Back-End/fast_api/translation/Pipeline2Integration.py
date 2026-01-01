@@ -42,4 +42,3 @@ class Pipeline2Integration:
             stimulation_amplitudes= self.encoder(img_t) #(B, amplitudes)
             phosphene_image = self.simulator(stimulation_amplitudes) #(1,1,H,W)
             return phosphene_image.detach().cpu().numpy().squeeze(0).squeeze(0)  #(H,W)
-

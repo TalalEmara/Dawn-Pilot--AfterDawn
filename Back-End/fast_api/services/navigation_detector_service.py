@@ -246,7 +246,7 @@ class NavigationDetectorService:
         rgb: np.ndarray, 
         depth: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = False
+        debug_mode: bool = True
     ) -> Dict[str, Any]:
         """
         Process a single frame through the navigation pipeline (optimized)
@@ -483,7 +483,7 @@ class NavigationDetectorService:
         depth: np.ndarray,
         frame_id: int,
         stop_at: str = "phosphene",
-        debug_mode: bool = False
+        debug_mode: bool = True
     ) -> Dict[str, Any]:
         """
         Process frame through full modular pipeline with stop points
@@ -522,11 +522,19 @@ class NavigationDetectorService:
         }
         
         try:
+            # 💾 HARDCODED DEBUG: Save input images
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H%M%S")
+            debug_input_prefix = f"{self.debug_output_dir}/pipeline_{frame_id}_{timestamp}"
+            cv2.imwrite(f"{debug_input_prefix}_01_input_rgb.jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(f"{debug_input_prefix}_02_input_depth.jpg", depth)
+            print(f"💾 Saved INPUT images: {debug_input_prefix}_01_input_*.jpg")
+            
             # STAGE 1: DETECTOR - Object detection + freepath detection
             stage_start = time.time()
             
             # Run navigation detector (existing optimized process_frame)
-            nav_result = self.process_frame(rgb, depth, frame_id, debug_mode=False)
+            nav_result = self.process_frame(rgb, depth, frame_id, debug_mode=True)
             
             if not nav_result["success"]:
                 result["error"] = "Navigation detection failed"
@@ -539,6 +547,10 @@ class NavigationDetectorService:
             
             # Draw bboxes on RGB for detector stage output
             detector_output = self.draw_detections_on_rgb(rgb, detections)
+            
+            # 💾 HARDCODED DEBUG: Save detector output
+            cv2.imwrite(f"{debug_input_prefix}_03_detector_output.jpg", cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
+            print(f"💾 Saved DETECTOR output: {debug_input_prefix}_03_detector_output.jpg")
             
             if stop_at == "detector":
                 # Encode detector output (RGB with bboxes)
@@ -614,11 +626,15 @@ class NavigationDetectorService:
                 translator.params['canvas_size'] = [h, w]
             
             # Get simplified canvas output (canonical shapes) - WITHOUT phosphene rendering
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True)
             
             # Convert to grayscale and binarize for consistency
             simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
             _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
+            
+            # 💾 HARDCODED DEBUG: Save translator output
+            cv2.imwrite(f"{debug_input_prefix}_04_translator_output.jpg", simplified_binary)
+            print(f"💾 Saved TRANSLATOR output: {debug_input_prefix}_04_translator_output.jpg")
             
             stage_times["translator"] = (time.time() - stage_start) * 1000
             
@@ -644,6 +660,10 @@ class NavigationDetectorService:
             
             # Center crop the simplified image (without circle for actual processing)
             cropped = self.center_crop_128x128(simplified_binary)
+            
+            # 💾 HARDCODED DEBUG: Save cropped image
+            cv2.imwrite(f"{debug_input_prefix}_05_cropped_128x128.jpg", cropped)
+            print(f"💾 Saved CROPPED image: {debug_input_prefix}_05_cropped_128x128.jpg")
             
             stage_times["crop"] = (time.time() - stage_start) * 1000
             
@@ -678,6 +698,10 @@ class NavigationDetectorService:
             
             # Convert phosphene output to image (scale to 0-255)
             phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
+            
+            # 💾 HARDCODED DEBUG: Save phosphene output
+            cv2.imwrite(f"{debug_input_prefix}_06_phosphene_output.png", phosphene_img)
+            print(f"💾 Saved PHOSPHENE output: {debug_input_prefix}_06_phosphene_output.png")
             
             # Encode phosphene output
             _, buffer = cv2.imencode('.png', phosphene_img)

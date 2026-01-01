@@ -1,26 +1,18 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState } from 'react'
+
 import './App.css'
-import PropertiesPanel from './components/level-1/PropertiesPanel/PropertiesPanel'
+import { Routes, Route } from 'react-router-dom'
 import BuilderPage from './pages/BuilderPage/BuilderPage'
+import DesktopViewer from './pages/DesktopView/DesktopView'
+import MobileViewer from './pages/MobileViewer/MobileViewer'
 
 function App() {
-  const queryClient = new QueryClient();
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
-
   return (
-    <>
-      <QueryClientProvider client={queryClient}>
-        {/* Show properties panel only when a model is selected */}
-        {selectedModel && (
-          <PropertiesPanel 
-            modelName={selectedModel} 
-            onClose={() => setSelectedModel(null)}
-          />
-        )}
-        <BuilderPage onModelSelect={setSelectedModel} />
-      </QueryClientProvider>
-    </>
+    <Routes>
+      <Route path="/desktop" element={<DesktopViewer />} />
+      <Route path="/mobile" element={<MobileViewer />} />
+      <Route path="/builder" element={<BuilderPage />} />
+      <Route path="/" element={<MobileViewer />} />
+    </Routes>
   )
 }
 
