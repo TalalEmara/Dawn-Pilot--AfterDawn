@@ -11,7 +11,7 @@ import { useCollisionDetection } from '../../hooks/useCollision';
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
-  const { isConnected, updateCamera } = useCameraSync({
+  const { isConnected, updateCamera, setOnCameraUpdate } = useCameraSync({
     clientType: 'desktop',
     throttleMs: 16 // ~60fps
   });
@@ -51,6 +51,21 @@ function DesktopViewer() {
     const animationId = requestAnimationFrame(broadcastCamera);
     return () => cancelAnimationFrame(animationId);
   }, [updateCamera]);
+
+  useEffect(() => {
+  setOnCameraUpdate((remoteData) => {
+    // We ignore remoteData.position because Desktop is the master of Position.
+    
+    // We apply remoteData.rotation because Mobile is the master of Rotation.
+    if (cameraRef.current) {
+      const el = cameraRef.current.el;
+      const r = remoteData.rotation;
+      
+      // Directly set the rotation on the A-Frame camera entity
+      el.setAttribute('rotation', `${r.x} ${r.y} ${r.z}`);
+    }
+  });
+}, [setOnCameraUpdate]);
 
 
   const handleCollision = useCallback((detail: { obstacleId: string; timestamp: number }) => {

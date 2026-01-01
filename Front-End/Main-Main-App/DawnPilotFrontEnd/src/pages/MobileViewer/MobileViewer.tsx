@@ -58,7 +58,7 @@ function MobileView() {
   // CONNECTION 1: SYNC BACKEND (Port 5000)
   // ---------------------------------------------------------
   // useCameraSync imports the URL internally from config/api.ts
-  const { isConnected: isSyncConnected, setOnCameraUpdate } = useCameraSync({
+  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera } = useCameraSync({
     clientType: "mobile",
     throttleMs: 16,
   });
@@ -160,7 +160,31 @@ function MobileView() {
       clearAllTimers();
     };
   }, [loadWorld, clearAllTimers]);
+  useEffect(() => {
+  const broadcastLoop = () => {
+    if (cameraRef.current && isSyncConnected) {
+      const camEl = cameraRef.current.el;
+      const rigEl = rigRef.current?.el;
+      
+      // Get the rotation from the camera (user looking around)
+      const rot = camEl.getAttribute('rotation');
+      
+      // Get position from Rig (so we satisfy the data shape, even if Desktop ignores it)
+      const pos = rigEl ? rigEl.getAttribute('position') : {x:0, y:0, z:0};
 
+      if (rot) {
+        updateCamera({
+          position: { x: pos.x, y: pos.y, z: pos.z },
+          rotation: { x: rot.x, y: rot.y, z: rot.z } // 👈 This is the important part
+        });
+      }
+    }
+    requestAnimationFrame(broadcastLoop);
+  };
+
+  const animationId = requestAnimationFrame(broadcastLoop);
+  return () => cancelAnimationFrame(animationId);
+}, [updateCamera, isSyncConnected]);
   // Sync Rig Position logic
   useEffect(() => {
     setOnCameraUpdate((camera) => {
