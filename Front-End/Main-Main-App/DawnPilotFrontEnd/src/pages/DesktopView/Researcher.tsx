@@ -7,6 +7,8 @@ import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCollisionDetection } from '../../hooks/useCollision';
+import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
+import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -34,6 +36,18 @@ function ResearcherView() {
   });
 
   const { world, loadWorld } = useScenarioWorld();
+
+  // Scenario save/load
+  const {
+    loadScenario: loadScenarioAPI,
+    listScenarios,
+    deleteScenario: deleteScenarioAPI,
+    loading: saveLoadLoading
+  } = useScenarioSaveLoad();
+
+  // Dialog states
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
   
   // Keep the framebuffer logic for sending data TO the AI
   useFrameBuffer({
@@ -122,6 +136,63 @@ function ResearcherView() {
 
   useCollisionDetection(hitboxRef, handleCollision);
 
+  // Handle load scenario
+  const handleLoadScenario = async (filename: string) => {
+    try {
+      const result = await loadScenarioAPI(filename);
+
+      // Update world state by reloading from backend with new scenario
+      await loadWorld();
+
+      // Restore camera position if available
+      if (result.scenario.camera && cameraRef.current) {
+        const cam = cameraRef.current.el;
+        const cameraData = result.scenario.camera;
+
+        // Set camera position and rotation
+        cam.setAttribute('position', `${cameraData.position.x} ${cameraData.position.y} ${cameraData.position.z}`);
+        cam.setAttribute('rotation', `${cameraData.rotation.x} ${cameraData.rotation.y} ${cameraData.rotation.z}`);
+
+        // Broadcast the new camera position to mobile
+        updateCamera({
+          position: cameraData.position,
+          rotation: cameraData.rotation
+        });
+      }
+
+      alert(`Scenario "${result.scenario.name}" loaded successfully!`);
+      setShowLoadDialog(false);
+    } catch (err) {
+      console.error('Failed to load scenario:', err);
+      alert('Error loading scenario. Make sure backend is running.');
+    }
+  };
+
+  // Handle delete scenario
+  const handleDeleteScenario = async (filename: string) => {
+    try {
+      await deleteScenarioAPI(filename);
+      // Refresh the list
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+    } catch (err) {
+      console.error('Failed to delete scenario:', err);
+      alert('Error deleting scenario.');
+    }
+  };
+
+  // Load scenarios list when opening load dialog
+  const handleOpenLoadDialog = async () => {
+    try {
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+      setShowLoadDialog(true);
+    } catch (err) {
+      console.error('Failed to list scenarios:', err);
+      alert('Error loading scenarios list.');
+    }
+  };
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -208,6 +279,28 @@ function ResearcherView() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* Scenario Controls */}
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Scenario Control</div>
+            <button
+              style={{
+                backgroundColor: '#00ff88',
+                color: '#000',
+                fontWeight: 'bold',
+                border: 'none',
+                padding: '8px 12px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                width: '100%'
+              }}
+              onClick={handleOpenLoadDialog}
+              disabled={saveLoadLoading}
+            >
+              📂 Load Scenario
+            </button>
           </div>
 
         </div>
@@ -302,7 +395,7 @@ function ResearcherView() {
             ref={cameraRef}
             primitive="a-camera"
             look-controls="enabled: false"
-            wasd-controls="enabled: true; acceleration: 65"
+            wasd-controls="enabled: true; acceleration: 30"
           >
             <Entity
               ref={hitboxRef}
@@ -315,6 +408,17 @@ function ResearcherView() {
             />
           </Entity>
         </Scene>
+
+        {/* Load Scenario Dialog */}
+        {showLoadDialog && (
+          <ScenarioLoadDialog
+            scenarios={savedScenarios}
+            onLoad={handleLoadScenario}
+            onCancel={() => setShowLoadDialog(false)}
+            onDelete={handleDeleteScenario}
+            loading={saveLoadLoading}
+          />
+        )}
       </div>
     </div>
   );

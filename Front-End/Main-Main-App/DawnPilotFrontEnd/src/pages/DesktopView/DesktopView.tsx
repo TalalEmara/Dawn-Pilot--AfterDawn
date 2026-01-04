@@ -2,11 +2,13 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useScenarioWorld } from '../../hooks/useScenarioWorld';
 import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCollisionDetection } from '../../hooks/useCollision';
+import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
+import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
 
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);
@@ -17,6 +19,18 @@ function DesktopViewer() {
   });
 
   const { world, loadWorld } = useScenarioWorld();
+  
+  // Scenario save/load
+  const { 
+    loadScenario: loadScenarioAPI, 
+    listScenarios,
+    deleteScenario: deleteScenarioAPI,
+    loading: saveLoadLoading 
+  } = useScenarioSaveLoad();
+
+  // Dialog states
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
   
     useFrameBuffer({
       logInterval: 1000,
@@ -66,6 +80,82 @@ function DesktopViewer() {
     }
   });
 }, [setOnCameraUpdate]);
+
+
+  // Handle load scenario
+  const handleLoadScenario = async (filename: string) => {
+    try {
+      const result = await loadScenarioAPI(filename);
+      
+      // Update world state by reloading from backend with new scenario
+      await loadWorld();
+      
+      // Restore camera position if available
+      if (result.scenario.camera && cameraRef.current) {
+        const cam = cameraRef.current.el;
+        const cameraData = result.scenario.camera;
+        
+        // Set camera position and rotation
+        cam.setAttribute('position', `${cameraData.position.x} ${cameraData.position.y} ${cameraData.position.z}`);
+        cam.setAttribute('rotation', `${cameraData.rotation.x} ${cameraData.rotation.y} ${cameraData.rotation.z}`);
+        
+        // Broadcast the new camera position to mobile
+        updateCamera({
+          position: cameraData.position,
+          rotation: cameraData.rotation
+        });
+      }
+      
+      alert(`Scenario "${result.scenario.name}" loaded successfully!`);
+      setShowLoadDialog(false);
+    } catch (err) {
+      console.error('Failed to load scenario:', err);
+      alert('Error loading scenario. Make sure backend is running.');
+    }
+  };
+
+  // Handle delete scenario
+  const handleDeleteScenario = async (filename: string) => {
+    try {
+      await deleteScenarioAPI(filename);
+      // Refresh the list
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+    } catch (err) {
+        <div style={{ marginTop: '8px' }}>
+          <button 
+            style={{ 
+              backgroundColor: '#00ff88', 
+              color: '#000', 
+              fontWeight: 'bold',
+              border: 'none',
+              padding: '4px 8px',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '10px'
+            }} 
+            onClick={handleOpenLoadDialog}
+            disabled={saveLoadLoading}
+          >
+            📂 Load Scenario
+          </button>
+        </div>
+      console.error('Failed to delete scenario:', err);
+      alert('Error deleting scenario.');
+    }
+  };
+
+  // Load scenarios list when opening load dialog
+  const handleOpenLoadDialog = async () => {
+    try {
+      const scenarios = await listScenarios();
+      setSavedScenarios(scenarios);
+      setShowLoadDialog(true);
+    } catch (err) {
+      console.error('Failed to list scenarios:', err);
+      alert('Error loading scenarios list.');
+    }
+  };
 
 
   const handleCollision = useCallback((detail: { obstacleId: string; timestamp: number }) => {
@@ -120,6 +210,24 @@ function DesktopViewer() {
         <div style={{ marginTop: '6px', fontWeight: 'bold' }}>Mobile:</div>
         <div>• Follows desktop camera</div>
         <div>• Gyroscope - Look around in VR</div>
+        <div style={{ marginTop: '8px' }}>
+          <button
+            style={{
+              backgroundColor: '#00ff88',
+              color: '#000',
+              fontWeight: 'bold',
+              border: 'none',
+              padding: '4px 8px',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '10px'
+            }}
+            onClick={handleOpenLoadDialog}
+            disabled={saveLoadLoading}
+          >
+            📂 Load Scenario
+          </button>
+        </div>
       </div>
 
       <Scene
