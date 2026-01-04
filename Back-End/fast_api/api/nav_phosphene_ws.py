@@ -1,3 +1,18 @@
+"""
+Navigation-Phosphene WebSocket Handler
+
+Optimized WebSocket endpoint for the full navigation pipeline with phosphene rendering.
+This is the MAIN PRODUCTION endpoint.
+
+Pipeline stages:
+1. detector - Object detection with bounding boxes
+2. translator - Simplified canonical shapes
+3. pre_phosphene - Center cropped 128x128
+4. phosphene - Final phosphene rendering (full pipeline)
+
+COLOR SPACE: Works in RGB throughout (optimal for ML models)
+"""
+
 import logging
 import base64
 import cv2
@@ -5,14 +20,9 @@ import numpy as np
 import os
 from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
-from core import decode_base64_image
+from core import decode_base64_to_rgb, encode_ndarray_to_base64
 
 logger = logging.getLogger(__name__)
-
-# Create debug output directory (absolute path)
-DEBUG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug_websocket")
-os.makedirs(DEBUG_DIR, exist_ok=True)
-print(f"🔍 Debug output directory: {os.path.abspath(DEBUG_DIR)}")
 
 # Global service (injected from websocket_routes)
 navigation_detector_service = None
@@ -35,7 +45,18 @@ def convert_to_json_serializable(obj):
         return obj
 
 async def handle_navigation_phosphene_websocket(websocket: WebSocket):
-    """WebSocket handler for full navigation pipeline with phosphene rendering"""
+    """
+    WebSocket handler for full navigation pipeline with phosphene rendering
+    
+    Protocol:
+    - Client sends: {"type": "frame", "frame_id": str, "rgb": base64, "depth": base64, "stage": str, "debug": bool}
+    - Server responds: {"type": "result", "data": {...}}
+    
+    Optimizations:
+    - RGB color space throughout (no BGR conversions except final encode)
+    - Minimal base64 encode/decode operations
+    - Debug images only saved when debug=True flag is set
+    """
     await websocket.accept()
     logger.info(f"Navigation-Phosphene WebSocket connected: {websocket.client}")
     
@@ -43,6 +64,13 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
         await websocket.send_json({"type": "error", "error": "Navigation detector service not available"})
         await websocket.close()
         return
+    
+    # Send welcome message to confirm connection is ready
+    await websocket.send_json({
+        "type": "connected",
+        "message": "Navigation-Phosphene WebSocket ready",
+        "service_ready": navigation_detector_service.is_loaded
+    })
     
     frames_processed = 0
     
@@ -53,10 +81,16 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
             if message.get("type") == "frame":
                 frame_id = message.get("frame_id", "unknown")
                 stage = message.get("stage", "phosphene")
+                debug_mode = message.get("debug", False)  # Get debug flag from client
+                cropping_config = message.get("cropping_config")  # Optional cropping override
                 
                 valid_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
                 if stage not in valid_stages:
-                    await websocket.send_json({"type": "error", "frame_id": frame_id, "error": f"Invalid stage '{stage}'"})
+                    await websocket.send_json({
+                        "type": "error",
+                        "frame_id": frame_id,
+                        "error": f"Invalid stage '{stage}'. Valid: {valid_stages}"
+                    })
                     continue
                 
                 try:
@@ -64,53 +98,50 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     depth_b64 = message.get("depth")
                     
                     if not rgb_b64 or not depth_b64:
-                        await websocket.send_json({"type": "error", "frame_id": frame_id, "error": "Missing rgb or depth image"})
+                        await websocket.send_json({
+                            "type": "error",
+                            "frame_id": frame_id,
+                            "error": "Missing rgb or depth image"
+                        })
                         continue
                     
-                    # Decode RGB image (returns BGR format)
-                    rgb_bgr = decode_base64_image(rgb_b64)
-                    rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+                    # Decode images ONCE to RGB (optimized)
+                    rgb = decode_base64_to_rgb(rgb_b64)  # Returns RGB directly
                     
-                    # Decode depth image (returns BGR format, convert to grayscale)
-                    depth_bgr = decode_base64_image(depth_b64)
-                    depth = cv2.cvtColor(depth_bgr, cv2.COLOR_BGR2GRAY)
+                    # Depth: decode and convert to grayscale if needed
+                    depth_bytes = base64.b64decode(depth_b64.split(',')[1] if ',' in depth_b64 else depth_b64)
+                    depth_arr = np.frombuffer(depth_bytes, dtype=np.uint8)
+                    depth = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
                     
-                    # 🔍 DEBUG: Save received images
-                    timestamp = datetime.now().strftime("%H%M%S")
-                    debug_prefix = f"{DEBUG_DIR}/frame_{frame_id}_{timestamp}"
-                    cv2.imwrite(f"{debug_prefix}_received_rgb.jpg", rgb_bgr)
-                    cv2.imwrite(f"{debug_prefix}_received_depth.jpg", depth_bgr)
-                    logger.info(f"💾 Saved received images: {debug_prefix}_received_*.jpg")
-                    logger.info(f"📊 RGB shape: {rgb.shape}, Depth shape: {depth.shape}")
+                    if rgb is None or depth is None:
+                        raise ValueError("Failed to decode images")
                     
+                    logger.info(f"📊 Frame {frame_id}: RGB {rgb.shape}, Depth {depth.shape}, Debug: {debug_mode}")
+                    
+                    # Process frame with debug flag
                     result = navigation_detector_service.process_full_pipeline(
-                        rgb=rgb, depth=depth, frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,
-                        stop_at=stage, debug_mode=True  # Enable debug mode
+                        rgb=rgb,
+                        depth=depth,
+                        frame_id=int(frame_id) if frame_id.isdigit() else frames_processed,
+                        stop_at=stage,
+                        debug_mode=debug_mode,  # Pass debug flag to service
+                        cropping_config=cropping_config  # Pass cropping config override
                     )
                     
                     response = {
                         "type": "result",
                         "data": convert_to_json_serializable({
-                            "frame_id": frame_id, "stage": stage, "success": result.get("success", False),
-                            "output_image": result.get("output_image"), "detections": result.get("detections", []),
-                            "freepath_circle": result.get("freepath_circle"), "stats": result.get("stats", {}),
+                            "frame_id": frame_id,
+                            "stage": stage,
+                            "success": result.get("success", False),
+                            "output_image": result.get("output_image"),
+                            "detections": result.get("detections", []),
+                            "freepath_coordinates": result.get("freepath_coordinates", []),
+                            "freepath_circle": result.get("freepath_circle"),
+                            "stats": result.get("stats", {}),
                             "error": result.get("error")
                         })
                     }
-                    
-                    # 🔍 DEBUG: Save output phosphene image
-                    if result.get("output_image"):
-                        try:
-                            output_b64 = result.get("output_image")
-                            output_bytes = base64.b64decode(output_b64)
-                            output_array = np.frombuffer(output_bytes, dtype=np.uint8)
-                            output_img = cv2.imdecode(output_array, cv2.IMREAD_COLOR)
-                            cv2.imwrite(f"{debug_prefix}_output_phosphene.png", output_img)
-                            logger.info(f"💾 Saved output phosphene: {debug_prefix}_output_phosphene.png")
-                        except Exception as e:
-                            logger.error(f"Failed to save output image: {e}")
-                    else:
-                        logger.warning(f"⚠️ No output_image in result!")
                     
                     await websocket.send_json(response)
                     frames_processed += 1
@@ -120,14 +151,22 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     
                 except Exception as e:
                     logger.error(f"Error processing frame {frame_id}: {e}", exc_info=True)
-                    await websocket.send_json({"type": "error", "frame_id": frame_id, "error": str(e)})
+                    await websocket.send_json({
+                        "type": "error",
+                        "frame_id": frame_id,
+                        "error": str(e)
+                    })
             
     except WebSocketDisconnect:
         logger.info(f"Navigation-Phosphene WebSocket disconnected (Processed: {frames_processed} frames)")
     except Exception as e:
         logger.error(f"Navigation-Phosphene WebSocket error: {e}", exc_info=True)
         try:
-            await websocket.send_json({"type": "error", "error": str(e), "message": "Fatal error occurred"})
+            await websocket.send_json({
+                "type": "error",
+                "error": str(e),
+                "message": "Fatal error occurred"
+            })
         except:
             pass
     finally:

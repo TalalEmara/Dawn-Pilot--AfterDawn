@@ -125,24 +125,28 @@ class ObjectDetector:
         return {i: f"class_{i}" for i in range(1, 30)}  # fallback dummy map
     
     def detect_per_frame(self, rgb_img, depth_img, conf_thresh=0.5):
-        # print(self.model)
+        # Ensure consistent device and memory management
         if self.model_name == "faster_rcnn":
-            tensor = to_tensor(rgb_img).to(self.device)
+            # Convert to tensor and move to device efficiently
+            tensor = to_tensor(rgb_img).to(self.device, non_blocking=True)
             with torch.no_grad():
                 outputs = self.model([tensor])[0]
-            boxes = outputs['boxes'].cpu().numpy()
-            scores = outputs['scores'].cpu().numpy()
-            labels = outputs['labels'].cpu().numpy()
+            # Move to CPU efficiently
+            boxes = outputs['boxes'].detach().cpu().numpy()
+            scores = outputs['scores'].detach().cpu().numpy()
+            labels = outputs['labels'].detach().cpu().numpy()
         else:
+            # YOLO processing with optimized memory management
             rgb_np = np.array(rgb_img)
             with torch.no_grad():
                 outputs = self.model(rgb_np)[0]
-            detections = outputs.boxes  # This is a Boxes object
-            boxes = detections.xyxy.cpu().numpy()       # (x1, y1, x2, y2)
-            scores = detections.conf.cpu().numpy()      # confidence
-            labels = detections.cls.cpu().numpy().astype(int)  # class index
+            detections = outputs.boxes
+            # Efficient CPU transfer
+            boxes = detections.xyxy.detach().cpu().numpy()
+            scores = detections.conf.detach().cpu().numpy()
+            labels = detections.cls.detach().cpu().numpy().astype(int)
 
-        # filter low confidence detections
+        # Filter detections efficiently
         keep = scores >= conf_thresh
         boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 

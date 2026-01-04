@@ -178,24 +178,20 @@ class TranslatorService:
             
             # Measure translator time
             translator_start = time.time()
-            # Get canvas array directly (no disk I/O)
-            translator_output, _ = self.translator.run(output_filename, save_to_disk=False)
+            # Get canvas array directly (no disk I/O) - NOW RETURNS 128x128 WITH RETINOTOPIC MAPPING
+            translator_output, _ = self.translator.run(output_filename, save_to_disk=False, target_canvas_size=(128, 128))
             translator_time = (time.time() - translator_start) * 1000
             
-            # Use canvas array directly (already in memory)
+            # Use canvas array directly (already in memory and 128x128)
             decode_start = time.time()
             # Convert to grayscale and binarize
             translator_output_gray = cv2.cvtColor(translator_output, cv2.COLOR_BGR2GRAY)
             _, translator_output_binary = cv2.threshold(translator_output_gray, 127, 255, cv2.THRESH_BINARY)
             decode_time = (time.time() - decode_start) * 1000
                 
-            # Resize to 128x128 for Pipeline2 (expected input size)
-            resize_start = time.time()
-            if translator_output_binary.shape != (128, 128):
-                translator_output_resized = cv2.resize(translator_output_binary, (128, 128), interpolation=cv2.INTER_LINEAR)
-            else:
-                translator_output_resized = translator_output_binary
-            resize_time = (time.time() - resize_start) * 1000
+            # NO RESIZE NEEDED - Translator now outputs 128x128 directly with retinotopic mapping
+            # This eliminates the resize step and prevents double-scaling artifacts
+            translator_output_resized = translator_output_binary  # Already 128x128
             
             # Optionally save translator output before phosphene simulation
             if save_debug_images:
@@ -243,10 +239,14 @@ class TranslatorService:
                 "timing_breakdown": {
                     "translator_ms": round(translator_time, 2),
                     "decode_ms": round(decode_time, 2),
-                    "resize_ms": round(resize_time, 2),
                     "phosphene_simulation_ms": round(phosphene_time, 2),
                     "encode_ms": round(encode_time, 2),
                     "total_ms": round(processing_time, 2)
+                },
+                "retinotopic_mapping": {
+                    "input_resolution": f"{image_width}x{image_height}",
+                    "output_resolution": "128x128",
+                    "mapping_type": "coordinate_normalization"
                 },
                 "selected_count": len(selected_objects),
                 "total_objects": len(objects),

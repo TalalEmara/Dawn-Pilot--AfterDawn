@@ -312,19 +312,22 @@ class Translator:
     # OBJECT RENDERING METHODS
     # =====================================================================================
     
-    def draw_shape(self, canvas, obj):
+    def draw_shape(self, canvas, obj, target_canvas_size=(128, 128), original_image_size=None):
         """
-        Render an object on the canvas using canonical shape definitions.
+        Render an object on the canvas using canonical shape definitions with retinotopic mapping.
         
         This method provides intelligent rendering with:
+        - Retinotopic coordinate mapping: normalizes coordinates from original resolution to target canvas
+        - Minimum draw size enforcement (3x3 pixels) to prevent objects from disappearing
         - Automatic fallback for unknown object classes (green filled rectangles)
         - Special handling for architectural elements (doors as yellow outlines)
-        - Dynamic scaling to match canvas dimensions
         - Respect for min/max pixel size constraints
         
         Args:
-            canvas (numpy.ndarray): Target canvas for rendering
+            canvas (numpy.ndarray): Target canvas for rendering (e.g., 128x128)
             obj (dict): Object data containing class, bbox, centroid_px, etc.
+            target_canvas_size (tuple): Target canvas dimensions (width, height)
+            original_image_size (tuple): Original image dimensions (width, height) for coordinate normalization
         """
         object_class = obj.get("class", "")
         # Make class name lookup case-insensitive by converting to lowercase
@@ -354,23 +357,44 @@ class Translator:
                     "color": [0, 255, 0]  # Green for unknown objects
                 }
 
-        # Get object position (centroid or fallback to image center)
-        centroid = obj.get("centroid_px", [self.input_width // 2, self.input_height // 2])
-        cx, cy = int(centroid[0]), int(centroid[1])
+        # Use provided original image size or fallback to instance attributes
+        if original_image_size is None:
+            orig_width, orig_height = self.input_width, self.input_height
+        else:
+            orig_width, orig_height = original_image_size
         
-        # Calculate rendering dimensions from bounding box
+        target_width, target_height = target_canvas_size
+        
+        # RETINOTOPIC MAPPING: Normalize coordinates from original resolution to 0-1 range,
+        # then scale to target canvas (e.g., 128x128)
+        centroid = obj.get("centroid_px", [orig_width // 2, orig_height // 2])
+        cx_original, cy_original = centroid[0], centroid[1]
+        
+        # Normalize to 0-1 range
+        cx_normalized = cx_original / orig_width
+        cy_normalized = cy_original / orig_height
+        
+        # Scale to target canvas
+        cx = int(cx_normalized * target_width)
+        cy = int(cy_normalized * target_height)
+        
+        # Calculate rendering dimensions from bounding box with retinotopic scaling
         bbox = obj.get("bbox", [0, 0, 50, 50])  # [x, y, w, h]
         bbox_w, bbox_h = bbox[2], bbox[3]
         
-        # Apply dynamic canvas scaling
-        canvas_h, canvas_w = self.params.get("canvas_size", [self.input_height, self.input_width])
-        scale_x = canvas_w / self.input_width
-        scale_y = canvas_h / self.input_height
+        # Scale bbox dimensions using retinotopic mapping
+        scale_x = target_width / orig_width
+        scale_y = target_height / orig_height
         wpx = int(bbox_w * scale_x)
         hpx = int(bbox_h * scale_y)
         
+        # CRITICAL: Enforce minimum draw size (3x3 pixels) to prevent distant objects from disappearing
+        MIN_DRAW_SIZE = 3
+        wpx = max(MIN_DRAW_SIZE, wpx)
+        hpx = max(MIN_DRAW_SIZE, hpx)
+        
         # Apply size constraints from shape definition
-        min_px = int(shape_def.get("min_px", 4))
+        min_px = int(shape_def.get("min_px", MIN_DRAW_SIZE))
         max_px = int(shape_def.get("max_px", max(64, min_px)))
         wpx = max(min_px, min(wpx, max_px))
         hpx = max(min_px, min(hpx, max_px))
@@ -402,11 +426,16 @@ class Translator:
             bbox = obj.get("bbox", [0, 0, 50, 50])  # [x, y, w, h]
             x, y, w, h = bbox
             
-            # Scale bbox coordinates to canvas
-            x_scaled = int(x * scale_x)
-            y_scaled = int(y * scale_y) 
-            w_scaled = int(w * scale_x)
-            h_scaled = int(h * scale_y)
+            # Apply retinotopic mapping to bbox coordinates
+            x_normalized = x / orig_width
+            y_normalized = y / orig_height
+            w_normalized = w / orig_width
+            h_normalized = h / orig_height
+            
+            x_scaled = int(x_normalized * target_width)
+            y_scaled = int(y_normalized * target_height)
+            w_scaled = max(MIN_DRAW_SIZE, int(w_normalized * target_width))
+            h_scaled = max(MIN_DRAW_SIZE, int(h_normalized * target_height))
             
             # Draw outline rectangle spanning exact bbox dimensions
             outline_thickness = 2
@@ -468,8 +497,8 @@ class Translator:
             cx = max(scaled_radius, min(cx, W - scaled_radius))
             cy = max(scaled_radius, min(cy, H - scaled_radius))
             
-            # Draw blue circle for free-path indicator
-            cv2.circle(canvas, (cx, cy), scaled_radius, (255, 0, 0), -1)
+            # Draw white circle for free-path indicator (survives binarization)
+            cv2.circle(canvas, (cx, cy), scaled_radius, (255, 255, 255), -1)
 
     # ---------------- debugging methods ----------------
     def visualize_bboxes(self, save_path="bbox_overlay.png"):
@@ -604,33 +633,40 @@ class Translator:
     # MAIN RENDERING PIPELINE
     # =====================================================================================
     
-    def run(self, out_name="frame_simp.png", save_to_disk=True):
+    def run(self, out_name="frame_simp.png", save_to_disk=True, target_canvas_size=(128, 128), draw_freepath=True):
         """
-        Execute the complete navigation translation pipeline.
+        Execute the complete navigation translation pipeline with retinotopic mapping.
         
         This is the main method that orchestrates the entire process:
-        1. Creates dynamic canvas matching input image dimensions
-        2. Renders free path navigation area
-        3. Selects most important objects based on scoring
-        4. Renders selected objects with appropriate shapes and colors
-        5. Optionally saves the final simplified navigation image
+        1. Creates 128x128 canvas directly (no center crop needed)
+        2. Applies retinotopic coordinate mapping: normalizes from original resolution to 128x128
+        3. Renders free path navigation area with coordinate transformation (optional)
+        4. Selects most important objects based on scoring
+        5. Renders selected objects with retinotopic mapping and minimum draw size
+        6. Optionally saves the final simplified navigation image
         
         Args:
             out_name (str): Output filename for the rendered image
             save_to_disk (bool): Whether to save the image to disk (default: False for WebSocket)
+            target_canvas_size (tuple): Target output dimensions (width, height), default (128, 128)
+            draw_freepath (bool): Whether to draw the freepath area (default: True)
             
         Returns:
-            tuple: (canvas_array, output_path) where canvas_array is the numpy image
+            tuple: (canvas_array, output_path) where canvas_array is 128x128 numpy image
         """
-        # add timing for each step
-        # Create dynamic canvas matching input image dimensions
-        W, H = self.canvas_size
-        canvas = np.zeros((H, W, 3), dtype=np.uint8)
+        # RETINOTOPIC MAPPING: Create target canvas directly (e.g., 128x128)
+        # No center crop needed - full field of view is preserved through coordinate normalization
+        target_width, target_height = target_canvas_size
+        canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+        
+        # Store original image dimensions for coordinate transformation
+        original_image_size = (self.input_width, self.input_height)
 
         
         start_time = time.time()
-        # Step 1: Draw free path navigation area (background element)
-        self.draw_freepath(canvas)
+        # Step 1: Draw free path navigation area (background element) - optional
+        if draw_freepath:
+            self.draw_freepath(canvas)
         free_path_time = (time.time() - start_time) * 1000
 
         # Step 2: Select most important objects for navigation
@@ -642,15 +678,17 @@ class Translator:
         for obj in selected:
             print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")
 
-        # Step 3: Render each selected object with appropriate visual representation
+        # Step 3: Render each selected object with retinotopic coordinate mapping
         render_start = time.time()
         for i, obj in enumerate(selected):
             object_class = obj.get("class", "unknown")
-            centroid = obj.get("centroid_px", [W//2, H//2])
-            print(f"[Translator] Drawing object {i}: class={object_class}, centroid={centroid}")
-            self.draw_shape(canvas, obj)
+            centroid_original = obj.get("centroid_px", [self.input_width//2, self.input_height//2])
+            print(f"[Translator] Drawing object {i}: class={object_class}, centroid_original={centroid_original}")
+            # Apply retinotopic mapping: coordinates normalized and scaled to target canvas
+            self.draw_shape(canvas, obj, target_canvas_size=target_canvas_size, original_image_size=original_image_size)
         render_time = (time.time() - render_start) * 1000
         print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")
+        print(f"[Translator] Output canvas size: {target_width}x{target_height} (retinotopic mapping from {self.input_width}x{self.input_height})")
         
         # Step 5: Optionally save final simplified navigation image
         out_path = ""

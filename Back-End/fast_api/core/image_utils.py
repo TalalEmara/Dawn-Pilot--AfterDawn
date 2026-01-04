@@ -2,6 +2,11 @@
 Image Utility Functions
 
 Helper functions for image encoding/decoding and processing.
+
+COLOR SPACE CONVENTIONS:
+- decode_base64_to_rgb(): Returns RGB format (for ML models)
+- decode_base64_image(): Returns BGR format (for OpenCV operations, legacy)
+- encode_ndarray_to_base64(): Accepts RGB or BGR, specify color_space parameter
 """
 
 import logging
@@ -13,33 +18,71 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
+def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
+    """
+    Decode base64 string to RGB numpy array (optimized for ML models)
+    
+    Args:
+        base64_string: Base64 encoded image data (with or without data URL prefix)
+        
+    Returns:
+        np.ndarray: RGB image (H, W, 3) in uint8 format
+        
+    Notes:
+        - Returns RGB format (not BGR) for direct use with ML models
+        - Faster than decode_base64_image() + color conversion
+    """
+    try:
+        # Remove data URL prefix if present
+        if ',' in base64_string:
+            base64_string = base64_string.split(',')[1]
+        
+        # Decode base64 to bytes
+        img_bytes = base64.b64decode(base64_string)
+        
+        # Decode to numpy array (BGR format from cv2.imdecode)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img_bgr is None:
+            raise ValueError("Failed to decode image")
+        
+        # Convert BGR to RGB
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        
+        return img_rgb
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+
+
 def decode_base64_image(base64_string: str) -> np.ndarray:
     """
-    Decode base64 string to OpenCV image
+    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
     
     Args:
         base64_string: Base64 encoded image data
         
     Returns:
-        OpenCV image (numpy array)
+        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
+        
+    Notes:
+        - Returns BGR format for backward compatibility
+        - Consider using decode_base64_to_rgb() for ML pipelines
     """
     try:
-        logger.info(f"📥 [RECEIVE] RGB base64 length: {len(base64_string)}, prefix: {base64_string[:30]}")
-        
         # Remove data URL prefix if present
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
         # Decode base64
         img_data = base64.b64decode(base64_string)
-        logger.info(f"📥 [DECODE] RGB bytes length: {len(img_data)}")
         
         # Convert to numpy array
         nparr = np.frombuffer(img_data, np.uint8)
         
-        # Decode image
+        # Decode image (returns BGR)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        logger.info(f"📥 [IMAGE] RGB decoded: {img.shape if img is not None else 'FAILED'}, dtype: {img.dtype if img is not None else 'N/A'}")
         
         if img is None:
             raise ValueError("Failed to decode image")
@@ -48,6 +91,48 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+
+
+
+
+def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.png') -> str:
+    """
+    Encode numpy array to base64 string (optimized - minimal conversions)
+    
+    Args:
+        img: Numpy array image (H, W, 3) or (H, W)
+        color_space: 'RGB' or 'BGR' - specifies input color space
+        format: Image format ('.png', '.jpg')
+        
+    Returns:
+        str: Base64 encoded image string (without data URL prefix)
+        
+    Notes:
+        - If img is RGB and you need PNG output, it will convert RGB->BGR once
+        - If img is already BGR, no conversion needed
+        - For grayscale images, color_space is ignored
+    """
+    try:
+        # Handle color conversion for color images
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            # Convert RGB to BGR if needed (cv2.imencode expects BGR)
+            if color_space == 'RGB':
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            # If already BGR, no conversion needed
+        
+        # Encode to PNG/JPG bytes
+        success, buffer = cv2.imencode(format, img)
+        if not success:
+            raise ValueError(f"Failed to encode image to {format}")
+        
+        # Convert to base64
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return img_base64
+    
+    except Exception as e:
+        logger.error(f"Failed to encode image to base64: {e}")
+        raise
 
 
 def decode_depth_map(depth_base64: str) -> np.ndarray:
