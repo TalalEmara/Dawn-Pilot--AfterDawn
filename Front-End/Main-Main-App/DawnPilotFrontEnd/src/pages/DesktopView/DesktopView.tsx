@@ -1,4 +1,5 @@
 import 'aframe';
+import '../../AFrameComponents/VRMovementControls';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
@@ -293,12 +294,14 @@ function DesktopViewer() {
           );
         })}
 
-        {/* Camera: WASD only, no mouse look */}
+        {/* Camera: WASD + VR Controller, no mouse look */}
         <Entity
           ref={cameraRef}
           primitive="a-camera"
           look-controls="enabled: false"
           wasd-controls="enabled: true; acceleration: 65"
+          vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
+
           // ---  Attach component ---
          
         >
