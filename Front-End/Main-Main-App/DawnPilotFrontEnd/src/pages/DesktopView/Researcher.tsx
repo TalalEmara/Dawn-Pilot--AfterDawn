@@ -9,6 +9,7 @@ import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCollisionDetection } from '../../hooks/useCollision';
 import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
+import { useExperimentVault } from '../../hooks/Recording/useExperimentVault'; //
 import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
 
 // Helper to format milliseconds into MM:SS
@@ -23,18 +24,28 @@ function ResearcherView() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
 
-  // --- Research State ---
-  const [startTime] = useState<number>(Date.now());
+  // --- Research / Experiment State ---
+  const [subjectId, setSubjectId] = useState("test_subject_01");
+  const [visionMode, setVisionMode] = useState("prosthetic");
+  const [currentScenarioId, setCurrentScenarioId] = useState("default_world");
+  const [mobileId, setMobileId] = useState<string>(""); 
+
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [collisionCount, setCollisionCount] = useState<number>(0);
   const [collisionLog, setCollisionLog] = useState<string[]>([]);
-  // Placeholder for AI Frames (Base64 string)
+  
+  // Placeholder for AI Frames
   const [aiHudFrame, setAiHudFrame] = useState<string | null>(null); 
 
-  const { isConnected, updateCamera, setOnCameraUpdate } = useCameraSync({
+  // 1. Get socket from CameraSync
+  const { isConnected, updateCamera, setOnCameraUpdate, socket } = useCameraSync({
     clientType: 'desktop',
     throttleMs: 16 // ~60fps
   });
+
+  // 2. Initialize Experiment Vault
+  const vault = useExperimentVault(socket);
 
   const { world, loadWorld } = useScenarioWorld();
 
@@ -46,11 +57,10 @@ function ResearcherView() {
     loading: saveLoadLoading
   } = useScenarioSaveLoad();
 
-  // Dialog states
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
   
-  // Keep the framebuffer logic for sending data TO the AI
+  // Frame buffer logic
   useFrameBuffer({
     logInterval: 1000,
     logPixelData: false,
@@ -59,32 +69,42 @@ function ResearcherView() {
   
   // --- Effects ---
 
-  // 1. Load World
+  // 1. Capture Mobile Client ID directly from socket events
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleCameraUpdate = (data: any) => {
+      // Capture the ID of the device sending camera updates (the mobile viewer)
+      if (data.clientId && data.clientId !== socket.id) {
+        setMobileId(data.clientId);
+      }
+    };
+
+    socket.on('camera:updated', handleCameraUpdate);
+    return () => {
+      socket.off('camera:updated', handleCameraUpdate);
+    };
+  }, [socket]);
+
+  // 2. Load World
   useEffect(() => {
     loadWorld().catch(err => {
       console.error('Researcher - Failed to load world:', err);
     });
   }, [loadWorld]);
 
-  // 2. Timer Logic
+  // 3. Timer Logic (Only runs when recording)
   useEffect(() => {
+    if (!vault.isRecording || !vault.startTime) {
+      setElapsedTime(0);
+      return;
+    }
+
     const interval = setInterval(() => {
-      setElapsedTime(Date.now() - startTime);
+      setElapsedTime(Date.now() - vault.startTime!);
     }, 1000);
     return () => clearInterval(interval);
-  }, [startTime]);
-
-  // 3. Simulated AI Socket Listener (Replace this with your actual Socket hook)
-  useEffect(() => {
-    // Example: If you have a specific hook or socket listener for AI frames:
-    // socket.on('ai_hud_frame', (base64Image) => setAiHudFrame(base64Image));
-    
-    // For demonstration, we just initialize it. 
-    // In a real scenario, this would update `aiHudFrame` when data arrives.
-    return () => {
-      // socket.off('ai_hud_frame');
-    };
-  }, []);
+  }, [vault.isRecording, vault.startTime]);
 
   // 4. Desktop broadcasts camera position to mobile
   useEffect(() => {
@@ -111,7 +131,6 @@ function ResearcherView() {
   // 5. Receive Rotation from Mobile
   useEffect(() => {
     setOnCameraUpdate((remoteData) => {
-      // Desktop controls Position, Mobile controls Rotation
       if (cameraRef.current) {
         const el = cameraRef.current.el;
         const r = remoteData.rotation;
@@ -120,53 +139,77 @@ function ResearcherView() {
     });
   }, [setOnCameraUpdate]);
 
-  // 6. Collision Handling
+  // 6. Collision Handling + Vault Logging
   const handleCollision = useCallback((detail: { obstacleId: string; timestamp: number }) => {
     const timestamp = new Date().toLocaleTimeString();
     const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
     
     console.warn(`💥 ${logMsg}`);
     
-    // Update Research Sidebar State
     setCollisionCount(prev => prev + 1);
-    setCollisionLog(prev => [logMsg, ...prev].slice(0, 10)); // Keep last 10 logs
+    setCollisionLog(prev => [logMsg, ...prev].slice(0, 10));
 
-    // Optional: Send metric to backend
-    // fetch('http://192.168.1.116:5000/metrics/collision', ...);
-  }, []);
+    // LOG TO VAULT
+    vault.logCollision(detail.obstacleId);
+
+  }, [vault]);
 
   useCollisionDetection(cameraRef, handleCollision);
   useCollisionDetection(hitboxRef, handleCollision);
 
-  // Handle load scenario
+  // --- Experiment Control Handlers ---
+
+  const handleStartExperiment = async () => {
+    if (!socket?.id || !mobileId) {
+      alert("Missing connection! Ensure Mobile Viewer is connected.");
+      return;
+    }
+
+    const success = await vault.startExperiment({
+      laptopSocketId: socket.id,
+      mobileId: mobileId,
+      subjectId: subjectId,
+      scenarioId: currentScenarioId,
+      visionMode: visionMode
+    });
+
+    if (success) {
+      setCollisionCount(0); // Reset metrics on start
+      setCollisionLog([]);
+    }
+  };
+
+  const handleStopExperiment = async () => {
+    const filename = await vault.stopExperiment();
+    if (filename) {
+      alert(`Experiment saved: ${filename}`);
+    }
+  };
+
+  // --- Scenario Handlers ---
+
   const handleLoadScenario = async (filename: string) => {
     try {
       const result = await loadScenarioAPI(filename);
-
-      // Update world state by reloading from backend with new scenario
       await loadWorld();
+      setCurrentScenarioId(filename); // Track current scenario
 
-      // Restore camera position if available
       if (result.scenario.camera && cameraRef.current) {
         const cam = cameraRef.current.el;
         const cameraData = result.scenario.camera;
-
-        // Set camera position and rotation
         cam.setAttribute('position', `${cameraData.position.x} ${cameraData.position.y} ${cameraData.position.z}`);
         cam.setAttribute('rotation', `${cameraData.rotation.x} ${cameraData.rotation.y} ${cameraData.rotation.z}`);
-
-        // Broadcast the new camera position to mobile
         updateCamera({
           position: cameraData.position,
           rotation: cameraData.rotation
         });
       }
 
-      alert(`Scenario "${result.scenario.name}" loaded successfully!`);
+      alert(`Scenario "${result.scenario.name}" loaded!`);
       setShowLoadDialog(false);
     } catch (err) {
       console.error('Failed to load scenario:', err);
-      alert('Error loading scenario. Make sure backend is running.');
+      alert('Error loading scenario.');
     }
   };
 
@@ -174,7 +217,6 @@ function ResearcherView() {
   const handleDeleteScenario = async (filename: string) => {
     try {
       await deleteScenarioAPI(filename);
-      // Refresh the list
       const scenarios = await listScenarios();
       setSavedScenarios(scenarios);
     } catch (err) {
@@ -183,7 +225,6 @@ function ResearcherView() {
     }
   };
 
-  // Load scenarios list when opening load dialog
   const handleOpenLoadDialog = async () => {
     try {
       const scenarios = await listScenarios();
@@ -217,14 +258,87 @@ function ResearcherView() {
         
         {/* Header */}
         <div style={{ padding: '20px', borderBottom: '1px solid #444', background: '#2d2d2d' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', color: '#4CAF50' }}>🧪 Research Control</h2>
+          <h2 style={{ margin: 0, fontSize: '18px', color: vault.isRecording ? '#ff4444' : '#4CAF50' }}>
+            {vault.isRecording ? '🔴 Recording...' : '🧪 Research Control'}
+          </h2>
           <div style={{ fontSize: '12px', color: '#aaa', marginTop: '5px' }}>
-             Status: {isConnected ? <span style={{color: '#4CAF50'}}>Connected</span> : <span style={{color: '#f44336'}}>Waiting...</span>}
+             Laptop: {isConnected ? '🟢' : '🔴'} | Mobile: {mobileId ? '🟢' : '🔴 Waiting...'}
           </div>
         </div>
 
         {/* Scrollable Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+
+          {/* Experiment Setup Form */}
+          <div style={{ marginBottom: '24px', background: '#333', padding: '15px', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Setup</div>
+            
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#aaa' }}>Subject ID</label>
+              <input 
+                type="text" 
+                value={subjectId}
+                onChange={(e) => setSubjectId(e.target.value)}
+                disabled={vault.isRecording}
+                style={{ width: '100%', padding: '5px', background: '#222', border: '1px solid #444', color: 'white' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: '#aaa' }}>Vision Mode</label>
+              <select 
+                value={visionMode}
+                onChange={(e) => setVisionMode(e.target.value)}
+                disabled={vault.isRecording}
+                style={{ width: '100%', padding: '5px', background: '#222', border: '1px solid #444', color: 'white' }}
+              >
+                <option value="normal">Normal Vision</option>
+                <option value="prosthetic">Prosthetic Simulation</option>
+                <option value="low_res">Low Resolution</option>
+              </select>
+            </div>
+
+            {!vault.isRecording ? (
+              <button
+                onClick={handleStartExperiment}
+                disabled={!mobileId}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: mobileId ? '#4CAF50' : '#555',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: mobileId ? 'pointer' : 'not-allowed',
+                  fontWeight: 'bold'
+                }}
+              >
+                {vault.isLoading ? 'Starting...' : 'Start Recording'}
+              </button>
+            ) : (
+              <button
+                onClick={handleStopExperiment}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                {vault.isLoading ? 'Stopping...' : 'Stop Recording'}
+              </button>
+            )}
+            
+            {vault.error && (
+              <div style={{ color: '#ff6b6b', fontSize: '11px', marginTop: '5px' }}>
+                Error: {vault.error}
+              </div>
+            )}
+          </div>
           
           {/* Timer Section */}
           <div style={{ marginBottom: '24px' }}>
@@ -245,7 +359,7 @@ function ResearcherView() {
             </div>
           </div>
 
-          {/* AI HUD Frame (The "frames from AI socket") */}
+          {/* AI HUD Frame */}
           <div style={{ marginBottom: '24px' }}>
              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>AI Live Inference</div>
              <div style={{ 
@@ -264,7 +378,6 @@ function ResearcherView() {
                ) : (
                  <div style={{ textAlign: 'center', color: '#555', fontSize: '12px' }}>
                    <div>📡 Waiting for AI Stream...</div>
-                   <div style={{ fontSize: '10px' }}>(Check Socket Connection)</div>
                  </div>
                )}
              </div>
@@ -286,6 +399,7 @@ function ResearcherView() {
           {/* Scenario Controls */}
           <div style={{ marginTop: '24px' }}>
             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Scenario Control</div>
+            <div style={{ fontSize: '11px', color: '#00d9ff', marginBottom: '5px'}}>Current: {currentScenarioId}</div>
             <button
               style={{
                 backgroundColor: '#00ff88',
@@ -299,7 +413,7 @@ function ResearcherView() {
                 width: '100%'
               }}
               onClick={handleOpenLoadDialog}
-              disabled={saveLoadLoading}
+              disabled={saveLoadLoading || vault.isRecording}
             >
               📂 Load Scenario
             </button>
@@ -311,7 +425,7 @@ function ResearcherView() {
       {/* --- RIGHT SIDE: 3D VIEWPORT --- */}
       <div style={{ flex: 1, position: 'relative', background: 'black' }}>
         
-        {/* On-screen Controls Overlay (Minimal) */}
+        {/* On-screen Controls Overlay */}
         <div style={{
           position: 'absolute',
           top: 10,
@@ -326,9 +440,6 @@ function ResearcherView() {
           pointerEvents: 'none'
         }}>
           <div>🎮 VR Controller + ⌨️ WASD</div>
-          <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '4px' }}>
-            Btn 7: Height ↑ | Btn 6: Height ↓
-          </div>
         </div>
 
         <Scene
@@ -336,19 +447,12 @@ function ResearcherView() {
           vr-mode-ui="enabled: false"
           fog="type: linear; color: #111; near: 50; far: 200"
           style={{ width: '100%', height: '100%' }}
-          // stats
         >
-          {/* Sky */}
+          {/* ... [Existing Scene Content remains unchanged] ... */}
           <Entity primitive="a-sky" color="#87CEEB" />
-
-          {/* Lights */}
           <Entity light={{ type: 'ambient', color: '#ffffff', intensity: 0.6 }} />
-          <Entity
-            light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }}
-            position="0 2 -6"
-          />
-
-          {/* Ground */}
+          <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" />
+          
           <Entity
             primitive="a-plane"
             position="0 -1 -4"
@@ -359,14 +463,12 @@ function ResearcherView() {
             material="src: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0YTFhIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=); repeat: 100 100"
           />
 
-          {/* Entities from backend */}
           {world.entities.map((e) => {
             const pos = e.Position || { x: 0, y: 0, z: 0 };
             const rot = e.Rotation || { x: 0, y: 0, z: 0 };
             const scl = e.Scale || { x: 1, y: 1, z: 1 };
             const color = e.Color?.value || '#fff';
             const url = e.Model?.url;
-            
             const isObstacle = e.name !== "Light";
 
             if (url === 'Aframe') {
@@ -396,22 +498,21 @@ function ResearcherView() {
             );
           })}
 
-          {/* Camera: WASD + VR Controller, no mouse look */}
           <Entity
             ref={cameraRef}
             primitive="a-camera"
             look-controls="enabled: false"
             wasd-controls="enabled: true; acceleration: 30"
             vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
-          collision-detector="targetSelector: .collidable; cooldown: 1000"
+            collision-detector="targetSelector: .collidable; cooldown: 1000"
           >
             <Entity
               ref={hitboxRef}
               primitive="a-box"
-              position="0 -0.8 0" // Shift down to body level
-              scale=".1 1.6 .1"     // Human size
+              position="0 -0.8 0"
+              scale=".1 1.6 .1"
               material="opacity: 0.5; color: red; wireframe: true" 
-              visible={true} // Keep visible for debugging or set to false
+              visible={true} 
               collision-detector="targetSelector: .collidable; cooldown: 1000"
             />
           </Entity>
