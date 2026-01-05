@@ -30,7 +30,7 @@ DEFAULT_CAMERA_INTRINSICS = {
     "cy": 360.0,          # Principal point Y (image center)
     "width": 1280,        # Image width in pixels
     "height": 720,        # Image height in pixels
-    "horizontal_fov": 85.2,  # Maximum horizontal FoV in degrees
+    "horizontal_fov": 87.0,  # Maximum horizontal FoV in degrees
     "vertical_fov": 58.0     # Maximum vertical FoV in degrees
 }
 
@@ -58,7 +58,7 @@ class FoVCropper:
         self.fy = self.intrinsics.get("fy", 649.5)
         self.cx = self.intrinsics.get("cx", 640.0)
         self.cy = self.intrinsics.get("cy", 360.0)
-        self.max_h_fov = self.intrinsics.get("horizontal_fov", 85.2)
+        self.max_h_fov = self.intrinsics.get("horizontal_fov", 87.0)
         self.max_v_fov = self.intrinsics.get("vertical_fov", 58.0)
     
     def crop_to_fov(
@@ -94,6 +94,7 @@ class FoVCropper:
             ValueError: If input image dimensions are invalid
         """
         h, w = img.shape[:2]
+        print(f'h = {h}, w = {w}')
         
         if h <= 0 or w <= 0:
             raise ValueError(f"Invalid image dimensions: {h}×{w}")
@@ -244,24 +245,82 @@ def postprocess_fov_crop(img: np.ndarray) -> np.ndarray:
 # Example usage and testing
 if __name__ == "__main__":
     import cv2
-    
-    # Example: Create test image
-    test_img = np.random.randint(0, 255, (720, 1280, 3), dtype=np.uint8)
-    
+    # image_path = 'C:/Users/lenovo/Downloads/1.7z/1/Color/1000.png'
+    # # Example: Create test image
+    # # test_img = np.random.randint(0, 255, (720, 1280, 3), dtype=np.uint8)
+    # image = cv2.imread(image_path)
+    # test_img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     # Initialize cropper with default Intel RealSense D435 intrinsics
     cropper = FoVCropper()
     
-    # Test different FoV angles
-    for fov in [30, 45, 60]:
-        cropped = cropper.crop_to_fov(test_img, fov_degrees=fov)
-        estimated_size = cropper.get_fov_size_estimate(fov)
-        print(f"{fov}° FoV:")
-        print(f"  Actual size: {cropped.shape[1]}×{cropped.shape[0]}")
-        print(f"  Estimated size: {estimated_size[0]}×{estimated_size[1]}")
-        print()
+    # # Test different FoV angles
+    # for fov in [30]:
+    #     cropped = cropper.crop_to_fov(test_img, fov_degrees=fov)
+    #     estimated_size = cropper.get_fov_size_estimate(fov)
+    #     print(f"{fov}° FoV:")
+    #     print(f"  Actual size: {cropped.shape[1]}×{cropped.shape[0]}")
+    #     print(f"  Estimated size: {estimated_size[0]}×{estimated_size[1]}")
+        
+    #     # Save cropped image
+    #     output_path = f'cropped_fov_{fov}.png'
+    #     cv2.imwrite(output_path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+    #     print(f"  Saved to: {output_path}")
+    #     print()
     
     # Test with vertical offset
-    print("Testing vertical offset (30° FoV):")
-    for offset_name, offset_val in [("Top", 0.0), ("Center", 0.5), ("Bottom", 1.0)]:
-        cropped = cropper.crop_to_fov(test_img, fov_degrees=30, offset_y_ratio=offset_val)
-        print(f"  {offset_name} (offset={offset_val}): {cropped.shape[1]}×{cropped.shape[0]}")
+    # print("Testing vertical offset (30° FoV):")
+    # for offset_name, offset_val in [("Low" , 0.6), ("Lower", 0.75), ("Bottom", 1.0)]:
+    #     cropped = cropper.crop_to_fov(test_img, fov_degrees=30, offset_y_ratio=offset_val)
+    #     cv2.imwrite(f'cropped_fov_30_offset_{offset_name.lower()}.png', 
+    #                 cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+    #     print(f"  {offset_name} (offset={offset_val}): {cropped.shape[1]}×{cropped.shape[0]}")
+    
+    # Process all images in a directory
+    import os
+    from pathlib import Path
+    
+    input_dir = r'C:\Users\lenovo\Downloads\2.7z\2\Color'
+    output_dir = r'D:\Projects\GP\Dataset\try'
+    fov_degrees = 30
+    
+    # Create output directory if it doesn't exist
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Get all image files (png, jpg, jpeg, bmp)
+    image_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.PNG', '.JPG', '.JPEG', '.BMP'}
+    image_files = [f for f in os.listdir(input_dir) if Path(f).suffix in image_extensions]
+    
+    print(f"Found {len(image_files)} images in {input_dir}")
+    print(f"Output directory: {output_dir}\n")
+    
+    # Process each image
+    for idx, filename in enumerate(image_files, 1):
+        input_path = os.path.join(input_dir, filename)
+        
+        try:
+            # Read image
+            image = cv2.imread(input_path)
+            if image is None:
+                print(f"[{idx}/{len(image_files)}] ✗ Failed to read: {filename}")
+                continue
+            
+            # Convert BGR to RGB for processing
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+            # Crop to FoV
+            cropped = cropper.crop_to_fov(image_rgb, fov_degrees=fov_degrees, offset_y_ratio=0.75)
+            
+            # Save cropped image (convert back to BGR)
+            output_filename = f"cropped2_{fov_degrees}deg_{filename}"
+            output_path = os.path.join(output_dir, output_filename)
+            cropped_bgr = cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(output_path, cropped_bgr)
+            
+            print(f"[{idx}/{len(image_files)}] ✓ {filename} → {output_filename}")
+            print(f"           Size: {image.shape[1]}×{image.shape[0]} → {cropped.shape[1]}×{cropped.shape[0]}")
+            
+        except Exception as e:
+            print(f"[{idx}/{len(image_files)}] ✗ Error processing {filename}: {str(e)}")
+    
+    print(f"\n✓ Processing complete! Saved to {output_dir}")
+
