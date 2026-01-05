@@ -10,7 +10,7 @@ import { useFrameBuffer, getFolderHandle } from "../../hooks/useFrameBuffer";
 import { useCameraSync } from "../../hooks/useCameraSync";
 import carImg from "../../assets/frame_159_234589.png.png";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
-import { URLS, SERVER_IP } from "../../config";
+import { URLS, SERVER_IP } from "../../ApiConfig";
 // Port 8000 for Phosphene AI (Stream)
 
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {

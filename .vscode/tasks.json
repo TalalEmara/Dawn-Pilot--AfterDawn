@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+
+  "windows": {
+    "options": {
+      "shell": {
+        "executable": "cmd.exe",
+        "args": ["/d", "/c"]
+      }
+    }
+  },
+
+  "tasks": [
+    {
+        "label": "dev:frontend",
+        "type": "shell",
+        "command": "pnpm dev",
+        "options": {
+            "cwd": "${workspaceFolder}/Front-End/Main-Main-App/DawnPilotFrontEnd"
+        },
+        "presentation": {
+            "group": "dev",
+            "panel": "dedicated",
+            "reveal": "always"
+        },
+        "problemMatcher": []
+    },
+    {
+        "label": "dev:experiment-manager",
+        "type": "shell",
+        "command": "pnpm dev",
+        "options": {
+            "cwd": "${workspaceFolder}/Back-End/Experiment-Manager"
+        },
+        "presentation": {
+            "group": "dev",
+            "panel": "dedicated",
+            "reveal": "always"
+        },
+        "problemMatcher": []
+    },
+    {
+        "label": "dev:fastapi",
+        "type": "shell",
+        "command": "fastapi dev main.py",
+        "options": {
+            "cwd": "${workspaceFolder}/Back-End/fast_api"
+        },
+        "presentation": {
+            "group": "dev",
+            "panel": "dedicated",
+            "reveal": "always"
+        },
+        "problemMatcher": []
+    },
+    {
+        "label": "dev:all",
+        "dependsOn": [
+            "dev:frontend",
+            "dev:experiment-manager",
+            "dev:fastapi"
+        ],
+        "dependsOrder": "parallel",
+        "problemMatcher": []
+    }
+]
+}

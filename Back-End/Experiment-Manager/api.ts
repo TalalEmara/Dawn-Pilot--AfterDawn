@@ -13,6 +13,7 @@ import {
   reloadWorld,
   updateCube
 } from './world_Manager';
+import { experimentVault } from './Scenario-Builder/ExperimentVault';
 
 const app = express();
 const PORT = 5000;
@@ -65,32 +66,22 @@ io.on('connection', (socket) => {
       position: data.position,
       rotation: data.rotation
     });
+    
+    
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('CAM', {
+        pos: data.position,
+        rot: data.rotation
+      });
+    }
   });
 
-//   socket.on('device:motion', (data: {
-//     acceleration?: { x: number; y: number; z: number };
-//     rotationRate?: { alpha: number; beta: number; gamma: number };
-//     orientation?: { alpha: number; beta: number; gamma: number };
-//   }) => {
-//     socket.broadcast.emit('device:motion:update', {
-//       clientId: socket.id,
-//       ...data
-//     });
-//   });
-
-//   socket.on('entity:update', (data: {
-//     entityId: string;
-//     component: string;
-//     value: any;
-//   }) => {
-//     socket.broadcast.emit('entity:updated', data);
-//   });
-
-//   socket.on('disconnect', () => {
-//     console.log(`Client disconnected: ${socket.id}`);
-//     connectedClients.delete(socket.id);
-//     socket.broadcast.emit('client:disconnected', { clientId: socket.id });
-//   });
+//  COLLISION EVENTS
+  socket.on('experiment:collision', (data: { obstacleId: string }) => {
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('COLLISION', data);
+    }
+  });
 });
 
 // ========== REST endpoints ==========
@@ -134,6 +125,42 @@ app.post('/api/world/reload', (req, res) => {
   res.json(getWorld());
 });
 
+// needs refactor
+//EXperiment Vault
+
+app.post('/api/experiment/start', (req, res) => {
+  try {
+    const { 
+      subjectId, 
+      scenarioId, 
+      visionMode, 
+      mobileId,
+      laptopSocketId 
+    } = req.body;
+
+    experimentVault.startExperiment({
+      laptopSocketId: laptopSocketId || 'unknown_laptop',
+      mobileId: mobileId || 'unknown_mobile',
+      subjectId: subjectId || 'Anonymous',
+      scenarioId: scenarioId,
+      visionMode: visionMode
+    });
+
+    res.json({ success: true, message: "Recording started" });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// STOP EXPERIMENT
+app.post('/api/experiment/stop', (req, res) => {
+  const filename = experimentVault.stopExperiment();
+  if (filename) {
+    res.json({ success: true, file: filename });
+  } else {
+    res.status(400).json({ error: "No active experiment to stop" });
+  }
+});
 // ========== Start server ==========
 
 httpServer.listen(PORT, '0.0.0.0', () => {

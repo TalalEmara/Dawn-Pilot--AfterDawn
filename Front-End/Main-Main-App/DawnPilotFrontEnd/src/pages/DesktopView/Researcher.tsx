@@ -135,6 +135,7 @@ function ResearcherView() {
     // fetch('http://192.168.1.116:5000/metrics/collision', ...);
   }, []);
 
+  useCollisionDetection(cameraRef, handleCollision);
   useCollisionDetection(hitboxRef, handleCollision);
 
   // Handle load scenario
@@ -335,6 +336,7 @@ function ResearcherView() {
           vr-mode-ui="enabled: false"
           fog="type: linear; color: #111; near: 50; far: 200"
           style={{ width: '100%', height: '100%' }}
+          // stats
         >
           {/* Sky */}
           <Entity primitive="a-sky" color="#87CEEB" />
@@ -401,6 +403,7 @@ function ResearcherView() {
             look-controls="enabled: false"
             wasd-controls="enabled: true; acceleration: 30"
             vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
+          collision-detector="targetSelector: .collidable; cooldown: 1000"
           >
             <Entity
               ref={hitboxRef}

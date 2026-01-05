@@ -13,7 +13,7 @@ export interface Entity {
 interface ScenarioWorld {
   entities: Entity[];
 }
-import { URLS } from '../config';
+import { URLS } from '../ApiConfig';
 // const SOCKET_URL = "http://192.168.1.107:5000";
 
 const API_BASE_URL = URLS.SCENARIO_API;

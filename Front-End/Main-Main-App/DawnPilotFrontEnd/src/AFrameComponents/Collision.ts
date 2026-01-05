@@ -17,9 +17,9 @@ interface CollisionDetector {
   el: any;
   
   // Physics State
-  lastSafePosition: any; // THREE.Vector3
-  mover: any;            // The Camera object
-  checkCollision: (pos: any) => boolean; // Helper function
+  lastSafePosition: any; 
+  mover: any;            
+  checkCollision: (pos: any) => boolean;
 }
 
 if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
@@ -35,8 +35,15 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       this.lastCollisionTime = 0;
       this.obstacles = [];
 
-      // 1. Identify the mover (Parent Camera)
-      this.mover = this.el.parentEl ? this.el.parentEl.object3D : this.el.object3D;
+      // --- FIX START: Smarter Mover Detection ---
+      // If this element has movement controls, it IS the mover.
+      // Otherwise, fallback to the parent (old behavior).
+      if (this.el.getAttribute("wasd-controls") || this.el.getAttribute("vr-movement-controls")) {
+        this.mover = this.el.object3D;
+      } else {
+        this.mover = this.el.parentEl ? this.el.parentEl.object3D : this.el.object3D;
+      }
+      // --- FIX END ---
 
       // 2. Initialize Safe Position
       this.lastSafePosition = new THREE.Vector3();
@@ -57,22 +64,15 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       this.obstacles = Array.from(els).map((el) => (el as any).object3D);
     },
 
-    /**
-     * Helper to check if a specific position would cause a collision
-     */
     checkCollision: function (this: CollisionDetector, pos: any) {
-      // Create a fixed-size Hitbox centered on the Player Position
-      // Size: 0.6 width x 1.6 height x 0.6 depth
-      // Offset: y - 0.8 (assuming camera is at eye level 1.6m)
-      const buffer = 0.1; // Extra skin thickness
-      const w = 0.3 + buffer; // Half-width
-      const d = 0.3 + buffer; // Half-depth
+      const buffer = 0.1; 
+      const w = 0.3 + buffer; 
+      const d = 0.3 + buffer; 
       
       const x = pos.x;
-      const y = pos.y - 0.8; // Center of body
+      const y = pos.y - 0.8; 
       const z = pos.z;
 
-      // Manual Box Construction (Ignoring Rotation)
       this.playerBox.min.set(x - w, y - 0.8, z - d);
       this.playerBox.max.set(x + w, y + 0.8, z + d);
 
@@ -80,72 +80,57 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
         if (!obstacle) continue;
         this.obstacleBox.setFromObject(obstacle);
         if (this.playerBox.intersectsBox(this.obstacleBox)) {
-          return true; // Hit something
+          return true; 
         }
       }
       return false;
     },
 
     tick: function (this: CollisionDetector) {
-      // 1. Calculate how much the controls moved us this frame
       const currentPos = this.mover.position.clone();
       const delta = currentPos.clone().sub(this.lastSafePosition);
 
-      // If we haven't moved effectively, skip
       if (delta.lengthSq() < 0.000001) return;
 
       let hitOccurred = false;
 
-      // 2. Try moving along X axis ONLY
-      // We test: (OldSafe X + Delta X, OldSafe Y, OldSafe Z)
       const testX = this.lastSafePosition.clone();
       testX.x += delta.x;
       
       let safeX = delta.x;
       if (this.checkCollision(testX)) {
-        safeX = 0; // X blocked! Stop X movement.
+        safeX = 0; 
         hitOccurred = true;
       }
 
-      // 3. Try moving along Z axis ONLY
-      // We test: (OldSafe X, OldSafe Y, OldSafe Z + Delta Z)
       const testZ = this.lastSafePosition.clone();
       testZ.z += delta.z;
       
       let safeZ = delta.z;
       if (this.checkCollision(testZ)) {
-        safeZ = 0; // Z blocked! Stop Z movement.
+        safeZ = 0; 
         hitOccurred = true;
       }
 
-      // 4. Construct Final Allowed Position
-      // We keep Y changes (jumping/stairs) typically, or check them too if needed
       const finalPos = this.lastSafePosition.clone();
       finalPos.x += safeX;
       finalPos.z += safeZ;
       finalPos.y = currentPos.y; 
 
-      // 5. Final Safety Check (Corner Case)
-      // Sometimes X is fine, Z is fine, but X+Z hits a diagonal corner
       if (hitOccurred || (safeX !== 0 && safeZ !== 0)) {
          if (this.checkCollision(finalPos)) {
-             // Diagonal hit! Stop everything to be safe.
              finalPos.copy(this.lastSafePosition);
              hitOccurred = true;
          }
       }
 
-      // 6. Apply Physics
       this.mover.position.copy(finalPos);
       this.lastSafePosition.copy(finalPos);
 
-      // 7. Metric Logging
       const now = Date.now();
       if (hitOccurred && (now - this.lastCollisionTime > this.data.cooldown)) {
         this.lastCollisionTime = now;
         
-        // Find ID of what we hit (just for logging, pick the first one nearby)
-        // We run a quick check to find the name
         let obstacleId = "unknown";
         for(const obs of this.obstacles) {
            this.obstacleBox.setFromObject(obs);

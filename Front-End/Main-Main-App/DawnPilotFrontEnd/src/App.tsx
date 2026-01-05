@@ -9,10 +9,10 @@ import ResearcherView from './pages/DesktopView/Researcher'
 function App() {
   return (
     <Routes>
-      <Route path="/desktop" element={<ResearcherView />} />
-      <Route path="/viewer" element={<DesktopViewer />} />
+      <Route path="/research" element={<ResearcherView />} />
+      <Route path="/desktop" element={<DesktopViewer />} />
       <Route path="/mobile" element={<MobileViewer />} />
-      <Route path="/builder" element={<BuilderPage onModelSelect={function (modelName: string): void {
+      <Route path="/builder" element={<BuilderPage onModelSelect={function (): void {
         throw new Error('Function not implemented.')
       } } />} />
       <Route path="/" element={<MobileViewer />} />

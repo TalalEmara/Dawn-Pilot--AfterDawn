@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 // import { SOCKET_URL } from '../config/api';
-import { URLS } from '../config';
+import { URLS } from '../ApiConfig';
 // const SOCKET_URL = "http://192.168.1.107:5000";
 
 const SOCKET_URL = URLS.SYNC_SOCKET;

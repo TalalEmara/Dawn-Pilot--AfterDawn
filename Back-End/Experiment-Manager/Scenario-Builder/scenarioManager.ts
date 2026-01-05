@@ -108,7 +108,7 @@ export function createEntityFromModel(
   }
  const entityObj = createEntity(components);
 
-  // ✅ Add metadata name to the returned object
+  // Add metadata name to the returned object
   entityObj.name = modelName;
   metadataMap.set(entityObj.id, { name: modelName });
 
