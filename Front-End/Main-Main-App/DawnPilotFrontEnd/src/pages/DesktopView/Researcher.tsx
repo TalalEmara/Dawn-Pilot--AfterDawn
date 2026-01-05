@@ -11,6 +11,7 @@ import { useCollisionDetection } from '../../hooks/useCollision';
 import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
 import { useExperimentVault } from '../../hooks/Recording/useExperimentVault'; //
 import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
+import Minimap from '../../components/level-0/MiniMap/MiniMap';
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -45,7 +46,9 @@ function ResearcherView() {
   });
 
   // 2. Initialize Experiment Vault
-  const vault = useExperimentVault(socket);
+  const 
+  
+  vault = useExperimentVault(socket);
 
   const { world, loadWorld } = useScenarioWorld();
 
@@ -154,7 +157,7 @@ function ResearcherView() {
 
   }, [vault]);
 
-  useCollisionDetection(cameraRef, handleCollision);
+  // useCollisionDetection(cameraRef, handleCollision);
   useCollisionDetection(hitboxRef, handleCollision);
 
   // --- Experiment Control Handlers ---
@@ -339,7 +342,7 @@ function ResearcherView() {
               </div>
             )}
           </div>
-          
+          <Minimap entities={world.entities} cameraRef={cameraRef}/>
           {/* Timer Section */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Session Duration</div>
