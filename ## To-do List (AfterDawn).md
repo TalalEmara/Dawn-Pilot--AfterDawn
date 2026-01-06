@@ -1,0 +1,13 @@
+## To-do List (AfterDawn)
+- [x] Timer (still not confirmed)
+- [x] Laptop frame sender
+- [x] Json Save
+- - [x] Json file
+- - [x] Module to handle differen
+-- [x] subject data input
+- [ ] Models Declare(Normalize)
+- [x] second view in Researcher mode
+- [ ] logger implement
+- [ ] Camera save location
+- [ ] Refactoring
+- [ ] UI Implementation

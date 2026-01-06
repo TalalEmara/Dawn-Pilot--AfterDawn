@@ -9,9 +9,11 @@ import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCollisionDetection } from '../../hooks/useCollision';
 import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
-import { useExperimentVault } from '../../hooks/Recording/useExperimentVault'; //
+import { useExperimentVault } from '../../hooks/Recording/useExperimentVault';
 import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
-import Minimap from '../../components/level-0/MiniMap/MiniMap';
+import Minimap from '../../components/level-0/MiniMap/MiniMap'; // Fixed Import Path
+import { useBinaryStream } from '../../hooks/useBinarySystem';
+import { SERVER_IP } from '../../ApiConfig';
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -19,6 +21,19 @@ const formatTime = (ms: number) => {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
+// Helper to convert Blob to base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      resolve(base64.split(",")[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
 function ResearcherView() {
@@ -31,24 +46,25 @@ function ResearcherView() {
   const [currentScenarioId, setCurrentScenarioId] = useState("default_world");
   const [mobileId, setMobileId] = useState<string>(""); 
 
-  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [collisionCount, setCollisionCount] = useState<number>(0);
   const [collisionLog, setCollisionLog] = useState<string[]>([]);
   
-  // Placeholder for AI Frames
-  const [aiHudFrame, setAiHudFrame] = useState<string | null>(null); 
+  // AI Socket State
+  const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
+  const frameIdRef = useRef<number>(0);
+  
+  // Optional: Monitor the stream locally
+  const aiHudCanvasRef = useBinaryStream(aiWebSocket);
 
   // 1. Get socket from CameraSync
   const { isConnected, updateCamera, setOnCameraUpdate, socket } = useCameraSync({
     clientType: 'desktop',
-    throttleMs: 16 // ~60fps
+    throttleMs: 16
   });
 
   // 2. Initialize Experiment Vault
-  const 
-  
-  vault = useExperimentVault(socket);
+  const vault = useExperimentVault(socket);
 
   const { world, loadWorld } = useScenarioWorld();
 
@@ -63,26 +79,72 @@ function ResearcherView() {
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
   
-  // Frame buffer logic
+  // --- AI WebSocket Connection ---
+  useEffect(() => {
+    const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
+
+    ws.onopen = () => {
+      console.log("🟢 [Researcher] AI WebSocket Connected");
+      setAiWebSocket(ws);
+    };
+
+    ws.onerror = (error) => {
+      console.error("🔴 [Researcher] AI WebSocket Error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("🔴 [Researcher] AI WebSocket Disconnected");
+      setAiWebSocket(null);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, []);
+
+  // --- Frame Capture & Sending (SENDER) ---
   useFrameBuffer({
-    logInterval: 1000,
-    logPixelData: false,
-    downsamplePercentage: 50
+    // Only capture if socket is open
+    enabled: aiWebSocket?.readyState === WebSocket.OPEN, 
+    // Capture rate (e.g. ~10 FPS = 100ms)
+    logInterval: 100, 
+    onFrame: async (rgbBlob, depthBlob) => {
+      if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
+
+      try {
+        const rgbBase64 = await blobToBase64(rgbBlob);
+        const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
+
+        if (!depthBase64) return;
+
+        frameIdRef.current++;
+
+        const message = {
+          type: "frame",
+          frame_id: String(frameIdRef.current).padStart(3, "0"),
+          rgb: rgbBase64,
+          depth: depthBase64,
+          stage: "phosphene", 
+        };
+
+        // Send to AI
+        aiWebSocket.send(JSON.stringify(message));
+      } catch (error) {
+        console.error("❌ Error sending frame:", error);
+      }
+    }
   });
-  
-  // --- Effects ---
 
   // 1. Capture Mobile Client ID directly from socket events
   useEffect(() => {
     if (!socket) return;
-    
     const handleCameraUpdate = (data: any) => {
-      // Capture the ID of the device sending camera updates (the mobile viewer)
       if (data.clientId && data.clientId !== socket.id) {
         setMobileId(data.clientId);
       }
     };
-
     socket.on('camera:updated', handleCameraUpdate);
     return () => {
       socket.off('camera:updated', handleCameraUpdate);
@@ -96,20 +158,19 @@ function ResearcherView() {
     });
   }, [loadWorld]);
 
-  // 3. Timer Logic (Only runs when recording)
+  // 3. Timer Logic
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
       setElapsedTime(0);
       return;
     }
-
     const interval = setInterval(() => {
       setElapsedTime(Date.now() - vault.startTime!);
     }, 1000);
     return () => clearInterval(interval);
   }, [vault.isRecording, vault.startTime]);
 
-  // 4. Desktop broadcasts camera position to mobile
+  // 4. Desktop broadcasts camera POSITION (Master of Position)
   useEffect(() => {
     const broadcastCamera = () => {
       const el = cameraRef.current?.el;
@@ -131,22 +192,22 @@ function ResearcherView() {
     return () => cancelAnimationFrame(animationId);
   }, [updateCamera]);
 
-  // 5. Receive Rotation from Mobile
+  // 5. Receive ROTATION from Mobile (Slave of Rotation)
   useEffect(() => {
     setOnCameraUpdate((remoteData) => {
       if (cameraRef.current) {
         const el = cameraRef.current.el;
         const r = remoteData.rotation;
+        // Update local camera rotation to match Mobile Headset
         el.setAttribute('rotation', `${r.x} ${r.y} ${r.z}`);
       }
     });
   }, [setOnCameraUpdate]);
 
-  // 6. Collision Handling + Vault Logging
+  // 6. Collision Handling
   const handleCollision = useCallback((detail: { obstacleId: string; timestamp: number }) => {
     const timestamp = new Date().toLocaleTimeString();
     const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
-    
     console.warn(`💥 ${logMsg}`);
     
     setCollisionCount(prev => prev + 1);
@@ -154,10 +215,8 @@ function ResearcherView() {
 
     // LOG TO VAULT
     vault.logCollision(detail.obstacleId);
-
   }, [vault]);
 
-  // useCollisionDetection(cameraRef, handleCollision);
   useCollisionDetection(hitboxRef, handleCollision);
 
   // --- Experiment Control Handlers ---
@@ -167,7 +226,6 @@ function ResearcherView() {
       alert("Missing connection! Ensure Mobile Viewer is connected.");
       return;
     }
-
     const success = await vault.startExperiment({
       laptopSocketId: socket.id,
       mobileId: mobileId,
@@ -175,27 +233,22 @@ function ResearcherView() {
       scenarioId: currentScenarioId,
       visionMode: visionMode
     });
-
     if (success) {
-      setCollisionCount(0); // Reset metrics on start
+      setCollisionCount(0); 
       setCollisionLog([]);
     }
   };
 
   const handleStopExperiment = async () => {
     const filename = await vault.stopExperiment();
-    if (filename) {
-      alert(`Experiment saved: ${filename}`);
-    }
+    if (filename) alert(`Experiment saved: ${filename}`);
   };
-
-  // --- Scenario Handlers ---
 
   const handleLoadScenario = async (filename: string) => {
     try {
       const result = await loadScenarioAPI(filename);
       await loadWorld();
-      setCurrentScenarioId(filename); // Track current scenario
+      setCurrentScenarioId(filename);
 
       if (result.scenario.camera && cameraRef.current) {
         const cam = cameraRef.current.el;
@@ -207,7 +260,6 @@ function ResearcherView() {
           rotation: cameraData.rotation
         });
       }
-
       alert(`Scenario "${result.scenario.name}" loaded!`);
       setShowLoadDialog(false);
     } catch (err) {
@@ -216,7 +268,6 @@ function ResearcherView() {
     }
   };
 
-  // Handle delete scenario
   const handleDeleteScenario = async (filename: string) => {
     try {
       await deleteScenarioAPI(filename);
@@ -240,24 +291,10 @@ function ResearcherView() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      width: '100vw', 
-      height: '100vh', 
-      background: '#1a1a1a', 
-      color: '#eee',
-      fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif'
-    }}>
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: '#1a1a1a', color: '#eee', fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif' }}>
       
       {/* --- LEFT SIDEBAR: EXPERIMENT DATA --- */}
-      <div style={{
-        width: '320px',
-        background: '#222',
-        borderRight: '1px solid #444',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 10
-      }}>
+      <div style={{ width: '320px', background: '#222', borderRight: '1px solid #444', display: 'flex', flexDirection: 'column', zIndex: 10 }}>
         
         {/* Header */}
         <div style={{ padding: '20px', borderBottom: '1px solid #444', background: '#2d2d2d' }}>
@@ -305,44 +342,32 @@ function ResearcherView() {
               <button
                 onClick={handleStartExperiment}
                 disabled={!mobileId}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: mobileId ? '#4CAF50' : '#555',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: mobileId ? 'pointer' : 'not-allowed',
-                  fontWeight: 'bold'
-                }}
+                style={{ width: '100%', padding: '10px', background: mobileId ? '#4CAF50' : '#555', color: 'white', border: 'none', borderRadius: '4px', cursor: mobileId ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
               >
                 {vault.isLoading ? 'Starting...' : 'Start Recording'}
               </button>
             ) : (
               <button
                 onClick={handleStopExperiment}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: '#f44336',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
+                style={{ width: '100%', padding: '10px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 {vault.isLoading ? 'Stopping...' : 'Stop Recording'}
               </button>
             )}
             
-            {vault.error && (
-              <div style={{ color: '#ff6b6b', fontSize: '11px', marginTop: '5px' }}>
-                Error: {vault.error}
-              </div>
-            )}
+            {vault.error && <div style={{ color: '#ff6b6b', fontSize: '11px', marginTop: '5px' }}>Error: {vault.error}</div>}
           </div>
+
           <Minimap entities={world.entities} cameraRef={cameraRef}/>
+          
+          {/* AI HUD Monitor */}
+          <div style={{ marginTop: '20px', marginBottom: '24px' }}>
+             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>AI Live Feed (Sending)</div>
+             <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '4px', border: '1px solid #444', overflow: 'hidden' }}>
+               <canvas ref={aiHudCanvasRef} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+             </div>
+          </div>
+
           {/* Timer Section */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Session Duration</div>
@@ -360,30 +385,6 @@ function ResearcherView() {
                 {collisionCount}
               </span>
             </div>
-          </div>
-
-          {/* AI HUD Frame */}
-          <div style={{ marginBottom: '24px' }}>
-             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>AI Live Inference</div>
-             <div style={{ 
-               width: '100%', 
-               aspectRatio: '16/9', 
-               background: '#000', 
-               borderRadius: '4px',
-               border: '1px solid #444',
-               display: 'flex',
-               alignItems: 'center',
-               justifyContent: 'center',
-               overflow: 'hidden'
-             }}>
-               {aiHudFrame ? (
-                 <img src={aiHudFrame} alt="AI HUD" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-               ) : (
-                 <div style={{ textAlign: 'center', color: '#555', fontSize: '12px' }}>
-                   <div>📡 Waiting for AI Stream...</div>
-                 </div>
-               )}
-             </div>
           </div>
 
           {/* Collision Log */}
@@ -404,17 +405,7 @@ function ResearcherView() {
             <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#888', marginBottom: '8px' }}>Scenario Control</div>
             <div style={{ fontSize: '11px', color: '#00d9ff', marginBottom: '5px'}}>Current: {currentScenarioId}</div>
             <button
-              style={{
-                backgroundColor: '#00ff88',
-                color: '#000',
-                fontWeight: 'bold',
-                border: 'none',
-                padding: '8px 12px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                width: '100%'
-              }}
+              style={{ backgroundColor: '#00ff88', color: '#000', fontWeight: 'bold', border: 'none', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', width: '100%' }}
               onClick={handleOpenLoadDialog}
               disabled={saveLoadLoading || vault.isRecording}
             >
@@ -428,30 +419,11 @@ function ResearcherView() {
       {/* --- RIGHT SIDE: 3D VIEWPORT --- */}
       <div style={{ flex: 1, position: 'relative', background: 'black' }}>
         
-        {/* On-screen Controls Overlay */}
-        <div style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          zIndex: 1000,
-          background: 'rgba(0,0,0,0.6)',
-          color: 'white',
-          padding: '8px',
-          borderRadius: '4px',
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          pointerEvents: 'none'
-        }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '8px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace', pointerEvents: 'none' }}>
           <div>🎮 VR Controller + ⌨️ WASD</div>
         </div>
 
-        <Scene
-          embedded
-          vr-mode-ui="enabled: false"
-          fog="type: linear; color: #111; near: 50; far: 200"
-          style={{ width: '100%', height: '100%' }}
-        >
-          {/* ... [Existing Scene Content remains unchanged] ... */}
+        <Scene embedded vr-mode-ui="enabled: false" fog="type: linear; color: #111; near: 50; far: 200" style={{ width: '100%', height: '100%' }}>
           <Entity primitive="a-sky" color="#87CEEB" />
           <Entity light={{ type: 'ambient', color: '#ffffff', intensity: 0.6 }} />
           <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" />
@@ -521,7 +493,6 @@ function ResearcherView() {
           </Entity>
         </Scene>
 
-        {/* Load Scenario Dialog */}
         {showLoadDialog && (
           <ScenarioLoadDialog
             scenarios={savedScenarios}
