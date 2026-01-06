@@ -718,10 +718,8 @@ class NavigationDetectorService:
         # Calculate FoV boundaries in square coordinates
         half_fov_rad = math.radians(fov_deg / 2)
         tan_half = math.tan(half_fov_rad)
-        left_px = tan_half * fx
-        right_px = tan_half * fx
-        top_px = tan_half * fy
-        bottom_px = tan_half * fy
+        fov_px_h = tan_half * fx  # horizontal FoV in pixels
+        fov_px_v = tan_half * fy  # vertical FoV in pixels
         
         # Adjust camera center for square crop
         new_cx = cx - crop_x1
@@ -730,11 +728,11 @@ class NavigationDetectorService:
         # Apply vertical offset to FoV center
         offset_cy = new_cy + (offset_y_ratio - 0.5) * square_size * 0.5
         
-        # FoV region in square coordinates
-        fov_x1 = new_cx - left_px
-        fov_x2 = new_cx + right_px
-        fov_y1 = offset_cy - top_px
-        fov_y2 = offset_cy + bottom_px
+        # FoV region in square coordinates (with clamping and int conversion)
+        fov_x1 = max(0, int(new_cx - fov_px_h))
+        fov_x2 = min(square_size, int(new_cx + fov_px_h))
+        fov_y1 = max(0, int(offset_cy - fov_px_v))
+        fov_y2 = min(square_size, int(offset_cy + fov_px_v))
         
         # Actual crop dimensions (variable size)
         actual_crop_w = fov_x2 - fov_x1
