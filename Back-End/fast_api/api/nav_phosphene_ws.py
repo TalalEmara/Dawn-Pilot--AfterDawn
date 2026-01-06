@@ -117,6 +117,8 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         raise ValueError("Failed to decode images")
                     
                     logger.info(f"📊 Frame {frame_id}: RGB {rgb.shape}, Depth {depth.shape}, Debug: {debug_mode}")
+                    print(f"\n🔍 DEBUG MODE: {debug_mode}, Stage: {stage}")
+                    print(f"🔍 Cropping config: {cropping_config}")
                     
                     # Process frame with debug flag
                     result = navigation_detector_service.process_full_pipeline(

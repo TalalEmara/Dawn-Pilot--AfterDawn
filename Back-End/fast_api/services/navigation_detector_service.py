@@ -113,7 +113,12 @@ class NavigationDetectorService:
                 "horizontal_fov": 85.2,
                 "vertical_fov": 58.0
             },
-            "freepath_fallback": "clamp_with_warning"
+            "freepath_fallback": "clamp_with_warning",
+            "freepath_ball": {
+                "radius": 20,
+                "margin_buffer": 10,
+                "bottom_half_threshold": 0.5
+            }
         }
         
         # Load from config if exists
@@ -638,10 +643,17 @@ class NavigationDetectorService:
         debug_mode: bool = False
     ) -> Optional[Tuple[int, int]]:
         """
-        Calculate freepath ball position using fast FoV-based selection
+        Calculate freepath ball position using smart selection algorithm
         
-        Fast O(n) approach: Scan freepath points and pick first valid one in FoV.
-        Only draws ball when freepath is visible in the FoV region.
+        Smart selection logic:
+        1. Collect all freepath points in the cropped/FoV region
+        2. Filter to bottom half only (configurable threshold)
+        3. If no points in bottom half, return None (no freepath in front)
+        4. Separate points with/without margin:
+           - WITH margin: Select LOWEST (closest, safest)
+           - WITHOUT margin (edge): Select UPPERMOST (avoid bottom clipping)
+        5. If multiple at same Y, prefer center-most
+        6. Return position as-is (never modify freepath point position)
         
         Args:
             freepath_coordinates: List of [x, y] freepath centerline points
@@ -662,12 +674,25 @@ class NavigationDetectorService:
         crop_size = cropping_config.get("size", [128, 128])
         crop_w, crop_h = crop_size
         
+        # Get freepath ball configuration
+        ball_config = cropping_config.get("freepath_ball", {})
+        BALL_RADIUS = ball_config.get("radius", 10)
+        MARGIN_BUFFER = ball_config.get("margin_buffer", 5)
+        BOTTOM_HALF_THRESHOLD = ball_config.get("bottom_half_threshold", 0.5)
+        MIN_MARGIN = BALL_RADIUS + MARGIN_BUFFER
+        
+        print(f"\n🎯 BALL CONFIG - Radius: {BALL_RADIUS}, Margin: {MARGIN_BUFFER}, Threshold: {BOTTOM_HALF_THRESHOLD}")
+        if debug_mode:
+            logger.info(f"🎯 Frame {frame_id}: Ball config - radius={BALL_RADIUS}, margin={MARGIN_BUFFER}, threshold={BOTTOM_HALF_THRESHOLD}")
+        
         if crop_type != "fov_based":
-            # Fallback to legacy logic for non-FoV cropping
-            return self._calculate_freepath_ball_position_legacy(
-                freepath_coordinates, original_size, cropping_config, frame_id, debug_mode
+            # Use smart selection for all modes
+            return self._calculate_freepath_ball_position_smart(
+                freepath_coordinates, original_size, cropping_config, 
+                frame_id, debug_mode, MIN_MARGIN, BOTTOM_HALF_THRESHOLD
             )
         
+        # FoV-based cropping with smart selection
         # Get camera intrinsics for FoV calculation
         intrinsics = cropping_config.get("camera_intrinsics", {})
         fx = intrinsics.get("fx", 696.0)
@@ -703,7 +728,7 @@ class NavigationDetectorService:
         new_cy = cy - crop_y1
         
         # Apply vertical offset to FoV center
-        offset_cy = new_cy + (offset_y_ratio - 0.5) * square_size * 0.5  # Shift by up to half the square size
+        offset_cy = new_cy + (offset_y_ratio - 0.5) * square_size * 0.5
         
         # FoV region in square coordinates
         fov_x1 = new_cx - left_px
@@ -711,14 +736,16 @@ class NavigationDetectorService:
         fov_y1 = offset_cy - top_px
         fov_y2 = offset_cy + bottom_px
         
+        # Actual crop dimensions (variable size)
+        actual_crop_w = fov_x2 - fov_x1
+        actual_crop_h = fov_y2 - fov_y1
+        
         if debug_mode:
             logger.info(f"🎯 Frame {frame_id}: FoV region in square: x={fov_x1:.0f}-{fov_x2:.0f}, y={fov_y1:.0f}-{fov_y2:.0f}")
             logger.info(f"🎯 Frame {frame_id}: Freepath points: {len(freepath_coordinates)}")
         
-        # Fast O(n) selection: iterate and pick first valid point
-        selected_point = None
-        GAP_THRESHOLD = 50  # Prefer points with gap from bottom
-        
+        # Step 1: Collect all points in FoV region (in crop coordinates)
+        points_in_crop = []
         for point in freepath_coordinates:
             px, py = point
             
@@ -728,33 +755,63 @@ class NavigationDetectorService:
             
             # Check if point is within FoV
             if fov_x1 <= square_px <= fov_x2 and fov_y1 <= square_py <= fov_y2:
-                # Optional: prefer points with bottom gap
-                gap_from_bottom = square_size - square_py
-                if gap_from_bottom >= GAP_THRESHOLD:
-                    selected_point = (square_px, square_py)
-                    break
-                elif selected_point is None:
-                    # Take first valid point if no gap-preferred found yet
-                    selected_point = (square_px, square_py)
+                # Convert to crop coordinates
+                final_x = (square_px - fov_x1)
+                final_y = (square_py - fov_y1)
+                points_in_crop.append((final_x, final_y))
         
-        if selected_point is None:
+        if not points_in_crop:
             if debug_mode:
-                logger.info(f"🎯 Frame {frame_id}: No freepath points in FoV, not drawing ball")
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in FoV")
             return None
         
-        # Convert to final crop coordinates (variable FoV size)
-        square_px, square_py = selected_point
-        crop_w = fov_x2 - fov_x1
-        crop_h = fov_y2 - fov_y1
-        final_x = int((square_px - fov_x1) * crop_w / (fov_x2 - fov_x1))
-        final_y = int((square_py - fov_y1) * crop_h / (fov_y2 - fov_y1))
+        # Step 2: Filter to bottom half only
+        bottom_half_y = actual_crop_h * BOTTOM_HALF_THRESHOLD
+        points_in_bottom = [p for p in points_in_crop if p[1] >= bottom_half_y]
         
-        # Ensure within bounds
-        final_x = max(0, min(crop_w - 1, final_x))
-        final_y = max(0, min(crop_h - 1, final_y))
+        if not points_in_bottom:
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in bottom half (threshold={BOTTOM_HALF_THRESHOLD})")
+            return None
+        
+        # Step 3: Separate points with/without margins
+        points_with_margin = [
+            (x, y) for x, y in points_in_bottom
+            if (MIN_MARGIN <= x <= actual_crop_w - MIN_MARGIN and 
+                MIN_MARGIN <= y <= actual_crop_h - MIN_MARGIN)
+        ]
+        
+        points_without_margin = [
+            (x, y) for x, y in points_in_bottom
+            if (x, y) not in points_with_margin
+        ]
+        
+        # Step 4: Select point based on margin availability
+        if points_with_margin:
+            # BEST CASE: Points with margin exist → use LOWEST (closest, safest)
+            candidates = points_with_margin
+            target_y = max(candidates, key=lambda p: p[1])[1]  # Lowest (highest Y)
+        else:
+            # EDGE CASE: Only edge points → use UPPERMOST (avoid bottom clipping)
+            candidates = points_without_margin
+            target_y = min(candidates, key=lambda p: p[1])[1]  # Uppermost (lowest Y)
+        
+        target_points = [p for p in candidates if p[1] == target_y]
+        
+        # Step 5: If multiple, pick center-most
+        if len(target_points) > 1:
+            center_x = actual_crop_w / 2
+            selected = min(target_points, key=lambda p: abs(p[0] - center_x))
+        else:
+            selected = target_points[0]
+        
+        # Convert to integer coordinates
+        final_x = int(selected[0])
+        final_y = int(selected[1])
         
         if debug_mode:
-            logger.info(f"🎯 Frame {frame_id}: Selected point {selected_point} -> ({final_x}, {final_y})")
+            logger.info(f"🎯 Frame {frame_id}: Selected point ({final_x}, {final_y}) from {len(points_in_crop)} candidates")
+            logger.info(f"🎯 Frame {frame_id}: Points with margin: {len(points_with_margin)}, without: {len(points_without_margin)}")
         
         return (final_x, final_y)
     
@@ -762,7 +819,8 @@ class NavigationDetectorService:
         self, 
         img: np.ndarray, 
         ball_position: Optional[Tuple[int, int]], 
-        crop_size: Tuple[int, int] = (128, 128)
+        crop_size: Tuple[int, int] = (128, 128),
+        ball_radius: int = 10
     ) -> np.ndarray:
         """
         Draw freepath ball on image at specified position
@@ -771,6 +829,7 @@ class NavigationDetectorService:
             img: Input image
             ball_position: (x, y) position to draw ball, or None to skip
             crop_size: Size of cropped image
+            ball_radius: Radius of the ball (configurable)
             
         Returns:
             Image with freepath ball drawn
@@ -783,14 +842,10 @@ class NavigationDetectorService:
             img_copy = cv2.cvtColor(img_copy, cv2.COLOR_GRAY2BGR)
             
         x, y = ball_position
-        crop_w, crop_h = crop_size
-        
-        # Ensure position is within bounds
-        x = max(5, min(x, crop_w - 5))
-        y = max(5, min(y, crop_h - 5))
         
         # Draw white circle for freepath ball (will survive binarization)
-        cv2.circle(img_copy, (x, y), 4, (255, 255, 255), -1)  # Filled white circle
+        # Use position as-is, never modify freepath point position
+        cv2.circle(img_copy, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
         
         return img_copy
     
@@ -875,8 +930,20 @@ class NavigationDetectorService:
         if not self.is_loaded:
             raise RuntimeError("Navigation detector models not loaded")
         
-        # Use provided cropping config or default
-        effective_cropping_config = cropping_config or self.cropping_config.copy()
+        # Merge provided cropping config with defaults (preserve freepath_ball and camera_intrinsics)
+        if cropping_config:
+            effective_cropping_config = self.cropping_config.copy()
+            effective_cropping_config.update(cropping_config)
+            # Ensure freepath_ball is preserved if not in override
+            if "freepath_ball" not in cropping_config and "freepath_ball" in self.cropping_config:
+                effective_cropping_config["freepath_ball"] = self.cropping_config["freepath_ball"]
+            # Ensure camera_intrinsics is preserved if not in override
+            if "camera_intrinsics" not in cropping_config and "camera_intrinsics" in self.cropping_config:
+                effective_cropping_config["camera_intrinsics"] = self.cropping_config["camera_intrinsics"]
+        else:
+            effective_cropping_config = self.cropping_config.copy()
+        
+        print(f"\n🔧 EFFECTIVE CONFIG: {effective_cropping_config.get('freepath_ball', 'MISSING!')}")
         
         stage_times = {}
         result = {
@@ -925,6 +992,13 @@ class NavigationDetectorService:
             if debug_mode and debug_input_prefix:
                 cv2.imwrite(f"{debug_input_prefix}_03_detector_output.jpg", cv2.cvtColor(detector_output, cv2.COLOR_RGB2BGR))
                 logger.info(f"💾 Saved DETECTOR output")
+                
+                # Save freepath visualization
+                if freepath_coordinates and len(freepath_coordinates) > 0:
+                    freepath_vis = self._visualize_freepath_points(rgb, freepath_coordinates, freepath_circle)
+                    cv2.imwrite(f"{debug_input_prefix}_03b_freepath_points.jpg", cv2.cvtColor(freepath_vis, cv2.COLOR_RGB2BGR))
+                    logger.info(f"💾 Saved FREEPATH visualization with {len(freepath_coordinates)} points")
+                    print(f"💾 Saved freepath visualization: {debug_input_prefix}_03b_freepath_points.jpg")
             
             if stop_at == "detector":
                 # Encode detector output (RGB with bboxes) - optimized single encode
@@ -1064,7 +1138,11 @@ class NavigationDetectorService:
             
             # Draw freepath ball on cropped image
             if freepath_ball_position:
-                cropped_image = self.draw_freepath_ball(cropped_image, freepath_ball_position, crop_size)
+                ball_radius = effective_cropping_config.get("freepath_ball", {}).get("radius", 10)
+                print(f"\n🎨 DRAWING BALL - Radius: {ball_radius}, Position: {freepath_ball_position}")
+                if debug_mode:
+                    logger.info(f"🎯 Frame {frame_id}: Drawing ball with radius={ball_radius} at position {freepath_ball_position}")
+                cropped_image = self.draw_freepath_ball(cropped_image, freepath_ball_position, crop_size, ball_radius)
             
             # Optional debug: Save pre-phosphene image
             if debug_mode and debug_input_prefix:
@@ -1136,6 +1214,57 @@ class NavigationDetectorService:
         
         return result
     
+    def _visualize_freepath_points(
+        self, 
+        rgb: np.ndarray, 
+        freepath_coordinates: List[List[int]], 
+        freepath_circle: Optional[Dict[str, Any]] = None
+    ) -> np.ndarray:
+        """
+        Visualize freepath centerline points on RGB image
+        
+        Args:
+            rgb: RGB image as numpy array (H, W, 3)
+            freepath_coordinates: List of [x, y] freepath points
+            freepath_circle: Optional freepath circle dict with center and radius
+            
+        Returns:
+            np.ndarray: RGB image with freepath points visualized
+        """
+        # Create a copy to draw on
+        vis_img = rgb.copy()
+        
+        if not freepath_coordinates or len(freepath_coordinates) == 0:
+            return vis_img
+        
+        # Draw all freepath points as small circles
+        for i, point in enumerate(freepath_coordinates):
+            x, y = int(point[0]), int(point[1])
+            # Draw point (cyan color for visibility)
+            cv2.circle(vis_img, (x, y), 3, (0, 255, 255), -1)  # Cyan filled circle
+            
+            # Draw line connecting consecutive points
+            if i > 0:
+                prev_x, prev_y = int(freepath_coordinates[i-1][0]), int(freepath_coordinates[i-1][1])
+                cv2.line(vis_img, (prev_x, prev_y), (x, y), (0, 255, 255), 2)  # Cyan line
+        
+        # Draw freepath circle if available
+        if freepath_circle and "center" in freepath_circle:
+            center = freepath_circle["center"]
+            radius = freepath_circle.get("radius", 0)
+            if center and radius > 0:
+                cx, cy = int(center[0]), int(center[1])
+                # Draw circle (green color)
+                cv2.circle(vis_img, (cx, cy), int(radius), (0, 255, 0), 2)  # Green circle outline
+                # Draw center point
+                cv2.circle(vis_img, (cx, cy), 5, (0, 255, 0), -1)  # Green filled circle
+        
+        # Add text info
+        text = f"Freepath Points: {len(freepath_coordinates)}"
+        cv2.putText(vis_img, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        
+        return vis_img
+    
     def is_ready(self) -> bool:
         """Check if navigation detector service is ready"""
         return self.is_loaded
@@ -1194,14 +1323,15 @@ class NavigationDetectorService:
         
         return img_with_boxes
     
-    def draw_freepath_ball(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int]) -> np.ndarray:
+    def draw_freepath_ball_alt(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int], ball_radius: int = 10) -> np.ndarray:
         """
-        Draw freepath ball on simplified translator image
+        Alternative draw freepath ball on simplified translator image (legacy compatibility)
         
         Args:
             simplified_img: Simplified image from translator (grayscale or BGR)
             ball_position: (x, y) position for ball in cropped coordinates, or None
             crop_size: [width, height] of cropped image
+            ball_radius: Radius of the ball
             
         Returns:
             np.ndarray: Image with drawn ball
@@ -1215,14 +1345,8 @@ class NavigationDetectorService:
         
         if ball_position:
             x, y = ball_position
-            # Ensure position is within image bounds
-            h, w = img_with_ball.shape[:2]
-            x = max(0, min(w - 1, x))
-            y = max(0, min(h - 1, y))
-            
-            # Draw ball (filled white circle, larger radius for better visibility)
-            ball_radius = 10  # Larger radius for better visibility on 128x128 images
-            cv2.circle(img_with_ball, (x, y), ball_radius, (255, 255, 255), -1)
+            # Use position as-is (never modify)
+            cv2.circle(img_with_ball, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
         
         return img_with_ball
     
@@ -1406,16 +1530,26 @@ class NavigationDetectorService:
         
         return fov_crop
     
-    def _calculate_freepath_ball_position_legacy(
+    def _calculate_freepath_ball_position_smart(
         self, 
         freepath_coordinates: List[List[int]], 
         original_size: Tuple[int, int],
         cropping_config: Dict[str, Any],
         frame_id: int,
-        debug_mode: bool = False
+        debug_mode: bool,
+        MIN_MARGIN: int,
+        BOTTOM_HALF_THRESHOLD: float
     ) -> Optional[Tuple[int, int]]:
         """
-        Legacy freepath ball calculation for non-FoV cropping modes
+        Smart freepath ball calculation for non-FoV cropping modes
+        
+        Applies same smart selection logic as FoV mode:
+        1. Collect points in crop region
+        2. Filter to bottom half
+        3. Select based on margin:
+           - WITH margin: LOWEST point
+           - WITHOUT margin: UPPERMOST point
+        4. If multiple, prefer center-most
         
         Args:
             freepath_coordinates: List of [x, y] freepath centerline points
@@ -1423,6 +1557,8 @@ class NavigationDetectorService:
             cropping_config: Cropping configuration
             frame_id: Frame ID for logging
             debug_mode: Enable debug logging
+            MIN_MARGIN: Minimum margin for "good" points
+            BOTTOM_HALF_THRESHOLD: Y threshold for bottom half
             
         Returns:
             (x, y) position for freepath ball in cropped coordinates, or None
@@ -1438,63 +1574,87 @@ class NavigationDetectorService:
         crop_w, crop_h = crop_size
 
         if crop_type == "retinotopic":
-            # For retinotopic mapping, use simple scaling
-            xs = [x for x, y in freepath_coordinates]
-            ys = [y for x, y in freepath_coordinates]
-            center_x = sum(xs) / len(xs) if xs else orig_w // 2
-            center_y = sum(ys) / len(ys) if ys else orig_h // 2
-
+            # For retinotopic, collect all points and transform
+            points_in_crop = []
             scale_x = crop_w / orig_w
             scale_y = crop_h / orig_h
-            crop_x = int(center_x * scale_x)
-            crop_y = int(center_y * scale_y)
+            
+            for x, y in freepath_coordinates:
+                crop_x = x * scale_x
+                crop_y = y * scale_y
+                if 0 <= crop_x < crop_w and 0 <= crop_y < crop_h:
+                    points_in_crop.append((crop_x, crop_y))
 
         else:  # central_crop
-            # For central_crop, find points within the crop region and map to canvas coordinates
+            # Calculate crop boundaries
             center_x = orig_w // 2
             center_y = int(orig_h * offset_y_ratio)
-
             half_w = crop_w // 2
             half_h = crop_h // 2
-
             crop_x1 = max(0, center_x - half_w)
             crop_y1 = max(0, center_y - half_h)
             crop_x2 = min(orig_w, center_x + half_w)
             crop_y2 = min(orig_h, center_y + half_h)
             
-            if debug_mode:
-                logger.info(f"🎯 Frame {frame_id}: Crop region: x1={crop_x1}, y1={crop_y1}, x2={crop_x2}, y2={crop_y2}")
-                logger.info(f"🎯 Frame {frame_id}: Freepath coords: {freepath_coordinates}")
-
-            # Find freepath points within crop region
-            points_in_crop = [
-                (x, y) for x, y in freepath_coordinates
-                if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2
-            ]
-            
-            if debug_mode:
-                logger.info(f"🎯 Frame {frame_id}: Points in crop: {points_in_crop}")
-
-            if points_in_crop:
-                # Find the lowest point (highest Y) in the freepath within crop region
-                lowest_point = max(points_in_crop, key=lambda p: p[1])  # p[1] is Y coordinate
-                center_x, center_y = lowest_point
-
-                # Map X coordinate to canvas coordinates (0-127)
-                crop_x = int((center_x - crop_x1) * crop_w / (crop_x2 - crop_x1))
-                # Position ball at the BOTTOM of the cropped image (highest Y in crop coordinates)
-                crop_y = crop_h - 1
-                
-                if debug_mode:
-                    logger.info(f"🎯 Frame {frame_id}: Lowest point in crop: {lowest_point}, mapped to: ({crop_x}, {crop_y})")
-            else:
-                # No points in crop region, don't draw the ball
-                if debug_mode:
-                    logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region, not drawing ball")
-                return None
+            # Collect points in crop region
+            points_in_crop = []
+            for x, y in freepath_coordinates:
+                if crop_x1 <= x <= crop_x2 and crop_y1 <= y <= crop_y2:
+                    # Map to crop coordinates
+                    crop_x = (x - crop_x1) * crop_w / (crop_x2 - crop_x1)
+                    crop_y = (y - crop_y1) * crop_h / (crop_y2 - crop_y1)
+                    points_in_crop.append((crop_x, crop_y))
         
-        # Ensure within bounds
-        crop_x = max(0, min(crop_w - 1, crop_x))
-        crop_y = max(0, min(crop_h - 1, crop_y))
+        if not points_in_crop:
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in crop region")
+            return None
         
-        return (crop_x, crop_y)
+        # Smart selection: bottom half only
+        bottom_half_y = crop_h * BOTTOM_HALF_THRESHOLD
+        points_in_bottom = [p for p in points_in_crop if p[1] >= bottom_half_y]
+        
+        if not points_in_bottom:
+            if debug_mode:
+                logger.info(f"🎯 Frame {frame_id}: No freepath points in bottom half")
+            return None
+        
+        # Separate with/without margins
+        points_with_margin = [
+            (x, y) for x, y in points_in_bottom
+            if (MIN_MARGIN <= x <= crop_w - MIN_MARGIN and 
+                MIN_MARGIN <= y <= crop_h - MIN_MARGIN)
+        ]
+        
+        points_without_margin = [
+            (x, y) for x, y in points_in_bottom
+            if (x, y) not in points_with_margin
+        ]
+        
+        # Select point based on margin availability
+        if points_with_margin:
+            # Points with margin → use LOWEST (closest, safest)
+            candidates = points_with_margin
+            target_y = max(candidates, key=lambda p: p[1])[1]  # Lowest
+        else:
+            # Only edge points → use UPPERMOST (avoid bottom clipping)
+            candidates = points_without_margin
+            target_y = min(candidates, key=lambda p: p[1])[1]  # Uppermost
+        
+        target_points = [p for p in candidates if p[1] == target_y]
+        
+        # Pick center-most if multiple
+        if len(target_points) > 1:
+            center_x_pos = crop_w / 2
+            selected = min(target_points, key=lambda p: abs(p[0] - center_x_pos))
+        else:
+            selected = target_points[0]
+        
+        # Convert to integer
+        final_x = int(selected[0])
+        final_y = int(selected[1])
+        
+        if debug_mode:
+            logger.info(f"🎯 Frame {frame_id}: Selected ({final_x}, {final_y}) from {len(points_in_crop)} candidates")
+        
+        return (final_x, final_y)
