@@ -681,7 +681,7 @@ class NavigationDetectorService:
         BOTTOM_HALF_THRESHOLD = ball_config.get("bottom_half_threshold", 0.5)
         MIN_MARGIN = BALL_RADIUS + MARGIN_BUFFER
         
-        print(f"\n🎯 BALL CONFIG - Radius: {BALL_RADIUS}, Margin: {MARGIN_BUFFER}, Threshold: {BOTTOM_HALF_THRESHOLD}")
+        # print(f"\n🎯 BALL CONFIG - Radius: {BALL_RADIUS}, Margin: {MARGIN_BUFFER}, Threshold: {BOTTOM_HALF_THRESHOLD}")
         if debug_mode:
             logger.info(f"🎯 Frame {frame_id}: Ball config - radius={BALL_RADIUS}, margin={MARGIN_BUFFER}, threshold={BOTTOM_HALF_THRESHOLD}")
         
@@ -941,7 +941,7 @@ class NavigationDetectorService:
         else:
             effective_cropping_config = self.cropping_config.copy()
         
-        print(f"\n🔧 EFFECTIVE CONFIG: {effective_cropping_config.get('freepath_ball', 'MISSING!')}")
+        # print(f"\n🔧 EFFECTIVE CONFIG: {effective_cropping_config.get('freepath_ball', 'MISSING!')}")
         
         stage_times = {}
         result = {
@@ -1077,7 +1077,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h), draw_freepath=False)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=False)
             
             # Convert to grayscale and binarize for consistency
             simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
@@ -1137,7 +1137,7 @@ class NavigationDetectorService:
             # Draw freepath ball on cropped image
             if freepath_ball_position:
                 ball_radius = effective_cropping_config.get("freepath_ball", {}).get("radius", 10)
-                print(f"\n🎨 DRAWING BALL - Radius: {ball_radius}, Position: {freepath_ball_position}")
+                # print(f"\n🎨 DRAWING BALL - Radius: {ball_radius}, Position: {freepath_ball_position}")
                 if debug_mode:
                     logger.info(f"🎯 Frame {frame_id}: Drawing ball with radius={ball_radius} at position {freepath_ball_position}")
                 cropped_image = self.draw_freepath_ball(cropped_image, freepath_ball_position, crop_size, ball_radius)

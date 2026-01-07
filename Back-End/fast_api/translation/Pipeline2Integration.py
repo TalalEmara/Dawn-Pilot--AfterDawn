@@ -14,7 +14,7 @@ class Pipeline2Integration:
         
         # Get the directory where this file is located
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'ckpt_epoch_6.pth')
+        checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'BestencoderAllLosses_model.pth')
         
         # checkpoint = torch.load(checkpoint_path, map_location=self.device)
         # encoder_weights = checkpoint['encoder_state_dict']
@@ -29,12 +29,15 @@ class Pipeline2Integration:
     
     def input2phosphenes(self, input_image):
         """
-        input_image: numpy array of 128x128
+        input_image: numpy array of variable dimensions
         returns: torch tensor of shape (H, W)
         """
         # convert the input image to ndarray if it is not already
         if not isinstance(input_image, np.ndarray):
             input_image = np.array(input_image)
+
+        # resize input image to (image size = 349, 373)
+        input_image = np.resize(input_image, (349, 373))
         
         with torch.no_grad():  # Disable gradient computation for inference
             img_t = torch.from_numpy(input_image).float().to(self.device)  #output (H, W)

@@ -238,7 +238,7 @@ class TorchAxonMapModel(Model):
 
 class P2PDifferentiableSimulator(nn.Module):
 
-    def __init__(self, n_electrodes=378, implant_z=300, xrange=(-5, 5), yrange=(-5, 5)):
+    def __init__(self, n_electrodes=378, implant_z=300, xrange=(-3.5, 3.5), yrange=(-3.5, 3.5)):
         super(P2PDifferentiableSimulator, self).__init__()
 
         self.n_electrodes = n_electrodes
@@ -247,7 +247,7 @@ class P2PDifferentiableSimulator(nn.Module):
         self.implant = PRIMA(x=0, y=0, z=implant_z)
 
         # TorchAxonMapModel with frozen spatial constants
-        self.model = TorchAxonMapSpatial(xrange=xrange, yrange=yrange)
+        self.model = TorchAxonMapSpatial(xrange=xrange, yrange=yrange, rho=50, axlambda=10)
         self.model.build()
 
     def forward(self, amplitudes: torch.Tensor):
@@ -260,7 +260,7 @@ class P2PDifferentiableSimulator(nn.Module):
 
         # Container for batch percepts
         percepts_list = []
-        H, W = 41, 41  # desired percept shape
+        H, W = 29, 29  # desired percept shape
 
         for b in range(batch_size):
             # Convert each sample to (n_el, n_time=1)
