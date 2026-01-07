@@ -19,11 +19,9 @@ import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import ScenarioSaveDialog from "../../components/level-1/ScenarioSaveDialog/ScenarioSaveDialog";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
 
-interface BuilderPageProps {
-  onModelSelect: (modelName: string) => void;
-}
+const BuilderPage = () => {
 
-const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   // World management
   const {
     world,
@@ -265,7 +263,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
         removeLastEntity: handleRemoveLastEntity,
         deleteEntity,
         queryEntities,
-        onModelSelect,
+        onModelSelect: (name: string) => {
+            setSelectedModel(name);
+        },
       }}
     >
       <div className={styles.BuilderPageContainer}>
@@ -279,7 +279,12 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
             loading={saveLoadLoading}
           />
         )}
-
+        {selectedModel && (
+            <PropertiesPanel 
+                modelName={selectedModel} 
+                onClose={() => setSelectedModel(null)} 
+            />
+        )}
         {showLoadDialog && (
           <ScenarioLoadDialog
             scenarios={savedScenarios}
@@ -381,7 +386,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({ onModelSelect }) => {
                 <AEntity
                   key={e.id}
                   ecs-entity
-                  gltf-model={url}
+                  gltf-model={`models${url}${url}.glb`}
                   position={positionAttr}
                   rotation={rotationAttr}
                   scale={scaleAttr}

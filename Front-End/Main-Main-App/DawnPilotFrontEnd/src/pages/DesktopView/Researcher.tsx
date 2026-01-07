@@ -345,7 +345,7 @@ function ResearcherView() {
                 const tag = `a-${e.name.toLowerCase()}`;
                 return <Entity key={e.id} primitive={tag} position={`${pos.x} ${pos.y} ${pos.z}`} rotation={`${rot.x} ${rot.y} ${rot.z}`} scale={`${scl.x} ${scl.y} ${scl.z}`} material={`color: ${color}`} className={isObstacle ? "collidable" : ""} />;
               }
-              return <Entity key={e.id} className={isObstacle ? "collidable" : ""} gltf-model={url} position={`${pos.x} ${pos.y} ${pos.z}`} rotation={`${rot.x} ${rot.y} ${rot.z}`} scale={`${scl.x} ${scl.y} ${scl.z}`} />;
+              return <Entity key={e.id} className={isObstacle ? "collidable" : ""} gltf-model={`models${url}${url}.glb`} position={`${pos.x} ${pos.y} ${pos.z}`} rotation={`${rot.x} ${rot.y} ${rot.z}`} scale={`${scl.x} ${scl.y} ${scl.z}`} />;
             })}
 
             <Entity ref={cameraRef} primitive="a-camera" look-controls="enabled: false" wasd-controls="enabled: true; acceleration: 30" vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6" collision-detector="targetSelector: .collidable; cooldown: 1000">

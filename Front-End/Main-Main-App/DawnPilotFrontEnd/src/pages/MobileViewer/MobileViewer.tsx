@@ -9,7 +9,7 @@ import { useComponentManager } from "../../hooks/useComponentManager";
 import { useCameraSync } from "../../hooks/useCameraSync";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
-
+import groundTexture from "../../assets/ground/ground.jpg";
 // Component to update texture from canvas
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
@@ -45,7 +45,11 @@ function MobileView() {
   const { clearAllTimers } = useComponentManager();
 
   // 1. SYNC CONNECTION (Port 5000)
-  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera } = useCameraSync({
+  const {
+    isConnected: isSyncConnected,
+    setOnCameraUpdate,
+    updateCamera,
+  } = useCameraSync({
     clientType: "mobile",
     throttleMs: 16,
   });
@@ -78,17 +82,19 @@ function MobileView() {
       if (cameraRef.current && isSyncConnected) {
         const camEl = cameraRef.current.el;
         const rigEl = rigRef.current?.el;
-        
+
         // Get user head rotation
-        const rot = camEl.getAttribute('rotation');
+        const rot = camEl.getAttribute("rotation");
         // Get rig position (controlled by desktop)
-        const pos = rigEl ? rigEl.getAttribute('position') : {x:0, y:0, z:0};
+        const pos = rigEl
+          ? rigEl.getAttribute("position")
+          : { x: 0, y: 0, z: 0 };
 
         if (rot) {
           // Send rotation so Desktop can match view
           updateCamera({
             position: { x: pos.x, y: pos.y, z: pos.z },
-            rotation: { x: rot.x, y: rot.y, z: rot.z } 
+            rotation: { x: rot.x, y: rot.y, z: rot.z },
           });
         }
       }
@@ -133,30 +139,91 @@ function MobileView() {
   }, [loadWorld, clearAllTimers]);
 
   return (
-    <div style={{ background: "black", width: "100vw", height: "100vh", overflow: "hidden" }}>
+    <div
+      style={{
+        background: "black",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       <style>{`
         .a-enter-vr-button { bottom: 20% !important; position: fixed !important; z-index: 99999 !important; }
         body { overflow: hidden !important; }
       `}</style>
 
       {/* Status UI */}
-      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, background: "rgba(0,0,0,0.5)", color: "white", padding: "8px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace", textAlign: "right" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          zIndex: 1000,
+          background: "rgba(0,0,0,0.5)",
+          color: "white",
+          padding: "8px",
+          borderRadius: "4px",
+          fontSize: "12px",
+          fontFamily: "monospace",
+          textAlign: "right",
+        }}
+      >
         {/* Hidden Buffer Canvas for HUD Texture */}
-        <canvas ref={hudCanvasRef} id="hud-buffer" width="640" height="360" style={{ display: "none" }} />
+        <canvas
+          ref={hudCanvasRef}
+          id="hud-buffer"
+          width="640"
+          height="360"
+          style={{ display: "none" }}
+        />
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
-        <div>AI (Recv): {aiWebSocket?.readyState === WebSocket.OPEN ? "🟢" : "🔴"}</div>
-        <div>Pos: {cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)}, {cameraPosition.z.toFixed(1)}</div>
+        <div>
+          AI (Recv): {aiWebSocket?.readyState === WebSocket.OPEN ? "🟢" : "🔴"}
+        </div>
+        <div>
+          Pos: {cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)},{" "}
+          {cameraPosition.z.toFixed(1)}
+        </div>
       </div>
 
-      <div style={{ position: "absolute", top: 10, left: 10, zIndex: 1000, background: "#2196F3", color: "white", padding: "8px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          zIndex: 1000,
+          background: "#0988efff",
+          padding: "8px",
+          borderRadius: "4px",
+          fontSize: "12px",
+          fontFamily: "monospace",
+        }}
+      >
         📱 Mobile Receiver
       </div>
 
-      <Scene embedded vr-mode-ui="enabled: true" device-orientation-permission-ui="enabled: true" style={{ width: "100%", height: "100%" }} renderer="preserveDrawingBuffer: true; antialias: true">
-        <Entity primitive="a-sky" color="#87CEEB" />
+      <Scene
+        embedded
+        vr-mode-ui="enabled: true"
+        device-orientation-permission-ui="enabled: true"
+        style={{ width: "100%", height: "100%" }}
+        renderer="preserveDrawingBuffer: true; antialias: false"
+      >
+        <Entity primitive="a-sky" color="lightblue" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
-        <Entity primitive="a-plane" position="0 -1 -4" rotation="-90 0 0" width="1000" height="1000" color="#000000" />
+        <Entity
+          light={{ type: "directional", color: "#ffffff", intensity: 1.0 }}
+          position="5 10 2"
+        />
+        <Entity
+          primitive="a-plane"
+          position="0 0 -4"
+          rotation="-90 0 0"
+          width="300"
+          height="1000"
+          color="#ffffff"
+          material={{ src: groundTexture, repeat: "300 1000" }}
+        />
 
         {/* World Entities */}
         {world.entities.map((e) => {
@@ -165,36 +232,69 @@ function MobileView() {
           const scl = e.Scale || { x: 1, y: 1, z: 1 };
           const color = e.Color?.value || "#fff";
           const url = e.Model?.url;
+          const isObstacle = e.name !== "Light";
+
           if (url === "Aframe") {
             const tag = `a-${e.name.toLowerCase()}`;
-            return <Entity key={e.id} primitive={tag} position={`${pos.x} ${pos.y} ${pos.z}`} rotation={`${rot.x} ${rot.y} ${rot.z}`} scale={`${scl.x} ${scl.y} ${scl.z}`} material={`color: ${color}`} />;
+            return (
+              <Entity
+                key={e.id}
+                primitive={tag}
+                position={`${pos.x} ${pos.y} ${pos.z}`}
+                rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                scale={`${scl.x} ${scl.y} ${scl.z}`}
+                material={`color: ${color}`}
+                className={isObstacle ? "collidable" : ""}
+              />
+            );
           }
-          return <Entity key={e.id} gltf-model={url} position={`${pos.x} ${pos.y} ${pos.z}`} rotation={`${rot.x} ${rot.y} ${rot.z}`} scale={`${scl.x} ${scl.y} ${scl.z}`} />;
+          return (
+            <Entity
+              key={e.id}
+              className={isObstacle ? "collidable" : ""}
+              gltf-model={`models${url}${url}.glb`}
+              material={`color: ${color}`}
+              position={`${pos.x} ${pos.y} ${pos.z}`}
+              rotation={`${rot.x} ${rot.y} ${rot.z}`}
+              scale={`${scl.x} ${scl.y} ${scl.z}`}
+            />
+          );
         })}
 
         {/* Rig (Position Controlled by Desktop) */}
-        <Entity ref={rigRef} animation__follow={{ property: "position", dur: 200, easing: "easeOutQuad", startEvents: "follow-target", autoplay: false }}>
-          
+        <Entity
+          ref={rigRef}
+          animation__follow={{
+            property: "position",
+            dur: 200,
+            easing: "easeOutQuad",
+            startEvents: "follow-target",
+            autoplay: false,
+          }}
+        >
           {/* Camera (Rotation Controlled by Mobile Sensors) */}
-          <Entity ref={cameraRef} primitive="a-camera" look-controls="enabled: true;">
-            
+          <Entity
+            ref={cameraRef}
+            primitive="a-camera"
+            look-controls="enabled: true;"
+          >
             {/* HUD Plane - Displays the Stream from AI */}
             {/* The canvas-updater component watches #hud-buffer which uses useBinaryStream to update */}
-            <Entity
+            {/* <Entity
               className="hud-ignore"
               geometry="primitive: plane; width: 1.6; height: 0.9"
               position="0 0 -1" 
               canvas-updater="src: #hud-buffer"
               material="shader: flat; transparent: true; opacity: 1.0; depthTest: false"
               visible={true}
-            />
-            
+            /> */}
+
             {/* Optional Background for Contrast */}
-             <Entity
+            {/* <Entity
               geometry="primitive: plane; width: 10; height: 10"
               position="0 0 -1.1"
-              material="color: black; opacity: 0.0; transparent: true"
-            />
+              material="color: red; opacity: 0.0; transparent: true"
+            /> */}
           </Entity>
         </Entity>
       </Scene>

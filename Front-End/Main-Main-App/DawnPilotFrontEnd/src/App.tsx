@@ -12,9 +12,7 @@ function App() {
       <Route path="/research" element={<ResearcherView />} />
       <Route path="/desktop" element={<DesktopViewer />} />
       <Route path="/mobile" element={<MobileViewer />} />
-      <Route path="/builder" element={<BuilderPage onModelSelect={function (): void {
-        throw new Error('Function not implemented.')
-      } } />} />
+      <Route path="/builder" element={<BuilderPage />} />
       <Route path="/" element={<MobileViewer />} />
     </Routes>
   )

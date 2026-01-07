@@ -9,8 +9,13 @@
  * 2. Specify the component names and their default values
  */
 
+import { Position } from "../ECS-Pattern/components";
+
 export interface ModelDefinition {
   components: {
+    [componentName: string]: any;
+  };
+  normalizeFactors?: {
     [componentName: string]: any;
   };
   description?: string;
@@ -74,9 +79,6 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
     }
   },
 
-  // ========================================
-  // Player Character
-  // ========================================
   Car: {
     name: "Car",
     description: "Player character with full transform",
@@ -84,9 +86,13 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Position: { x: 0, y: 0, z: 0 },
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
-      Model: { url: "/car.glb" }
+      Model: { url: "/car" }
+    },
+    normalizeFactors: {
+      Scale: { x: 0.005, y: 0.005, z: 0.005 },
     }
   },
+  
   TreeTrunk: {
     name: "Tree Trunk",
     description: "tree trunk model",
@@ -94,10 +100,87 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Position: { x: 0, y: 0, z: 0 },
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
-      Model: { url: "/treeTrunk.glb" }
+      Model: { url: "/treeTrunk" },
+    },
+     normalizeFactors: {
+      Scale: { x: 0.001, y: 0.001, z: 0.001 },
     }
   },
 
+  Tree: {
+    name: "Tree ",
+    description: "tree model",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/tree" },
+    },
+    normalizeFactors: {
+      Scale: { x: 0.005, y: 0.005, z: 0.005 },
+    }
+  },
+  Pole: {
+    name: "Pole",
+    description: "Pole model",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/pole" },
+    },
+    normalizeFactors: {
+      Scale: { x: 0.0005, y: 0.0005, z: 0.0005 },
+    }
+  },
+  PlottedPlant: {
+    name: "Plotted Plant",
+    description: "Plotted Plant model",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/plottedPlant" },
+    }, 
+    normalizeFactors: {
+      Scale: { x: 0.5, y: 0.5, z: 0.5 },
+    }
+  },
+  Man: {
+    name: "Man",
+    description: "Man model",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/man" },
+    },
+  },
+  Crossway: {
+    name: "Crossway",
+    description: "Street crossway section",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/crossway" },
+    }, 
+    normalizeFactors: {
+      Scale: { x: 0.04, y: 0.04, z: 0.04 },
+      Rotation: { x:-90, y: 0, z: 0 },
+    }
+  },
+
+  Garbage: {
+    name: "Garbage",
+    description: "Garbage object",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/garbage" },
+    },
+  }
 };
 
 /**

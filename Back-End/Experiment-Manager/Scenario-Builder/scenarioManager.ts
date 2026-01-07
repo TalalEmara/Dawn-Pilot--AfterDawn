@@ -90,31 +90,52 @@ export function createScenarioWorld(): any {
 /**
  * Create entity from a model definition
  */
-export function createEntityFromModel(
-  modelName: string, 
-  overrides?: Record<string, any>): any {
-  if (!modelExists(modelName)) {
-    throw new Error(`Model "${modelName}" not found in definitions`);
-  }
+//
 
-  const definition = getModelDefinition(modelName)!;
-  
-  // Merge definition components with overrides
-  const components = { ...definition.components };
-  if (overrides) {
-    for (const [compName, compData] of Object.entries(overrides)) {
-      components[compName] = { ...components[compName], ...compData };
+//
+
+export function createEntityFromModel(modelName: string, overrides: Record<string, any> = {}) {
+  const definition = getModelDefinition(modelName);
+  if (!definition) throw new Error(`Model "${modelName}" not found`);
+
+  // 1. Deep clone defaults
+  const components = JSON.parse(JSON.stringify(definition.components));
+
+  // 2. Merge overrides
+  Object.entries(overrides).forEach(([key, val]) => {
+    components[key] = { ...(components[key] || {}), ...val };
+  });
+
+  // 3. Apply normalization factors with component-specific logic
+  const norms = definition.normalizeFactors || {};
+
+  Object.entries(norms).forEach(([compName, factors]) => {
+    if (components[compName]) {
+      Object.entries(factors).forEach(([axis, factor]) => {
+        // Ensure we are working with numbers
+        if (typeof components[compName][axis] === 'number' && typeof factor === 'number') {
+          
+          if (compName === 'Scale') {
+            // Scale: Multiply
+            components[compName][axis] *= factor;
+          } else if (compName === 'Position' || compName === 'Rotation') {
+            // Position & Rotation: Add
+            components[compName][axis] += factor;
+          }
+          
+        }
+      });
     }
-  }
- const entityObj = createEntity(components);
+  });
 
-  // Add metadata name to the returned object
-  entityObj.name = modelName;
-  metadataMap.set(entityObj.id, { name: modelName });
+  // 4. Create and return entity
+  const entity = createEntity(components);
+  entity.name = modelName;
+  metadataMap.set(entity.id, { name: modelName });
 
-  console.log(`Created entity from model "${modelName}":`, entityObj);
-  return entityObj;}
-
+  console.log(`Created entity "${modelName}":`, entity);
+  return entity;
+}
 /**
  * Create a new entity with optional initial components
  */
