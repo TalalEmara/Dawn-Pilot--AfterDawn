@@ -47,6 +47,18 @@ if os.path.exists(navigation_config_path):
     with open(navigation_config_path, 'r') as f:
         nav_config = json.load(f)
         detector_mode = nav_config.get("detector_mode", "mock")
+        
+        # Load frame buffer configuration
+        from core.frame_buffer import FrameBufferConfig
+        frame_buffer_config_dict = nav_config.get("frame_buffer", {})
+        frame_buffer_config = FrameBufferConfig.from_dict(frame_buffer_config_dict)
+        logger.info(f"Frame buffer: enabled={frame_buffer_config.enabled}, "
+                   f"max_age={frame_buffer_config.max_frame_age_ms}ms, "
+                   f"metrics_interval={frame_buffer_config.metrics_interval_seconds}s")
+else:
+    # Default frame buffer config
+    from core.frame_buffer import FrameBufferConfig
+    frame_buffer_config = FrameBufferConfig(enabled=True)
 
 logger.info(f"Detector mode: {detector_mode}")
 
@@ -69,6 +81,7 @@ set_services(detector_service, translator_service)
 # Inject navigation detector service into WebSocket handler
 import api.nav_phosphene_ws as nav_ws
 nav_ws.navigation_detector_service = navigation_detector_service
+nav_ws.frame_buffer_config = frame_buffer_config
 
 
 # ============================================================================

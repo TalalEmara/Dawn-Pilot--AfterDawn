@@ -10,6 +10,11 @@
     "parallel_processing": true,
     "gpu_memory_optimization": true
   },
+  "frame_buffer": {
+    "enabled": true,
+    "max_frame_age_ms": 1000.0,
+    "metrics_interval_seconds": 30.0
+  },
   "cropping": {
     "type": "central_crop",
     "size": [128, 128],

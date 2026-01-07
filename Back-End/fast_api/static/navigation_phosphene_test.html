@@ -421,6 +421,14 @@
                             <div class="stat-label">Total Time</div>
                             <div class="stat-value" id="totalTime">0ms</div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Frames Dropped</div>
+                            <div class="stat-value" id="framesDropped">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">WS Drained</div>
+                            <div class="stat-value" id="wsDrained">0</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -645,6 +653,12 @@
             if (data.stats) {
                 const totalTime = Object.values(data.stats).reduce((a, b) => a + b, 0);
                 document.getElementById('totalTime').textContent = totalTime.toFixed(0) + 'ms';
+            }
+            
+            // Display buffer metrics
+            if (data.buffer_metrics) {
+                document.getElementById('framesDropped').textContent = data.buffer_metrics.total_dropped || 0;
+                document.getElementById('wsDrained').textContent = data.buffer_metrics.websocket_drained || 0;
             }
         }
         
