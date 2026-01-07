@@ -115,7 +115,7 @@ class NavigationDetectorService:
             },
             "freepath_fallback": "clamp_with_warning",
             "freepath_ball": {
-                "radius": 20,
+                "radius": 50,
                 "margin_buffer": 10,
                 "bottom_half_threshold": 0.5
             }
@@ -676,7 +676,7 @@ class NavigationDetectorService:
         
         # Get freepath ball configuration
         ball_config = cropping_config.get("freepath_ball", {})
-        BALL_RADIUS = ball_config.get("radius", 10)
+        BALL_RADIUS = ball_config.get("radius", 50)
         MARGIN_BUFFER = ball_config.get("margin_buffer", 5)
         BOTTOM_HALF_THRESHOLD = ball_config.get("bottom_half_threshold", 0.5)
         MIN_MARGIN = BALL_RADIUS + MARGIN_BUFFER
@@ -818,7 +818,7 @@ class NavigationDetectorService:
         img: np.ndarray, 
         ball_position: Optional[Tuple[int, int]], 
         crop_size: Tuple[int, int] = (128, 128),
-        ball_radius: int = 10
+        ball_radius: int = 50
     ) -> np.ndarray:
         """
         Draw freepath ball on image at specified position
