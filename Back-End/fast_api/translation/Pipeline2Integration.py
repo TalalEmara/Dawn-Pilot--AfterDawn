@@ -24,7 +24,7 @@ class Pipeline2Integration:
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
         self.encoder.load_state_dict(checkpoint)
         self.encoder.eval()  # Set to evaluation mode
-        self.simulator = P2PDifferentiableSimulator().to(self.device)
+        self.simulator = P2PDifferentiableSimulatorScoreboard().to(self.device)
 
     
     def input2phosphenes(self, input_image):
