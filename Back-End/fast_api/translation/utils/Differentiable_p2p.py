@@ -4,7 +4,7 @@ This is the re-implmenetation of Axon Map in pytorch
 
 from pulse2percept.implants import PRIMA, ProsthesisSystem
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.models import AxonMapSpatial, Model, ScoarboardSpatial
+from pulse2percept.models import AxonMapSpatial, Model, ScoreboardSpatial
 import torch.nn as nn
 import torch 
 import pulse2percept as p2p
