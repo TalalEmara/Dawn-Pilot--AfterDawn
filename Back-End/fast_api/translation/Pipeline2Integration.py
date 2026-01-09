@@ -1,6 +1,6 @@
 #Integration of pipeline 2
 from .utils.utils import E2E_Simple_Encoder
-from .utils.Differentiable_p2p import P2PDifferentiableSimulator
+from .utils.Differentiable_p2p import P2PDifferentiableSimulator, P2PDifferentiableSimulatorScoreboard
 import torch
 import numpy as np
 import os
@@ -14,7 +14,7 @@ class Pipeline2Integration:
         
         # Get the directory where this file is located
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'BestencoderAllLosses_model.pth')
+        checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'scoreboardencoder.pth')
         
         # checkpoint = torch.load(checkpoint_path, map_location=self.device)
         # encoder_weights = checkpoint['encoder_state_dict']
