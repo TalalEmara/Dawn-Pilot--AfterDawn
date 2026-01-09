@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Controller Gamepad Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+        
+        .status {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        
+        .status-item {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+        
+        .connected {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .disconnected {
+            color: #f87171;
+            font-weight: bold;
+        }
+        
+        .section {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        
+        .section h2 {
+            margin-bottom: 15px;
+            color: #60a5fa;
+            font-size: 1.3em;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .axis, .button {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            transition: all 0.1s;
+        }
+        
+        .axis.active {
+            background: rgba(74, 222, 128, 0.3);
+            border: 2px solid #4ade80;
+            transform: scale(1.05);
+        }
+        
+        .button.pressed {
+            background: rgba(248, 113, 113, 0.5);
+            border: 2px solid #f87171;
+            transform: scale(1.05);
+        }
+        
+        .axis-label, .button-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #93c5fd;
+        }
+        
+        .axis-value, .button-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .bar-container {
+            width: 100%;
+            height: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #60a5fa);
+            transition: width 0.1s;
+            border-radius: 10px;
+        }
+        
+        .instructions {
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid #fbbf24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .instructions h3 {
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ul {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+        }
+        
+        .log {
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #60a5fa;
+            padding-left: 10px;
+        }
+        
+        .log-entry.change {
+            border-left-color: #4ade80;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 VR Controller Gamepad Test</h1>
+        <p class="subtitle">Test your controller to see what the browser can read</p>
+        
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ul>
+                <li><strong>1.</strong> Connect your VR controller via Bluetooth</li>
+                <li><strong>2.</strong> Press any button on the controller to activate it</li>
+                <li><strong>3.</strong> Move the rocker and press all buttons to test</li>
+                <li><strong>4.</strong> Watch the values update in real-time below</li>
+            </ul>
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span>Status: </span>
+                <span id="connectionStatus" class="disconnected">No Controller Connected</span>
+            </div>
+            <div class="status-item">
+                <span>Controller Name: </span>
+                <span id="controllerName">-</span>
+            </div>
+            <div class="status-item">
+                <span>Gamepad Index: </span>
+                <span id="gamepadIndex">-</span>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🕹️ Axes (Joystick/Rocker)</h2>
+            <div id="axesContainer" class="grid">
+                <p style="opacity: 0.6;">No axes detected yet...</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🔘 Buttons</h2>
+            <div id="buttonsContainer" class="grid">
+                <p style="opacity: 0.6;">No buttons detected yet...</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>📊 Activity Log</h2>
+            <div id="log" class="log">
+                <div class="log-entry">Waiting for controller input...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State tracking
+        let gamepadIndex = null;
+        let lastAxesValues = [];
+        let lastButtonStates = [];
+        const DEADZONE = 0.1;
+        
+        // DOM elements
+        const statusEl = document.getElementById('connectionStatus');
+        const nameEl = document.getElementById('controllerName');
+        const indexEl = document.getElementById('gamepadIndex');
+        const axesContainer = document.getElementById('axesContainer');
+        const buttonsContainer = document.getElementById('buttonsContainer');
+        const logEl = document.getElementById('log');
+        
+        // Logging function
+        function log(message, isChange = false) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry' + (isChange ? ' change' : '');
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.insertBefore(entry, logEl.firstChild);
+            
+            // Keep only last 50 entries
+            while (logEl.children.length > 50) {
+                logEl.removeChild(logEl.lastChild);
+            }
+        }
+        
+        // Check for gamepad connection
+        function checkGamepads() {
+            const gamepads = navigator.getGamepads();
+            
+            for (let i = 0; i < gamepads.length; i++) {
+                const gamepad = gamepads[i];
+                if (gamepad && gamepadIndex === null) {
+                    gamepadIndex = i;
+                    statusEl.textContent = 'Connected ✓';
+                    statusEl.className = 'connected';
+                    nameEl.textContent = gamepad.id;
+                    indexEl.textContent = i;
+                    
+                    log(`🎮 Controller connected: ${gamepad.id}`);
+                    log(`   Axes: ${gamepad.axes.length}, Buttons: ${gamepad.buttons.length}`);
+                    
+                    // Initialize tracking arrays
+                    lastAxesValues = new Array(gamepad.axes.length).fill(0);
+                    lastButtonStates = new Array(gamepad.buttons.length).fill(false);
+                    
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Update axes display
+        function updateAxes(gamepad) {
+            if (gamepad.axes.length === 0) return;
+            
+            axesContainer.innerHTML = '';
+            
+            gamepad.axes.forEach((value, index) => {
+                const axisDiv = document.createElement('div');
+                axisDiv.className = 'axis';
+                
+                const isActive = Math.abs(value) > DEADZONE;
+                if (isActive) {
+                    axisDiv.classList.add('active');
+                }
+                
+                // Log significant changes
+                if (Math.abs(value - lastAxesValues[index]) > 0.2) {
+                    log(`Axis ${index}: ${value.toFixed(3)}`, true);
+                    lastAxesValues[index] = value;
+                }
+                
+                // Direction indicator
+                let direction = '';
+                if (index === 0 || index === 2) { // Horizontal axes
+                    if (value < -DEADZONE) direction = ' ← LEFT';
+                    else if (value > DEADZONE) direction = ' RIGHT →';
+                } else { // Vertical axes
+                    if (value < -DEADZONE) direction = ' ↑ UP';
+                    else if (value > DEADZONE) direction = ' ↓ DOWN';
+                }
+                
+                const barWidth = ((value + 1) / 2) * 100; // Convert -1..1 to 0..100
+                
+                axisDiv.innerHTML = `
+                    <div class="axis-label">Axis ${index}${direction}</div>
+                    <div class="axis-value">${value.toFixed(3)}</div>
+                    <div class="bar-container">
+                        <div class="bar" style="width: ${barWidth}%"></div>
+                    </div>
+                `;
+                
+                axesContainer.appendChild(axisDiv);
+            });
+        }
+        
+        // Update buttons display
+        function updateButtons(gamepad) {
+            if (gamepad.buttons.length === 0) return;
+            
+            buttonsContainer.innerHTML = '';
+            
+            gamepad.buttons.forEach((button, index) => {
+                const buttonDiv = document.createElement('div');
+                buttonDiv.className = 'button';
+                
+                const isPressed = button.pressed;
+                if (isPressed) {
+                    buttonDiv.classList.add('pressed');
+                }
+                
+                // Log button presses
+                if (isPressed && !lastButtonStates[index]) {
+                    log(`🔘 Button ${index} PRESSED (value: ${button.value.toFixed(2)})`, true);
+                    lastButtonStates[index] = true;
+                } else if (!isPressed && lastButtonStates[index]) {
+                    log(`   Button ${index} released`, false);
+                    lastButtonStates[index] = false;
+                }
+                
+                buttonDiv.innerHTML = `
+                    <div class="button-label">Button ${index}</div>
+                    <div class="button-value">${isPressed ? '🔴 PRESSED' : '⚪ Released'}</div>
+                    <div style="margin-top: 5px; opacity: 0.7;">Value: ${button.value.toFixed(2)}</div>
+                `;
+                
+                buttonsContainer.appendChild(buttonDiv);
+            });
+        }
+        
+        // Main update loop
+        function update() {
+            const gamepads = navigator.getGamepads();
+            
+            if (gamepadIndex === null) {
+                checkGamepads();
+            } else {
+                const gamepad = gamepads[gamepadIndex];
+                
+                if (!gamepad) {
+                    // Disconnected
+                    gamepadIndex = null;
+                    statusEl.textContent = 'Disconnected ✗';
+                    statusEl.className = 'disconnected';
+                    nameEl.textContent = '-';
+                    indexEl.textContent = '-';
+                    log('❌ Controller disconnected');
+                } else {
+                    // Update displays
+                    updateAxes(gamepad);
+                    updateButtons(gamepad);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+        
+        // Event listeners for gamepad connection
+        window.addEventListener('gamepadconnected', (e) => {
+            log(`🎮 Gamepad connected event: ${e.gamepad.id}`);
+            checkGamepads();
+        });
+        
+        window.addEventListener('gamepaddisconnected', (e) => {
+            log(`❌ Gamepad disconnected event: ${e.gamepad.id}`);
+            gamepadIndex = null;
+        });
+        
+        // Start the update loop
+        log('System ready. Connect your controller and press any button.');
+        update();
+    </script>
+</body>
+</html>

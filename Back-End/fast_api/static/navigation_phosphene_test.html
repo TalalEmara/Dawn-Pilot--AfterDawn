@@ -384,7 +384,14 @@
                             <select id="cropTypeSelect" style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
                                 <option value="central_crop">Central Crop (with offset)</option>
                                 <option value="retinotopic">Retinotopic Mapping</option>
+                                <option value="fov_based" selected>FoV Based Cropping</option>
                             </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;" id="fovConfig">
+                            <label for="fovDegrees" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">FoV Degrees:</label>
+                            <input type="number" id="fovDegrees" value="30" min="10" max="90" step="5" 
+                                   style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
@@ -402,11 +409,11 @@
                         
                         <div style="margin-bottom: 15px;">
                             <label for="offsetRatio" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">Vertical Offset Ratio:</label>
-                            <input type="range" id="offsetRatio" min="0" max="1" step="0.1" value="0.5" 
+                            <input type="range" id="offsetRatio" min="0" max="1" step="0.1" value="0.75" 
                                    style="width: 100%; margin-bottom: 5px;">
                             <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6c757d;">
                                 <span>Top (0.0)</span>
-                                <span id="offsetValue">Center (0.5)</span>
+                                <span id="offsetValue">0.75</span>
                                 <span>Bottom (1.0)</span>
                             </div>
                         </div>
@@ -579,6 +586,11 @@
                 freepath_fallback: "none"
             };
             
+            // Add FoV degrees if using FoV-based cropping
+            if (croppingConfig.type === 'fov_based') {
+                croppingConfig.fov_degrees = parseFloat(document.getElementById('fovDegrees').value);
+            }
+            
             updateStatus('Processing...', 'processing');
             
             const message = {
@@ -587,6 +599,7 @@
                 rgb: rgbImage,
                 depth: depthImage,
                 stage: stage,
+                debug: false,  // Disable debug logging
                 cropping_config: croppingConfig
             };
             
@@ -671,6 +684,9 @@
         // Initialize
         updateStageInfo();
         
+        // Initialize crop type display
+        document.getElementById('cropTypeSelect').dispatchEvent(new Event('change'));
+        
         // Add event listener for offset ratio slider
         document.getElementById('offsetRatio').addEventListener('input', function(e) {
             const value = parseFloat(e.target.value);
@@ -682,7 +698,17 @@
             } else if (value === 1) {
                 display.textContent = 'Bottom (1.0)';
             } else {
-                display.textContent = value.toFixed(1);
+                display.textContent = value.toFixed(2);
+            }
+        });
+        
+        // Add event listener for crop type selection
+        document.getElementById('cropTypeSelect').addEventListener('change', function(e) {
+            const fovConfig = document.getElementById('fovConfig');
+            if (e.target.value === 'fov_based') {
+                fovConfig.style.display = 'block';
+            } else {
+                fovConfig.style.display = 'none';
             }
         });
     </script>

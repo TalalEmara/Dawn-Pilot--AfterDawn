@@ -16,10 +16,24 @@
     "metrics_interval_seconds": 30.0
   },
   "cropping": {
-    "type": "central_crop",
-    "size": [128, 128],
-    "offset_y_ratio": 0.5,
-    "freepath_fallback": "none"
+    "type": "fov_based",
+    "fov_degrees": 30,
+    "camera_intrinsics": {
+      "fx": 696.0,
+      "fy": 649.5,
+      "cx": 640.0,
+      "cy": 360.0,
+      "width": 1280,
+      "height": 720,
+      "horizontal_fov": 87.0,
+      "vertical_fov": 58.0
+    },
+    "freepath_fallback": "clamp_with_warning",
+    "freepath_ball": {
+      "radius": 50,
+      "margin_buffer": 10,
+      "bottom_half_threshold": 0.5
+    }
   },
   "testing": {
     "test_data_path": "D:/Eng/SBE/gp/Dawn-Pilot--AfterDawn/testing_sequence/7",

@@ -4,7 +4,7 @@ This is the re-implmenetation of Axon Map in pytorch
 
 from pulse2percept.implants import PRIMA, ProsthesisSystem
 from pulse2percept.stimuli import Stimulus
-from pulse2percept.models import AxonMapSpatial, Model
+from pulse2percept.models import AxonMapSpatial, Model, ScoreboardSpatial
 import torch.nn as nn
 import torch 
 import pulse2percept as p2p
@@ -261,6 +261,142 @@ class P2PDifferentiableSimulator(nn.Module):
         # Container for batch percepts
         percepts_list = []
         H, W = 41, 41  # desired percept shape
+
+        for b in range(batch_size):
+            # Convert each sample to (n_el, n_time=1)
+            stim = amplitudes[b].unsqueeze(1)  # shape: (n_el, 1)
+            percept = self.model._predict_spatial(self.implant.earray, stim) 
+            
+            # Compute percept via differentiable AxonMap
+            percept_2d = percept.reshape(H, W)  # remove time dim and reshape
+            percepts_list.append(percept_2d)
+
+        # Stack into tensor (batch_size, n_space, n_time)
+        percepts = torch.stack(percepts_list, dim=0).unsqueeze(1)
+        # print(percepts.shape)
+        percepts_min = percepts.amin(dim=(1, 2, 3), keepdim=True)
+        percepts_max = percepts.amax(dim=(1, 2, 3), keepdim=True)
+        percepts = (percepts - percepts_min) / (percepts_max - percepts_min + 1e-8)
+        return percepts
+
+
+class TorchScoreboardSpatial(ScoreboardSpatial):
+    """
+    PyTorch reimplementation of the Scoreboard Model.
+    Replaces 'fast_scoreboard' Cython logic with differentiable PyTorch operations.
+    """
+
+    def _predict_spatial(self, earray, stim):
+        # Standard setup (same as your AxonMap implementation)
+        dtype = torch.float32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if not torch.is_tensor(stim):
+            raise TypeError("stim must be a torch.Tensor")
+
+        if stim.device != device or stim.dtype != dtype:
+            stim = stim.to(dtype=dtype, device=device)
+
+        if stim.dim() != 2:
+            raise ValueError("stim must have shape (n_el, n_time)") 
+
+        # -------------------------
+        # 1) Grid positions (constants, frozen)
+        # -------------------------
+        # Unlike 'fast_scoreboard' where grid is passed in, 
+        # in the class structure we get it from 'self.grid'
+        # We flatten them to 1D arrays to match the logic of 'n_space'
+        xgrid_np = self.grid.x.ravel()
+        ygrid_np = self.grid.y.ravel()
+
+        xgrid = torch.tensor(xgrid_np, dtype=dtype, device=device, requires_grad=False)
+        ygrid = torch.tensor(ygrid_np, dtype=dtype, device=device, requires_grad=False)
+
+        # -------------------------
+        # 2) Electrode positions (constants, frozen)
+        # -------------------------
+        # Approx: 280 microns = 1 degree visual angle
+        microns_per_degree = 280.0 
+        xel_np = np.array([e.x for e in earray.electrode_objects], dtype=np.float32) / microns_per_degree
+        yel_np = np.array([e.y for e in earray.electrode_objects], dtype=np.float32) / microns_per_degree
+
+        xel = torch.tensor(xel_np, dtype=dtype, device=device, requires_grad=False)
+        yel = torch.tensor(yel_np, dtype=dtype, device=device, requires_grad=False)
+
+        # -------------------------
+        # 3) Calculate Gaussian Weights (The Core Logic)
+        # -------------------------
+        # We use broadcasting to calculate the distance from every pixel to every electrode at once.
+        # xgrid shape: (N_space, 1)
+        # xel shape:   (1, N_el)
+        # Result shape: (N_space, N_el)
+        dx = xgrid.unsqueeze(1) - xel.unsqueeze(0)
+        dy = ygrid.unsqueeze(1) - yel.unsqueeze(0)
+        dist2 = dx**2 + dy**2
+
+        # Get rho (spread parameter)
+        rho_val = float(self.rho) / microns_per_degree
+        denom = 2.0 * (rho_val ** 2)
+
+        # Create the weight matrix (This replaces the Gaussian calculation in the loop)
+        # Shape: (N_space, N_el)
+        weights = torch.exp(-dist2 / denom)
+
+        # -------------------------
+        # 4) Compute Percept (Matrix Multiplication)
+        # -------------------------
+        # This replaces the nested loops: "px_bright = px_bright + amp * gauss"
+        # weights: (N_space, N_el)
+        # stim:    (N_el, N_time)
+        # percept: (N_space, N_time)
+        percept = torch.matmul(weights, stim)
+
+        # -------------------------
+        # 5) Thresholding
+        # -------------------------
+        thresh_val = float(self.thresh_percept)
+        percept = percept * (percept.abs() >= thresh_val).to(dtype)
+
+        return percept
+
+
+class TorchScoreboardModel(Model):
+    """
+    Wrapper class to make it compatible with your Simulator setup
+    """
+    def __init__(self, **params):
+        super(TorchScoreboardModel, self).__init__(
+            spatial=TorchScoreboardSpatial(),
+            temporal=None,
+            **params
+        )
+
+
+class P2PDifferentiableSimulatorScoreboard(nn.Module):
+
+    def __init__(self, n_electrodes=378, implant_z=300, xrange=(-3.5, 3.5), yrange=(-3.5, 3.5)):
+        super(P2PDifferentiableSimulatorScoreboard, self).__init__()
+
+        self.n_electrodes = n_electrodes
+
+        # Initialize implant (constants)
+        self.implant = PRIMA(x=0, y=0, z=implant_z)
+
+        # Initialize the model and build it (this is done in numpy, no need to torch)
+        self.model = TorchScoreboardModel(xrange=xrange, yrange=yrange, rho=50)
+        self.model.build()
+
+    def forward(self, amplitudes: torch.Tensor):
+        if not torch.is_tensor(amplitudes):
+            raise TypeError("amplitudes must be a torch.Tensor")
+        
+        batch_size, n_el = amplitudes.shape
+        if n_el != self.n_electrodes:
+            raise ValueError(f"Expected {self.n_electrodes} electrodes, got {n_el}")
+
+        # Container for batch percepts
+        percepts_list = []
+        H, W = 29, 29  # desired percept shape
 
         for b in range(batch_size):
             # Convert each sample to (n_el, n_time=1)

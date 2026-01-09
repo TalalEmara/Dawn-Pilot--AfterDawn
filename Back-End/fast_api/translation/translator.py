@@ -633,7 +633,7 @@ class Translator:
     # MAIN RENDERING PIPELINE
     # =====================================================================================
     
-    def run(self, out_name="frame_simp.png", save_to_disk=True, target_canvas_size=(128, 128), draw_freepath=True):
+    def run(self, out_name="frame_simp.png", save_to_disk=False, target_canvas_size=(128, 128), draw_freepath=True):
         """
         Execute the complete navigation translation pipeline with retinotopic mapping.
         
