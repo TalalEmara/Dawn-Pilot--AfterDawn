@@ -121,6 +121,13 @@ class NavigationDetectorService:
             }
         }
         
+        # Cached camera intrinsics (scaled for current image resolution)
+        # Only recalculated when image dimensions change - eliminates per-frame overhead
+        self._cached_image_dims = None  # (width, height)
+        self._cached_intrinsics = None  # (fx, fy, cx, cy)
+        self._cached_image_dims = None  # (width, height)
+        self._cached_intrinsics = None  # (fx, fy, cx, cy)
+        
         # Load from config if exists
         if os.path.exists(config_path):
             try:
@@ -693,12 +700,12 @@ class NavigationDetectorService:
             )
         
         # FoV-based cropping with smart selection
-        # Get camera intrinsics for FoV calculation
+        # Get scaled camera intrinsics (MUST match the actual image resolution)
+        orig_h, orig_w = original_size
         intrinsics = cropping_config.get("camera_intrinsics", {})
-        fx = intrinsics.get("fx", 696.0)
-        fy = intrinsics.get("fy", 649.5)
-        cx = intrinsics.get("cx", 640.0)
-        cy = intrinsics.get("cy", 360.0)
+        
+        # Use cached scaled intrinsics to match actual image dimensions
+        fx, fy, cx, cy = self._update_cached_intrinsics(orig_w, orig_h, intrinsics)
         
         # Get FoV with clamping
         requested_fov = cropping_config.get("fov_degrees", 30)
@@ -706,9 +713,6 @@ class NavigationDetectorService:
         max_v_fov = intrinsics.get("vertical_fov", 58.0)
         offset_y_ratio = cropping_config.get("offset_y_ratio", 0.5)
         fov_deg = min(requested_fov, max_h_fov, max_v_fov)
-        
-        # Calculate square crop boundaries
-        orig_h, orig_w = original_size
         square_size = min(orig_h, orig_w)
         crop_x1 = (orig_w - square_size) // 2
         crop_x2 = crop_x1 + square_size
@@ -1079,6 +1083,12 @@ class NavigationDetectorService:
             translator.params['canvas_size'] = [h, w]
             simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=False)
             
+            # Safety check: Ensure simplified_canvas is valid
+            if simplified_canvas is None or simplified_canvas.size == 0:
+                logger.error(f"Translator returned None or empty image for frame {frame_id}")
+                result["error"] = "Translator failed to generate simplified canvas"
+                return result
+            
             # Convert to grayscale and binarize for consistency
             simplified_gray = cv2.cvtColor(simplified_canvas, cv2.COLOR_BGR2GRAY)
             _, simplified_binary = cv2.threshold(simplified_gray, 127, 255, cv2.THRESH_BINARY)
@@ -1107,6 +1117,12 @@ class NavigationDetectorService:
             # STAGE 3: PRE_PHOSPHENE - Apply cropping and add freepath ball
             stage_start = time.time()
             
+            # Safety check before cropping
+            if simplified_binary is None or simplified_binary.size == 0:
+                logger.error(f"simplified_binary is None or empty before cropping (frame {frame_id})")
+                result["error"] = "Image is empty before cropping stage"
+                return result
+            
             # Apply cropping to the full-sized translator output
             if crop_type == "fov_based":
                 cropped_image = self._fov_based_crop(simplified_binary, effective_cropping_config)
@@ -1118,6 +1134,12 @@ class NavigationDetectorService:
             else:  # retinotopic
                 crop_size = effective_cropping_config.get("size", [128, 128])
                 cropped_image = cv2.resize(simplified_binary, tuple(crop_size), interpolation=cv2.INTER_LINEAR)
+            
+            # Validate cropped image
+            if cropped_image is None or cropped_image.size == 0:
+                logger.error(f"Cropping resulted in empty image! Crop type: {crop_type}, Input shape: {simplified_binary.shape}")
+                result["error"] = f"Cropping failed - empty image after {crop_type} crop"
+                return result
             
             # Calculate and draw freepath ball on the cropped image
             freepath_ball_position = None
@@ -1453,6 +1475,50 @@ class NavigationDetectorService:
             
             return cropped
     
+    def _update_cached_intrinsics(self, width: int, height: int, intrinsics: Dict) -> Tuple[float, float, float, float]:
+        """
+        Update cached camera intrinsics only when image dimensions change.
+        Eliminates per-frame calculation overhead by caching scaled values.
+        
+        Args:
+            width: Current image width
+            height: Current image height
+            intrinsics: Camera intrinsics config dict
+        
+        Returns:
+            Tuple of (fx, fy, cx, cy) scaled for current resolution
+        """
+        current_dims = (width, height)
+        
+        # Return cached values if dimensions haven't changed (FAST PATH)
+        if self._cached_image_dims == current_dims and self._cached_intrinsics is not None:
+            return self._cached_intrinsics
+        
+        # Recalculate only when dimensions change (SLOW PATH - rare)
+        cam_w_ref = intrinsics.get("width", 1280)
+        cam_h_ref = intrinsics.get("height", 720)
+        fx_ref = intrinsics.get('fx', 696.0)
+        fy_ref = intrinsics.get('fy', 649.5)
+        cx_ref = intrinsics.get('cx', 640.0)
+        cy_ref = intrinsics.get('cy', 360.0)
+        
+        scale_x = width / cam_w_ref
+        scale_y = height / cam_h_ref
+        fx = fx_ref * scale_x
+        fy = fy_ref * scale_y
+        cx = cx_ref * scale_x
+        cy = cy_ref * scale_y
+        
+        # Cache the results
+        self._cached_image_dims = current_dims
+        self._cached_intrinsics = (fx, fy, cx, cy)
+        
+        logger.info(f"📐 Updated camera intrinsics cache: {cam_w_ref}x{cam_h_ref} -> {width}x{height} (scale: {scale_x:.2f}x, {scale_y:.2f}y)")
+        logger.info(f"   fx: {fx_ref:.1f} -> {fx:.1f}, fy: {fy_ref:.1f} -> {fy:.1f}")
+        logger.info(f"   cx: {cx_ref:.1f} -> {cx:.1f}, cy: {cy_ref:.1f} -> {cy:.1f}")
+        
+        return self._cached_intrinsics
+    
     def _fov_based_crop(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
         """
         FoV-based cropping with square pre-cropping - VARIABLE SIZE OUTPUT
@@ -1473,16 +1539,13 @@ class NavigationDetectorService:
         
         h, w = img.shape[:2]
         
-        # Get camera intrinsics
+        # Get camera intrinsics (calibrated for reference resolution)
         intrinsics = cropping_config.get("camera_intrinsics", {})
-        fx = intrinsics.get("fx", 696.0)
-        fy = intrinsics.get("fy", 649.5)
-        cx = intrinsics.get("cx", 640.0)
-        cy = intrinsics.get("cy", 360.0)
-        cam_w = intrinsics.get("width", 1280)
-        cam_h = intrinsics.get("height", 720)
         max_h_fov = intrinsics.get("horizontal_fov", 85.2)
         max_v_fov = intrinsics.get("vertical_fov", 58.0)
+        
+        # Get scaled intrinsics from cache (only recalculates if dimensions changed)
+        fx, fy, cx, cy = self._update_cached_intrinsics(w, h, intrinsics)
         
         # Get requested FoV with clamping
         requested_fov = cropping_config.get("fov_degrees", 30)
@@ -1523,8 +1586,29 @@ class NavigationDetectorService:
         fov_y1 = max(0, int(offset_cy - fov_px_v))
         fov_y2 = min(square_size, int(offset_cy + fov_px_v))
         
+        # Validate boundaries to prevent empty crop
+        if fov_x1 >= fov_x2 or fov_y1 >= fov_y2:
+            logger.error(f"Invalid FoV crop boundaries: x1={fov_x1}, x2={fov_x2}, y1={fov_y1}, y2={fov_y2}")
+            logger.error(f"Image shape: {img.shape}, square_size: {square_size}, fov_deg: {fov_deg}")
+            logger.error(f"FoV pixels: h={fov_px_h:.1f}, v={fov_px_v:.1f}")
+            # Fallback to center crop
+            crop_w, crop_h = cropping_config.get("size", [128, 128])
+            center_x, center_y = square_size // 2, square_size // 2
+            fov_x1 = max(0, center_x - crop_w // 2)
+            fov_x2 = min(square_size, center_x + crop_w // 2)
+            fov_y1 = max(0, center_y - crop_h // 2)
+            fov_y2 = min(square_size, center_y + crop_h // 2)
+            logger.info(f"Using fallback center crop: {fov_x1}:{fov_x2}, {fov_y1}:{fov_y2}")
+        
         # Step 3: Crop to FoV region - NO RESIZING for variable output
         fov_crop = square_img[fov_y1:fov_y2, fov_x1:fov_x2]
+        
+        # Final safety check
+        if fov_crop.size == 0:
+            logger.error(f"FoV crop resulted in empty image! Shape: {fov_crop.shape}")
+            # Emergency fallback: return center crop
+            crop_w, crop_h = cropping_config.get("size", [128, 128])
+            return square_img[:crop_h, :crop_w]
         
         return fov_crop
     

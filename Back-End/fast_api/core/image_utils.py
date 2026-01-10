@@ -113,6 +113,14 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
         - For grayscale images, color_space is ignored
     """
     try:
+        # Validate input image
+        if img is None:
+            raise ValueError("Input image is None")
+        if img.size == 0:
+            raise ValueError("Input image is empty (size=0)")
+        if not isinstance(img, np.ndarray):
+            raise ValueError(f"Input must be numpy array, got {type(img)}")
+        
         # Handle color conversion for color images
         if len(img.shape) == 3 and img.shape[2] == 3:
             # Convert RGB to BGR if needed (cv2.imencode expects BGR)
@@ -123,7 +131,7 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
         # Encode to PNG/JPG bytes
         success, buffer = cv2.imencode(format, img)
         if not success:
-            raise ValueError(f"Failed to encode image to {format}")
+            raise ValueError(f"Failed to encode image to {format}. Image shape: {img.shape}, dtype: {img.dtype}")
         
         # Convert to base64
         img_base64 = base64.b64encode(buffer).decode('utf-8')

@@ -14,6 +14,7 @@ import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/Scen
 import Minimap from '../../components/level-0/MiniMap/MiniMap';
 import { useBinaryStream } from '../../hooks/useBinarySystem';
 import { SERVER_IP } from '../../ApiConfig';
+import groundTexture from '../../assets/ground/ground.jpg';
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -65,7 +66,7 @@ function ResearcherView() {
   // 2. Initialize Experiment Vault
   const vault = useExperimentVault(socket);
 
-  const { world, loadWorld } = useScenarioWorld();
+  const { world, loadWorld, setWorld } = useScenarioWorld();
 
   const {
     loadScenario: loadScenarioAPI,
@@ -221,15 +222,31 @@ function ResearcherView() {
   const handleLoadScenario = async (filename: string) => {
     try {
       const result = await loadScenarioAPI(filename);
-      await loadWorld();
+      
+      // Update world state directly (like Builder)
+      setWorld(result.world);
+      
+      // Update scenario ID for experiment tracking
       setCurrentScenarioId(filename);
+      
+      // Restore camera position if available (with setTimeout like Builder)
       if (result.scenario.camera && cameraRef.current) {
-        const cam = cameraRef.current.el;
-        const { position, rotation } = result.scenario.camera;
-        cam.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-        cam.setAttribute('rotation', `${rotation.x} ${rotation.y} ${rotation.z}`);
-        updateCamera({ position, rotation });
+        setTimeout(() => {
+          const cam = cameraRef.current.el;
+          const { position, rotation } = result.scenario.camera;
+          cam.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+          cam.setAttribute('rotation', `${rotation.x} ${rotation.y} ${rotation.z}`);
+          
+          // Broadcast camera position to Mobile
+          updateCamera({ position, rotation });
+        }, 100);
       }
+      
+      // Notify Mobile to reload (optional - Mobile can manually refresh)
+      if (socket) {
+        socket.emit('scenario-loaded', { filename });
+      }
+      
       alert(`Scenario "${result.scenario.name}" loaded!`);
       setShowLoadDialog(false);
     } catch (err) {
@@ -327,11 +344,11 @@ function ResearcherView() {
             <div>🎮 VR Controller + ⌨️ WASD</div>
           </div>
 
-          <Scene embedded vr-mode-ui="enabled: false" fog="type: linear; color: #111; near: 50; far: 200" style={{ width: '100%', height: '100%' }}>
-            <Entity primitive="a-sky" color="#87CEEB" />
+          <Scene embedded vr-mode-ui="enabled: false" style={{ width: '100%', height: '100%' }} renderer="preserveDrawingBuffer: true; antialias: false">
+            <Entity primitive="a-sky" color="lightblue" />
             <Entity light={{ type: 'ambient', color: '#ffffff', intensity: 0.6 }} />
             <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" />
-            <Entity primitive="a-plane" position="0 -1 -4" rotation="-90 0 0" width="1000" height="1000" color="#2a5a2a" material="src: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0YTFhIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=); repeat: 100 100" />
+            <Entity primitive="a-plane" position="0 -1 -4" rotation="-90 0 0" width="1000" height="1000" material={{ src: groundTexture, repeat: '100 100' }} />
 
             {world.entities.map((e) => {
               const pos = e.Position || { x: 0, y: 0, z: 0 };
