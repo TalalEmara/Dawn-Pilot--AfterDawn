@@ -135,7 +135,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     if message.get("type") == "frame":
                         frame_id = message.get("frame_id", "unknown")
                         stage = message.get("stage", "phosphene")
-                        debug_mode = message.get("debug", False)
+                        debug_mode = message.get("debug", True)
                         cropping_config = message.get("cropping_config")
                         
                         valid_stages = ["detector", "translator", "pre_phosphene", "phosphene"]

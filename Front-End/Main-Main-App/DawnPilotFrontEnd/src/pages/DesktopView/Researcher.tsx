@@ -348,8 +348,16 @@ function ResearcherView() {
             <Entity primitive="a-sky" color="lightblue" />
             <Entity light={{ type: 'ambient', color: '#ffffff', intensity: 0.6 }} />
             <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" />
-            <Entity primitive="a-plane" position="0 -1 -4" rotation="-90 0 0" width="1000" height="1000" material={{ src: groundTexture, repeat: '100 100' }} />
-
+           <Entity 
+  primitive="a-plane" 
+  position="0 -1 0" 
+  rotation="-90 0 0" 
+  width="1000" 
+  height="1000" 
+  material={{ src: groundTexture, repeat: '100 100' }}
+  segments-width="50"
+  segments-height="50"
+/>
             {world.entities.map((e) => {
               const pos = e.Position || { x: 0, y: 0, z: 0 };
               const rot = e.Rotation || { x: 0, y: 0, z: 0 };
@@ -366,7 +374,11 @@ function ResearcherView() {
             })}
 
             <Entity ref={cameraRef} primitive="a-camera" look-controls="enabled: false" wasd-controls="enabled: true; acceleration: 30" vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6" collision-detector="targetSelector: .collidable; cooldown: 1000">
-              <Entity ref={hitboxRef} primitive="a-box" position="0 -0.8 0" scale=".1 1.6 .1" material="opacity: 0.5; color: red; wireframe: true" visible={true} collision-detector="targetSelector: .collidable; cooldown: 1000" />
+              <Entity ref={hitboxRef} primitive="a-box" position="0 -0.8 0" scale=".1 1.6 .1"
+               material="opacity: 0.5; color: red; wireframe: true"
+              visible={true} 
+              className="depth-ignore"
+              collision-detector="targetSelector: .collidable; cooldown: 1000" />
             </Entity>
           </Scene>
         </div>

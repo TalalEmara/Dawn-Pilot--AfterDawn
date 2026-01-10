@@ -6,7 +6,7 @@
     "class_map_path": "object_path_detection\\yolo_class_mapping.json",
     "freepath_model_path": "object_path_detection\\models\\final_deeplabv3_footpath.pth",
     "output_dir": "api_output",
-    "debug_mode": false,
+    "debug_mode": true,
     "parallel_processing": true,
     "gpu_memory_optimization": true
   },
