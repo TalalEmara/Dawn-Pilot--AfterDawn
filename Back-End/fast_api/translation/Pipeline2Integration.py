@@ -1,4 +1,5 @@
 #Integration of pipeline 2
+import cv2
 from .utils.utils import E2E_Simple_Encoder
 from .utils.Differentiable_p2p import P2PDifferentiableSimulator, P2PDifferentiableSimulatorScoreboard
 import torch
@@ -37,7 +38,10 @@ class Pipeline2Integration:
             input_image = np.array(input_image)
 
         # resize input image to (image size = 349, 373)
-        input_image = np.resize(input_image, (349, 373))
+        # input_image = np.resize(input_image, (349, 373), interpolation=cv2.INTER_NEAREST)
+        cv_resize_image = cv2.resize(input_image, (373, 349), interpolation=cv2.INTER_NEAREST)
+        input_image = cv_resize_image.astype(np.float32)  # Convert to float32
+        # input_image = cv_resize_image.astype(np.float32) / 255.0  # Normalize to [0, 1]
         
         with torch.no_grad():  # Disable gradient computation for inference
             img_t = torch.from_numpy(input_image).float().to(self.device)  #output (H, W)
