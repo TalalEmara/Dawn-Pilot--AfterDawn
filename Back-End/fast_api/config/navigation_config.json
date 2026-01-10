@@ -20,10 +20,15 @@
       "cy": 360.0,
       "width": 1280,
       "height": 720,
-      "horizontal_fov": 85.2,
+      "horizontal_fov": 87.0,
       "vertical_fov": 58.0
     },
-    "freepath_fallback": "clamp_with_warning"
+    "freepath_fallback": "clamp_with_warning",
+    "freepath_ball": {
+      "radius": 50,
+      "margin_buffer": 10,
+      "bottom_half_threshold": 0.5
+    }
   },
   "testing": {
     "test_data_path": "D:/Eng/SBE/gp/Dawn-Pilot--AfterDawn/testing_sequence/7",
