@@ -194,9 +194,8 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Scale: { x: 1, y: 1, z: 1 },
       Model: { url: "/busStop" },
     },
-    normalizeFactors: {
-      Position: { x: 0, y: .302, z: 0 },
-      Scale: { x: 0.001, y: 0.001, z: 0.001 },
+    normalizeFactors: { 
+      Scale: { x: 0.05, y: 0.05, z: 0.05 },
     }
   }
 };
