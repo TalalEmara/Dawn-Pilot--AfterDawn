@@ -89,7 +89,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Model: { url: "/car" }
     },
     normalizeFactors: {
-      Scale: { x: 0.005, y: 0.005, z: 0.005 },
+      Scale: { x: 0.00005, y: 0.00005, z: 0.00005 },
     }
   },
   
