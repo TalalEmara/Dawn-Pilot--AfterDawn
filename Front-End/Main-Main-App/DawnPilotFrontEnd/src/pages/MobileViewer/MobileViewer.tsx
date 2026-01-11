@@ -108,10 +108,12 @@ function MobileView() {
   useEffect(() => {
     setOnCameraUpdate((camera) => {
       const newPos = camera.position;
+      // Apply -0.3 offset to y position (mobile camera lower than desktop)
+      const adjustedY = newPos.y - 0;
       if (!hasReceivedPosition.current) {
         hasReceivedPosition.current = true;
         if (rigRef.current?.el?.object3D) {
-          rigRef.current.el.object3D.position.set(newPos.x, newPos.y, newPos.z);
+          rigRef.current.el.object3D.position.set(newPos.x, adjustedY, newPos.z);
         }
       } else {
         const rigEl = rigRef.current?.el;
@@ -119,7 +121,7 @@ function MobileView() {
           // Smooth follow
           rigEl.setAttribute("animation__follow", {
             property: "position",
-            to: `${newPos.x} ${newPos.y} ${newPos.z}`,
+            to: `${newPos.x} ${adjustedY} ${newPos.z}`,
             dur: 200,
             easing: "easeOutQuad",
             startEvents: "follow-target",
@@ -128,7 +130,7 @@ function MobileView() {
           rigEl.emit("follow-target", null, false);
         }
       }
-      setCameraPosition(newPos);
+      setCameraPosition({ ...newPos, y: adjustedY });
     });
   }, [setOnCameraUpdate]);
 
@@ -210,19 +212,19 @@ function MobileView() {
         renderer="preserveDrawingBuffer: true; antialias: false"
       >
         <Entity primitive="a-sky" color="lightblue" />
-        <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity
+        <Entity light={{ type: "ambient", color: "#ffffff", intensity: 1}} />
+        {/* <Entity
           light={{ type: "directional", color: "#ffffff", intensity: 1.0 }}
           position="5 10 2"
-        />
+        /> */}
         <Entity
           primitive="a-plane"
-          position="0 0 -4"
+          position="0 0 0"
           rotation="-90 0 0"
-          width="300"
-          height="1000"
+          width="20"
+          height="20"
           color="#ffffff"
-          material={{ src: groundTexture, repeat: "300 1000" }}
+          material={{ src: groundTexture, repeat: "20 20" }}
         />
 
         {/* World Entities */}
@@ -272,11 +274,11 @@ function MobileView() {
             autoplay: false,
           }}
         >
-          {/* Camera (Rotation Controlled by Mobile Sensors) */}
           <Entity
             ref={cameraRef}
             primitive="a-camera"
             look-controls="enabled: true;"
+            position="0 0 0"
           >
             {/* HUD Plane - Displays the Stream from AI */}
             {/* The canvas-updater component watches #hud-buffer which uses useBinaryStream to update */}

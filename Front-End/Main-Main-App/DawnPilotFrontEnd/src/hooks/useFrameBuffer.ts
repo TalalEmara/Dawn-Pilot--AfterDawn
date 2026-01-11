@@ -34,6 +34,7 @@ export const useFrameBuffer = (options?: {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
   const cleanupFnsRef = useRef<Array<() => void>>([]);
+  
 
   useEffect(() => {
     if (options?.enabled === false) return;
