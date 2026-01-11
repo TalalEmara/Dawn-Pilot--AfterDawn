@@ -26,8 +26,8 @@
     "freepath_fallback": "clamp_with_warning",
     "freepath_ball": {
       "radius": 20,
-      "margin_buffer": 10,
-      "bottom_half_threshold": 0.5
+      "margin_buffer": 2,
+      "bottom_half_threshold": 0.7
     }
   },
   "testing": {

@@ -319,7 +319,7 @@ class NavigationDetectorService:
         rgb: np.ndarray, 
         depth: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = False
+        debug_mode: bool = True
     ) -> Dict[str, Any]:
         """
         Process a single frame through the navigation pipeline (PARALLEL OPTIMIZED)
@@ -498,7 +498,7 @@ class NavigationDetectorService:
         self, 
         rgb: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = False
+        debug_mode: bool = True
     ) -> Tuple[Tuple[np.ndarray, List[Tuple[int, int]], Optional[Dict[str, Any]]], float]:
         """
         Worker method for parallel freepath detection execution
@@ -555,7 +555,7 @@ class NavigationDetectorService:
                 if temp_path and not debug_mode and os.path.exists(temp_path):
                     os.remove(temp_path)
     
-    def _infer_freepath_from_array(self, rgb_array: np.ndarray, frame_id: int, save_debug: bool = False):
+    def _infer_freepath_from_array(self, rgb_array: np.ndarray, frame_id: int, save_debug: bool = True):
         """
         Optimized freepath inference directly from numpy array (no file I/O)
         
@@ -647,7 +647,7 @@ class NavigationDetectorService:
         original_size: Tuple[int, int],
         cropping_config: Dict[str, Any],
         frame_id: int,
-        debug_mode: bool = False
+        debug_mode: bool = True
     ) -> Optional[Tuple[int, int]]:
         """
         Calculate freepath ball position using smart selection algorithm
@@ -897,7 +897,7 @@ class NavigationDetectorService:
         depth: np.ndarray,
         frame_id: int,
         stop_at: str = "phosphene",
-        debug_mode: bool = False,
+        debug_mode: bool = True,
         cropping_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
@@ -1081,7 +1081,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=False)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h), draw_freepath=True)
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:

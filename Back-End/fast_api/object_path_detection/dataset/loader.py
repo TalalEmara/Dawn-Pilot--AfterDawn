@@ -15,6 +15,10 @@ class DatasetLoader:
         self.current_idx = 0
         self.frame_paths = self._get_frame_paths()
 
+    def _numeric_sort(self, path):
+        # Extract base name without extension, then convert to int
+        return int(os.path.splitext(os.path.basename(path))[0])
+
     def _get_frame_paths(self):
         """
         Collects all frame paths for RGB, depth, and labels from the dataset.
@@ -29,10 +33,10 @@ class DatasetLoader:
 
             # nested structure
             inner = seq  # because structure is seq/seq/Color
-            rgb_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Color", "*.png")))
-            depth_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Depth", "*.png")))
-            label_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Labels", "*.xml")))
-
+            rgb_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Color", "*.png")), key=self._numeric_sort)
+            depth_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Depth", "*.png")), key=self._numeric_sort)
+            label_files = sorted(glob.glob(os.path.join(self.base_path, seq, inner, "Labels", "*.xml")), key=self._numeric_sort)
+            
             seq_data = list(zip(rgb_files, depth_files, label_files))
             paths.extend(seq_data)
         # print(paths)

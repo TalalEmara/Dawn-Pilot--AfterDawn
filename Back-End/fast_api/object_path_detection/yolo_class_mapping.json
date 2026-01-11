@@ -1,11 +1,10 @@
 {
-    "0": "Background",
-    "1": "Person",
-    "2": "Car",
-    "3": "Crossway",
+    "0": "Person",
+    "1": "Crossway",
+    "2": "Potted Plant",
+    "3": "Pole",
     "4": "Garbage",
-    "5": "Pole",
-    "6": "Bus station",
-    "7": "Potted Plant",
-    "8": "Tree Trunk"
+    "5": "Bus station",
+    "6": "Car",
+    "7": "Tree Trunk"
 }
