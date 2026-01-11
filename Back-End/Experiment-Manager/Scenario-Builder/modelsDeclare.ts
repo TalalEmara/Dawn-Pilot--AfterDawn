@@ -184,6 +184,20 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Position: { x: 0, y: .302, z: 0 },
       Scale: { x: 0.001, y: 0.001, z: 0.001 },
     }
+  },
+  BusStop: {
+    name: "Bus Stop",
+    description: "Bus Stop object",
+    components: {
+      Position: { x: 0, y: 0, z: 0 },
+      Rotation: { x: 0, y: 0, z: 0 },
+      Scale: { x: 1, y: 1, z: 1 },
+      Model: { url: "/busStop" },
+    },
+    normalizeFactors: {
+      Position: { x: 0, y: .302, z: 0 },
+      Scale: { x: 0.001, y: 0.001, z: 0.001 },
+    }
   }
 };
 

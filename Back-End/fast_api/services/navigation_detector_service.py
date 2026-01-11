@@ -97,7 +97,7 @@ class NavigationDetectorService:
         self.model_path = os.path.join(self.base_dir, "object_path_detection", "models", "best_yolo.pt")
         self.class_map_path = os.path.join(self.base_dir, "object_path_detection", "yolo_class_mapping.json")
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
-        self.debug_mode = False
+        self.debug_mode = True
         
         # Default cropping config
         self.cropping_config = {
@@ -150,7 +150,7 @@ class NavigationDetectorService:
                     if freepath_path:
                         self.freepath_model_path = os.path.join(self.base_dir, freepath_path)
                     
-                    self.debug_mode = nav_config.get("debug_mode", False)
+                    self.debug_mode = nav_config.get("debug_mode", True)
                     
                     # Performance optimization settings
                     self.parallel_processing = nav_config.get("parallel_processing", True)

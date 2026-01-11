@@ -34,6 +34,7 @@ export const useFrameBuffer = (options?: {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
   const cleanupFnsRef = useRef<Array<() => void>>([]);
+  
 
   useEffect(() => {
     if (options?.enabled === false) return;
@@ -241,24 +242,55 @@ async function pixelsToBlob(data: Uint8Array, width: number, height: number): Pr
   return new Promise((resolve) => encodingCanvas!.toBlob(resolve, "image/jpeg", 0.7));
 }
 
-function readDepthBuffer(gl: WebGLRenderingContext, renderer: any, sceneEl: ASceneEl, width: number, height: number, percentage: number) {
-  // ... (Your existing readDepthBuffer code remains exactly the same) ...
-  // Paste the updated readDepthBuffer function I gave you in the previous response here
-  // or keep your current one if it includes the parent traversal fix.
-  
+function readDepthBuffer(
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
+  renderer: any,
+  sceneEl: ASceneEl,
+  width: number,
+  height: number,
+  percentage: number
+) {
   try {
     const camera = sceneEl.camera;
     const scene = sceneEl.object3D;
-    if (!camera || !scene) return null;
-    const THREE = (window as any).THREE;
-    if (!THREE) return null;
+    
+    if (!camera || !scene) {
+      console.warn("Camera or scene not available for depth reading");
+      return null;
+    }
 
+    const THREE = (window as any).THREE;
+    if (!THREE) {
+      console.warn("THREE.js not available on window");
+      return null;
+    }
+
+    // CRITICAL: Force complete matrix update
     scene.updateMatrixWorld(true);
     camera.updateMatrixWorld(true);
+    
+    if (camera.updateProjectionMatrix) {
+      camera.updateProjectionMatrix();
+    }
 
+    // Use camera's actual near/far, but override far for better depth visualization
     const near = (camera as any).near || 0.1;
-    const visualizationFar = 10;
+    const originalFar = (camera as any).far || 1000;
+    
+    // CRITICAL FIX: Use a reasonable far plane for depth visualization
+    // Instead of 10000, use something closer to actual scene scale (e.g., 50)
+    const visualizationFar = 10; // Adjust this based on your scene size
+    
+    const cameraWorldPos = new THREE.Vector3();
+    camera.getWorldPosition(cameraWorldPos);
+    const cameraWorldDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraWorldDir);
+    
+    console.log(`📷 Camera near: ${near}, original far: ${originalFar}, visualization far: ${visualizationFar}`);
+    console.log(`📷 Camera world position:`, cameraWorldPos);
+    console.log(`📷 Camera world direction:`, cameraWorldDir);
 
+    // Create depth shader with better normalization
     const depthMaterial = new THREE.ShaderMaterial({
       vertexShader: `
         varying float vDepth;
@@ -272,69 +304,146 @@ function readDepthBuffer(gl: WebGLRenderingContext, renderer: any, sceneEl: ASce
         varying float vDepth;
         uniform float near;
         uniform float far;
+        
         void main() {
+          // Normalize depth to 0-1 range
           float depth = (vDepth - near) / (far - near);
           depth = clamp(depth, 0.0, 1.0);
+          
+          // Invert so closer = brighter (optional, but often more intuitive)
           depth = 1.0 - depth;
+          
           gl_FragColor = vec4(vec3(depth), 1.0);
         }
       `,
-      uniforms: { near: { value: near }, far: { value: visualizationFar } },
-      side: THREE.DoubleSide
+      uniforms: {
+        near: { value: near },
+        far: { value: visualizationFar } // Use the shorter range
+      },
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true
     });
-
+    
+    // Store original materials
     const originalMaterials = new Map();
+    let meshCount = 0;
+    let minDist = Infinity, maxDist = 0;
+    
     scene.traverse((obj: any) => {
       if (obj.isMesh) {
-          // Check for HUD and skip
-          let isHud = false;
-          let curr = obj;
-          while(curr) {
-              if (curr.el && curr.el.classList && curr.el.classList.contains('hud-ignore')) {
-                  isHud = true;
-                  break;
-              }
-              curr = curr.parent;
-          }
-          if(isHud) return;
+        // SKIP meshes marked with 'depth-ignore' class
+        if (obj.el?.classList?.contains('depth-ignore')) {
+          return;
+        }
 
-          originalMaterials.set(obj, obj.material);
-          obj.material = depthMaterial;
+        obj.updateMatrixWorld(true);
+        originalMaterials.set(obj, obj.material);
+        
+        const worldPos = new THREE.Vector3();
+        obj.getWorldPosition(worldPos);
+        
+        const toObject = worldPos.clone().sub(cameraWorldPos);
+        const dotProduct = toObject.dot(cameraWorldDir);
+        const distance = worldPos.distanceTo(cameraWorldPos);
+        
+        if (distance < minDist) minDist = distance;
+        if (distance > maxDist) maxDist = distance;
+        
+        console.log(`  - Mesh: ${obj.name || 'unnamed'}, geometry: ${obj.geometry?.type}`);
+        console.log(`    world position:`, worldPos);
+        console.log(`    distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`);
+        
+        obj.material = depthMaterial;
+        obj.material.needsUpdate = true;
+        meshCount++;
       }
     });
+    
+    console.log(`🎯 Processing ${meshCount} meshes for depth`);
+    console.log(`📏 Distance range: ${minDist.toFixed(2)} - ${maxDist.toFixed(2)}`);
+    
+    if (maxDist > visualizationFar) {
+      console.warn(`⚠️  Objects are farther (${maxDist.toFixed(2)}) than visualization far (${visualizationFar}). Consider increasing visualizationFar.`);
+    }
 
+    // Create render target
     const depthTarget = new THREE.WebGLRenderTarget(width, height, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       format: THREE.RGBAFormat,
-      type: THREE.UnsignedByteType,
+      type: THREE.UnsignedByteType
     });
 
+    // Render with depth shader
     const originalTarget = renderer.getRenderTarget();
     const originalAutoClear = renderer.autoClear;
-
+    
     renderer.autoClear = false;
     renderer.setRenderTarget(depthTarget);
     renderer.setClearColor(0x000000, 1);
     renderer.clear(true, true, true);
+    
+    camera.updateMatrixWorld(true);
+    scene.updateMatrixWorld(true);
+    
     renderer.render(scene, camera);
-
+    
     renderer.setRenderTarget(originalTarget);
     renderer.autoClear = originalAutoClear;
 
-    originalMaterials.forEach((material: any, obj: any) => {
+    // Restore materials
+    originalMaterials.forEach((material, obj) => {
       obj.material = material;
+      obj.material.needsUpdate = true;
     });
 
+    // Read pixels
     const depthPixels = new Uint8Array(width * height * 4);
     renderer.readRenderTargetPixels(depthTarget, 0, 0, width, height, depthPixels);
+
+    // Check depth data
+    let minVal = 255, maxVal = 0, nonZeroCount = 0;
+    let sampleValues: number[] = [];
+    
+    for (let i = 0; i < depthPixels.length; i += 4) {
+      const val = depthPixels[i];
+      if (val > 0) nonZeroCount++;
+      if (val < minVal) minVal = val;
+      if (val > maxVal) maxVal = val;
+      
+      if (sampleValues.length < 10 && val > 0) {
+        sampleValues.push(val);
+      }
+    }
+    
+    console.log(`📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height} (${(nonZeroCount/(width*height)*100).toFixed(2)}%)`);
+    
+    if (sampleValues.length > 0) {
+      console.log(`📊 Sample depth values (0-255):`, sampleValues);
+    } else {
+      console.warn(`⚠️ WARNING: No depth data captured!`);
+      const centerX = Math.floor(width / 2);
+      const centerY = Math.floor(height / 2);
+      const centerIdx = (centerY * width + centerX) * 4;
+      console.log(`📊 Center pixel RGBA:`, [
+        depthPixels[centerIdx],
+        depthPixels[centerIdx + 1],
+        depthPixels[centerIdx + 2],
+        depthPixels[centerIdx + 3]
+      ]);
+    }
+
+    // Clean up
     depthTarget.dispose();
     depthMaterial.dispose();
 
+    // Downsample
     const step = Math.max(1, Math.floor(100 / percentage));
     const newWidth = Math.ceil(width / step);
     const newHeight = Math.ceil(height / step);
     const grayscaleDepth = new Uint8Array(newWidth * newHeight);
+    
     let writeIdx = 0;
     for (let y = 0; y < height; y += step) {
       for (let x = 0; x < width; x += step) {
@@ -342,13 +451,20 @@ function readDepthBuffer(gl: WebGLRenderingContext, renderer: any, sceneEl: ASce
         grayscaleDepth[writeIdx++] = depthPixels[idx];
       }
     }
-    return { data: grayscaleDepth, width: newWidth, height: newHeight };
+
+    console.log(`🔍 Depth buffer captured: ${newWidth}x${newHeight}`);
+    
+    return {
+      data: grayscaleDepth,
+      width: newWidth,
+      height: newHeight
+    };
+
   } catch (err) {
-    console.error("DepthBuffer Error", err);
+    console.error("Error reading depth buffer:", err);
     return null;
   }
 }
-
 let frameCounter = 0;
 function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
   frameCounter++;
