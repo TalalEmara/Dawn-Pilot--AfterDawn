@@ -623,7 +623,9 @@ function ResearcherView() {
             style={{ width: "100%", height: "100%" }}
             renderer="preserveDrawingBuffer: true; antialias: false"
           >
-            <Entity primitive="a-sky" color="lightblue" />
+            <Entity primitive="a-sky" material={{ src: groundTexture, repeat: "20 20" }}
+              segments-width="50"
+              segments-height="50" />
             <Entity
               light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
             />

@@ -255,7 +255,7 @@ class NavigationDetectorService:
             
             # Warm up object detector
             print("  Warming up object detector...")
-            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=0.5)
+            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=0.2)
             
             # Warm up freepath detector
             print("  Warming up freepath detector...")
@@ -288,7 +288,7 @@ class NavigationDetectorService:
             depth = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint16)
         
         # Run object detection only
-        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=0.5)
+        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=0.2)
         
         # Convert to standard format with proper type conversion
         standardized_detections = []
@@ -487,7 +487,7 @@ class NavigationDetectorService:
         import time
         start = time.time()
         
-        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.5)
+        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.2)
         
         elapsed_ms = (time.time() - start) * 1000
         logger.debug(f"Frame {frame_id}: Object detection completed in {elapsed_ms:.2f}ms")
