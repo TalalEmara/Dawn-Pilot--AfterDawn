@@ -299,10 +299,11 @@ class NavigationDetectorService:
             cx = int(bbox[0] + bbox[2] // 2)
             cy = int(bbox[1] + bbox[3] // 2)
             
-            confidence = 0.8
-            if det.get("distance_m"):
-                dist = float(det.get("distance_m"))
-                confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+            confidence = det.get("detection_score", 0.001)
+            # confidence = 0.8
+            # if det.get("distance_m"):
+            #     dist = float(det.get("distance_m"))
+            #     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
             
             standardized_detections.append({
                 "class": str(det.get("class", "unknown")),

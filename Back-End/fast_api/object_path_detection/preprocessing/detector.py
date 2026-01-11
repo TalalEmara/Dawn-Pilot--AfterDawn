@@ -171,7 +171,8 @@ class ObjectDetector:
                 "bbox": [int(x1), int(y1), int(x2 - x1), int(y2 - y1)],
                 "distance_m": distance,
                 "mask_path": None,
-                "velocity": None, 
+                "velocity": None,
+                "detection_score": float(score),
                 "hazard": None
             })
 
