@@ -265,7 +265,7 @@
                 <span id="statusText">Disconnected</span>
             </div>
             <div class="status-item">
-                <span>WebSocket: <strong id="wsUrl">ws://localhost:8000/ws/navigation</strong></span>
+                <span>WebSocket: <strong id="wsUrl">ws://localhost:8000/ws/navigation-phosphene</strong></span>
             </div>
         </div>
         
@@ -290,6 +290,15 @@
             <button class="btn-primary" id="connectBtn" onclick="connect()">Connect</button>
             <button class="btn-success" id="sendBtn" onclick="sendFrame()" disabled>Send Frame</button>
             <button class="btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+        
+        <!-- Vision Mode Selector -->
+        <div class="controls" style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <span style="font-weight: 600; color: #333; margin-right: 10px;">👁️ Vision Mode:</span>
+            <button class="btn-primary" id="passthroughBtn" onclick="setStage('passthrough')" style="background: #17a2b8;">Passthrough (Normal)</button>
+            <button class="btn-primary" id="edgeModeBtn" onclick="setStage('edge_mode')" style="background: #ffc107; color: #000;">Edge Mode (Low-Res)</button>
+            <button class="btn-primary" id="phospheneBtn" onclick="setStage('phosphene')" style="background: #28a745;">Phosphene (Full Pipeline)</button>
+            <span id="currentStageLabel" style="margin-left: 15px; font-weight: 600; color: #28a745;">[phosphene]</span>
         </div>
         
         <!-- Stats Panel -->
@@ -350,6 +359,25 @@
         let frameCounter = 0;
         let rgbImageData = null;
         let depthImageData = null;
+        let currentStage = 'phosphene'; // Default stage
+        
+        // Stage selection function
+        function setStage(stage) {
+            currentStage = stage;
+            document.getElementById('currentStageLabel').textContent = `[${stage}]`;
+            
+            // Update button styles
+            document.getElementById('passthroughBtn').style.opacity = stage === 'passthrough' ? '1' : '0.6';
+            document.getElementById('edgeModeBtn').style.opacity = stage === 'edge_mode' ? '1' : '0.6';
+            document.getElementById('phospheneBtn').style.opacity = stage === 'phosphene' ? '1' : '0.6';
+            
+            // Update depth requirement message
+            const depthRequired = ['detector', 'translator', 'pre_phosphene', 'phosphene'].includes(stage);
+            const depthMsg = depthRequired ? '(Depth Required)' : '(Depth Optional)';
+            document.getElementById('depthFileName').style.color = depthRequired ? '#dc3545' : '#28a745';
+            
+            log(`🎯 Mode changed to: ${stage} ${depthMsg}`, 'info');
+        }
 
         // Update file name displays
         document.getElementById('rgbInput').addEventListener('change', function(e) {
@@ -463,29 +491,41 @@
                 return;
             }
 
-            if (!rgbImageData || !depthImageData) {
-                log('❌ Please select both RGB and Depth images', 'error');
+            if (!rgbImageData) {
+                log('❌ Please select RGB image', 'error');
+                return;
+            }
+            
+            // Check if depth is required for this stage
+            const depthRequiredStages = ['detector', 'translator', 'pre_phosphene', 'phosphene'];
+            const needsDepth = depthRequiredStages.includes(currentStage);
+            
+            if (needsDepth && !depthImageData) {
+                log(`❌ Depth image required for stage '${currentStage}'`, 'error');
                 return;
             }
 
             try {
                 // Extract base64 data (remove data:image/png;base64, prefix)
                 const rgbBase64 = rgbImageData.split(',')[1];
-                const depthBase64 = depthImageData.split(',')[1];
-
+                
                 const message = {
                     type: 'frame',
-                    data: {
-                        frame_id: frameCounter,
-                        rgb: rgbBase64,
-                        depth: depthBase64
-                    }
+                    frame_id: String(frameCounter).padStart(3, '0'),
+                    rgb: rgbBase64,
+                    stage: currentStage
                 };
+                
+                // Only include depth if available
+                if (depthImageData) {
+                    const depthBase64 = depthImageData.split(',')[1];
+                    message.depth = depthBase64;
+                }
 
                 ws.send(JSON.stringify(message));
                 frameCounter++;
                 document.getElementById('frameCount').textContent = frameCounter;
-                log(`📤 Sent frame ${frameCounter}`, 'info');
+                log(`📤 Sent frame ${frameCounter} [stage: ${currentStage}]`, 'info');
 
             } catch (error) {
                 log(`❌ Error sending frame: ${error.message}`, 'error');

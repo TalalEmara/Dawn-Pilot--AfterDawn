@@ -76,6 +76,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // VISION MODE SYNC
+  socket.on('vision-mode:update', (data: { mode: string }) => {
+    // Broadcast to all other clients (especially Mobile)
+    socket.broadcast.emit('vision-mode:changed', { mode: data.mode });
+    console.log(`Vision mode synced: ${data.mode}`);
+    
+    // Optionally log to experiment data
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('VISION_MODE', { mode: data.mode });
+    }
+  });
+
 //  COLLISION EVENTS
   socket.on('experiment:collision', (data: { obstacleId: string }) => {
     if (experimentVault.isRecording()) {

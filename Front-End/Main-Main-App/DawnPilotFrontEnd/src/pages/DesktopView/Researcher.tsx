@@ -39,6 +39,20 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// Helper to map vision mode to backend stage
+const getStageFromVisionMode = (mode: string): string => {
+  switch (mode) {
+    case "normal":
+      return "passthrough";
+    case "prosthetic":
+      return "phosphene";
+    case "low_res":
+      return "edge_mode";
+    default:
+      return "phosphene";
+  }
+};
+
 function ResearcherView() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
@@ -112,19 +126,24 @@ function ResearcherView() {
 
       try {
         const rgbBase64 = await blobToBase64(rgbBlob);
-        const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
-
-        if (!depthBase64) return;
+        
+        // Only encode depth for prosthetic mode (phosphene pipeline needs it)
+        const needsDepth = visionMode === "prosthetic";
+        const depthBase64 = (needsDepth && depthBlob) ? await blobToBase64(depthBlob) : null;
 
         frameIdRef.current++;
 
-        const message = {
+        const message: any = {
           type: "frame",
           frame_id: String(frameIdRef.current).padStart(3, "0"),
           rgb: rgbBase64,
-          depth: depthBase64,
-          stage: "phosphene",
+          stage: getStageFromVisionMode(visionMode),
         };
+        
+        // Only include depth if available and needed
+        if (depthBase64) {
+          message.depth = depthBase64;
+        }
 
         aiWebSocket.send(JSON.stringify(message));
       } catch (error) {
@@ -145,6 +164,14 @@ function ResearcherView() {
       socket.off("camera:updated", handleCameraUpdate);
     };
   }, [socket]);
+
+  // Sync vision mode to Mobile Viewer
+  useEffect(() => {
+    if (socket && socket.connected) {
+      socket.emit('vision-mode:update', { mode: visionMode });
+      console.log(`📡 Synced vision mode: ${visionMode}`);
+    }
+  }, [visionMode, socket]);
 
   useEffect(() => {
     loadWorld().catch((err) =>

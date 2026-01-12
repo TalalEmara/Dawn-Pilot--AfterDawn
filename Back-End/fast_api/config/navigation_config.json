@@ -1,8 +1,8 @@
 {
   "detector_mode": "navigation",
   "navigation_detector": {
-    "model_type": "yolo",
-    "model_path": "object_path_detection\\models\\yolo_syn_100.pt",
+    "model_type": "faster_rcnn",
+    "model_path": "object_path_detection\\models\\best_yolo.pt",
     "class_map_path": "object_path_detection\\yolo_class_mapping.json",
     "freepath_model_path": "object_path_detection\\models\\final_deeplabv3_footpath.pth",
     "output_dir": "api_output",

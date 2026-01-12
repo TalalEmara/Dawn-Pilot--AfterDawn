@@ -96,23 +96,29 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
         This prevents Event Loop blocking during 700ms GPU inference.
         """
         try:
-            # Decode images (blocking I/O)
+            # Decode RGB (always required)
             rgb_b64 = payload["rgb"]
-            depth_b64 = payload["depth"]
-            
             rgb = decode_base64_to_rgb(rgb_b64)
-            depth_bytes = base64.b64decode(depth_b64.split(',')[1] if ',' in depth_b64 else depth_b64)
-            depth_arr = np.frombuffer(depth_bytes, dtype=np.uint8)
-            depth = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
             
-            if rgb is None or depth is None:
-                raise ValueError("Failed to decode images")
+            if rgb is None:
+                raise ValueError("Failed to decode RGB image")
             
-            # Run inference (blocking GPU operation - 700ms)
+            # Decode depth (optional)
+            depth = None
+            depth_b64 = payload.get("depth")
+            if depth_b64:
+                depth_bytes = base64.b64decode(depth_b64.split(',')[1] if ',' in depth_b64 else depth_b64)
+                depth_arr = np.frombuffer(depth_bytes, dtype=np.uint8)
+                depth = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
+                
+                if depth is None:
+                    raise ValueError("Failed to decode depth image")
+            
+            # Run inference (blocking GPU operation - varies by stage)
             result = navigation_detector_service.process_full_pipeline(
                 rgb=rgb,
-                depth=depth,
                 frame_id=int(payload["frame_id"]) if payload["frame_id"].isdigit() else 0,
+                depth=depth,  # Can be None for passthrough/edge_mode
                 stop_at=payload["stage"],
                 debug_mode=payload["debug_mode"],
                 cropping_config=payload.get("cropping_config")
@@ -138,7 +144,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         debug_mode = message.get("debug", True)
                         cropping_config = message.get("cropping_config")
                         
-                        valid_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
+                        valid_stages = ["passthrough", "edge_mode", "detector", "translator", "pre_phosphene", "phosphene"]
                         if stage not in valid_stages:
                             await websocket.send_json({
                                 "type": "error",
@@ -148,13 +154,24 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                             continue
                         
                         rgb_b64 = message.get("rgb")
-                        depth_b64 = message.get("depth")
+                        depth_b64 = message.get("depth")  # Optional now
                         
-                        if not rgb_b64 or not depth_b64:
+                        # RGB is always required
+                        if not rgb_b64:
                             await websocket.send_json({
                                 "type": "error",
                                 "frame_id": frame_id,
-                                "error": "Missing rgb or depth image"
+                                "error": "Missing rgb image"
+                            })
+                            continue
+                        
+                        # Depth is only required for detector/translator/phosphene stages
+                        depth_required_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
+                        if stage in depth_required_stages and not depth_b64:
+                            await websocket.send_json({
+                                "type": "error",
+                                "frame_id": frame_id,
+                                "error": f"Depth image is required for stage '{stage}'. Use 'passthrough' or 'edge_mode' for RGB-only processing."
                             })
                             continue
                         
