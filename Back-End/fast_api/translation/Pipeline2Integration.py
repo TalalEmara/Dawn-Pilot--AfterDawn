@@ -1,8 +1,8 @@
 #Integration of pipeline 2
-import cv2
 from .utils.utils import E2E_Simple_Encoder
 from .utils.Differentiable_p2p import P2PDifferentiableSimulator, P2PDifferentiableSimulatorScoreboard
 import torch
+import torch.nn.functional as F
 import numpy as np
 import os
 
@@ -52,21 +52,15 @@ class Pipeline2Integration:
         if not isinstance(input_image, np.ndarray):
             input_image = np.array(input_image)
 
-        # Select encoder and target size based on mode
-        if use_edge_encoder:
-            target_size = (128, 128)  # Edge encoder expects 128x128
-            encoder = self.encoder_edge
-        else:
-            target_size = (373, 349)  # Phosphene encoder expects 373x349
-            encoder = self.encoder_phosphene
+        # Select target size based on mode
+        target_size = (128, 128) if use_edge_encoder else (373, 349)
+        encoder = self.encoder_edge if use_edge_encoder else self.encoder_phosphene
         
-        # Resize input image to encoder's expected size
-        cv_resize_image = cv2.resize(input_image, target_size, interpolation=cv2.INTER_NEAREST)
-        input_image_resized = cv_resize_image.astype(np.float32)  # Ensure float32
+        # Convert to tensor and resize using nearest interpolation
+        img_t = torch.from_numpy(input_image).float().to(self.device).unsqueeze(0)  # (1, H, W)
+        img_resized = F.interpolate(img_t.unsqueeze(0), size=target_size, mode='nearest')  # (1, 1, H', W')
         
         with torch.no_grad():  # Disable gradient computation for inference
-            img_t = torch.from_numpy(input_image_resized).float().to(self.device)  # (H, W)
-            img_t = img_t.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
-            stimulation_amplitudes = encoder(img_t)  # (B, amplitudes)
-            phosphene_image = self.simulator(stimulation_amplitudes)  # (1, 1, H, W)
-            return phosphene_image.detach().cpu().numpy().squeeze(0).squeeze(0)  # (H, W)
+            stimulation_amplitudes = encoder(img_resized)  # (B, amplitudes)
+            phosphene_image = self.simulator(stimulation_amplitudes)  # (1, 1, H', W')
+            return phosphene_image.detach().cpu().numpy().squeeze(0).squeeze(0)  # (H', W')
