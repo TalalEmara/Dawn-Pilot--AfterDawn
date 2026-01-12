@@ -472,17 +472,23 @@ class NavigationDetectorService:
             result["error"] = str(e)
             result["success"] = False
         
-        # Periodic GPU memory cleanup if optimization is enabled
-        if self.gpu_memory_optimization and torch.cuda.is_available():
-            # Clear cache every 100 frames to prevent memory buildup
-            if hasattr(self, '_frame_count'):
-                self._frame_count += 1
-            else:
-                self._frame_count = 1
+        # Periodic GPU memory cleanup and watchdog
+        if torch.cuda.is_available():
+            if not hasattr(self, '_frame_count'):
+                self._frame_count = 0
+            self._frame_count += 1
             
-            if self._frame_count % 100 == 0:
+            # GPU Watchdog: Force sync every 50 frames to prevent Windows TDR timeout
+            if self._frame_count % 50 == 0:
+                torch.cuda.synchronize()
+                logger.debug(f"GPU watchdog sync at frame {frame_id}")
+            
+            # Memory cleanup every 100 frames if optimization enabled
+            if self.gpu_memory_optimization and self._frame_count % 100 == 0:
                 torch.cuda.empty_cache()
-                logger.debug(f"GPU cache cleared at frame {frame_id}")
+                allocated_gb = torch.cuda.memory_allocated() / (1024**3)
+                reserved_gb = torch.cuda.memory_reserved() / (1024**3)
+                logger.debug(f"GPU cache cleared at frame {frame_id} | Allocated: {allocated_gb:.3f}GB, Reserved: {reserved_gb:.3f}GB")
         
         return result
     
@@ -916,7 +922,7 @@ class NavigationDetectorService:
         frame_id: int,
         depth: Optional[np.ndarray] = None,
         stop_at: str = "phosphene",
-        debug_mode: bool = True,
+        debug_mode: bool = False,
         cropping_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
@@ -1194,7 +1200,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h), draw_freepath=True)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:

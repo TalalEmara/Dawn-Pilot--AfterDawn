@@ -173,6 +173,36 @@ function ResearcherView() {
     }
   }, [visionMode, socket]);
 
+  // Reconnect AI WebSocket on mode switch to clear frame queue
+  useEffect(() => {
+    if (!aiWebSocket) return;
+    
+    console.log(`🔄 Mode switched to: ${visionMode}, reconnecting AI WebSocket...`);
+    
+    // Close existing connection
+    if (aiWebSocket.readyState === WebSocket.OPEN) {
+      aiWebSocket.close();
+    }
+    
+    // Reconnect after brief delay
+    const reconnectTimer = setTimeout(() => {
+      const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
+      
+      ws.onopen = () => {
+        console.log(`🟢 [Researcher] AI WebSocket Reconnected for ${visionMode} mode`);
+        setAiWebSocket(ws);
+      };
+      
+      ws.onerror = (error) => console.error('🔴 AI WebSocket Error:', error);
+      ws.onclose = () => {
+        console.log('🔴 AI WebSocket Disconnected');
+        setAiWebSocket(null);
+      };
+    }, 100);
+    
+    return () => clearTimeout(reconnectTimer);
+  }, [visionMode]);
+
   useEffect(() => {
     loadWorld().catch((err) =>
       console.error("Researcher - Failed to load world:", err)

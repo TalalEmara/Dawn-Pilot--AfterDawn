@@ -39,7 +39,7 @@ export const useFrameBuffer = (options?: {
   useEffect(() => {
     if (options?.enabled === false) return;
 
-    const LOG_INTERVAL = options?.logInterval ?? 2000;
+    const LOG_INTERVAL = options?.logInterval ?? 100;  // Reduced from 2000ms to 100ms for 10 FPS
     const LOG_PIXEL_DATA = options?.logPixelData ?? false;
     const SHOULD_CAPTURE = LOG_PIXEL_DATA || !!options?.onFrame;
 
