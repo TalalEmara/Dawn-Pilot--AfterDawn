@@ -1034,7 +1034,7 @@ class NavigationDetectorService:
                     timestamp = datetime.now().strftime("%H%M%S")
                     debug_prefix = f"{self.debug_output_dir}/edge_mode_{frame_id}_{timestamp}"
                     cv2.imwrite(f"{debug_prefix}_01_cropped.jpg", cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
-                    cv2.imwrite(f"{debug_prefix}_02_edges.jpg", cv2.cvtColor(edges, cv2.COLOR_RGB2BGR))
+                    cv2.imwrite(f"{debug_prefix}_02_edges.jpg", cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR))
                     logger.info(f"💾 Saved EDGE_MODE intermediate images")
                 
                 # Step 3: Run through edge encoder/simulator
@@ -1046,7 +1046,7 @@ class NavigationDetectorService:
                 else:
                     edges_gray = edges
                 
-                edges_normalized = edges_gray.astype(np.float32) / 255.0
+                edges_normalized = edges_gray #.astype(np.float32) / 255.0
                 
                 # Run edge encoder rendering (uses 128x128 edge encoder)
                 if self.pipeline2 is None:
@@ -1434,9 +1434,9 @@ class NavigationDetectorService:
         dilated_edges = cv2.dilate(edges, kernel, iterations=DILATION_ITERATIONS)
         
         # Convert back to RGB for encoder (expects 3 channels)
-        edges_rgb = cv2.cvtColor(dilated_edges, cv2.COLOR_GRAY2RGB)
+        # edges_rgb = cv2.cvtColor(dilated_edges, cv2.COLOR_GRAY2RGB)
         
-        return edges_rgb
+        return dilated_edges
     
     def is_ready(self) -> bool:
         """Check if navigation detector service is ready"""

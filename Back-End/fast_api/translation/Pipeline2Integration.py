@@ -1,10 +1,13 @@
 #Integration of pipeline 2
+import cv2
 from .utils.utils import E2E_Simple_Encoder
 from .utils.Differentiable_p2p import P2PDifferentiableSimulator, P2PDifferentiableSimulatorScoreboard
 import torch
-import torch.nn.functional as F
+import torchvision.transforms as T
 import numpy as np
 import os
+from PIL import Image
+import matplotlib.pyplot as plt
 
 
 class Pipeline2Integration:
@@ -31,6 +34,16 @@ class Pipeline2Integration:
         self.encoder_edge.load_state_dict(edge_checkpoint)
         self.encoder_edge.eval()  # Set to evaluation mode
         print("✓ Edge encoder loaded successfully")
+
+        self.edge_transform = T.Compose([
+            T.Resize((128, 128)),
+            T.ToTensor(),
+        ])
+
+        self.phosphene_transform = T.Compose([
+            T.Resize((349, 373)),
+            T.ToTensor(),
+        ])
         
         # Shared simulator (used by both encoders)
         self.simulator = P2PDifferentiableSimulatorScoreboard().to(self.device)
@@ -52,15 +65,32 @@ class Pipeline2Integration:
         if not isinstance(input_image, np.ndarray):
             input_image = np.array(input_image)
 
-        # Select target size based on mode
-        target_size = (128, 128) if use_edge_encoder else (373, 349)
-        encoder = self.encoder_edge if use_edge_encoder else self.encoder_phosphene
+        # Select encoder and target size based on mode
+        if use_edge_encoder:
+            # target_size = (128, 128)  # Edge encoder expects 128x128
+            encoder = self.encoder_edge
+        else:
+            # target_size = (349, 373)  # Phosphene encoder expects 349x373
+            encoder = self.encoder_phosphene
         
-        # Convert to tensor and resize using nearest interpolation
-        img_t = torch.from_numpy(input_image).float().to(self.device).unsqueeze(0)  # (1, H, W)
-        img_resized = F.interpolate(img_t.unsqueeze(0), size=target_size, mode='nearest')  # (1, 1, H', W')
+        # convert the ndarray image to pil image
         
+        input_image_pil = Image.fromarray(input_image)
+        
+        # apply the appropriate transform
+        input_image_transformed = self.edge_transform(input_image_pil) if use_edge_encoder else self.phosphene_transform(input_image_pil)
+
         with torch.no_grad():  # Disable gradient computation for inference
-            stimulation_amplitudes = encoder(img_resized)  # (B, amplitudes)
-            phosphene_image = self.simulator(stimulation_amplitudes)  # (1, 1, H', W')
-            return phosphene_image.detach().cpu().numpy().squeeze(0).squeeze(0)  # (H', W')
+            img_t = input_image_transformed.to(self.device)  # (C, H, W)
+            img_t = img_t.unsqueeze(0)  # (1, C, H, W)
+            stimulation_amplitudes = encoder(img_t)  # (B, amplitudes)
+            phosphene_image = self.simulator(stimulation_amplitudes)  # (1, 1, H, W)
+            final_image = phosphene_image.detach().cpu().numpy().squeeze(0).squeeze(0)  # (H, W)
+            # visualize the output phosphene image and save it using matplotlib
+            # plt.imshow(final_image, cmap="gray", interpolation="nearest")
+            # plt.show()
+            # plt.savefig("phosphene_output_2.png")
+            # plt.close()
+
+            return final_image
+
