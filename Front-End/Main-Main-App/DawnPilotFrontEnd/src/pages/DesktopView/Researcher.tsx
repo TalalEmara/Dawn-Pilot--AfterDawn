@@ -15,6 +15,7 @@ import Minimap from "../../components/level-0/MiniMap/MiniMap";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
+import datasetTest from "../../assets/testing/dataset.png";
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -42,6 +43,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 function ResearcherView() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
+  const cameraInitialized = useRef<boolean>(false);
 
   // --- Research / Experiment State ---
   const [subjectId, setSubjectId] = useState("test_subject_01");
@@ -105,8 +107,8 @@ function ResearcherView() {
   // --- Frame Capture & Sending ---
   useFrameBuffer({
     downsamplePercentage: 50,
-    enabled: aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 100,
+    enabled: true && aiWebSocket?.readyState === WebSocket.OPEN,
+    logInterval: 2000,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
@@ -151,6 +153,15 @@ function ResearcherView() {
       console.error("Researcher - Failed to load world:", err)
     );
   }, [loadWorld]);
+
+  // Set initial camera position ONCE (prevent re-render from resetting position)
+  useEffect(() => {
+    if (cameraRef.current?.el && !cameraInitialized.current) {
+      cameraRef.current.el.setAttribute("position", "0 1.6 0");
+      cameraInitialized.current = true;
+      console.log("[Camera] Initial position set to 0 1.6 0");
+    }
+  });
 
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
@@ -623,9 +634,12 @@ function ResearcherView() {
             style={{ width: "100%", height: "100%" }}
             renderer="preserveDrawingBuffer: true; antialias: false"
           >
-            <Entity primitive="a-sky" material={{ src: groundTexture, repeat: "20 20" }}
+            <Entity
+              primitive="a-sky"
+              material={{ color: "#fff" }}
               segments-width="50"
-              segments-height="50" />
+              segments-height="50"
+            />
             <Entity
               light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
             />
@@ -673,25 +687,38 @@ function ResearcherView() {
                 />
               );
             })}
-
+            <Entity
+              primitive="a-light"
+              type="ambient"
+              color="#ffffff"
+              intensity="0"
+              distance="15"
+              position="0 4 2"
+            />
+            <Entity
+              primitive="a-plane"
+              position="0 2 -2"
+              rotation="0 0 0"
+              width="10"
+              height="5"
+              material={{ src: datasetTest, repeat: "1 1" }}
+            />
             <Entity
               ref={cameraRef}
               primitive="a-camera"
-              position="0 1.0 0"
               look-controls="enabled: false"
-              wasd-controls="enabled: true; acceleration: 30"
+              wasd-controls="enabled: true; acceleration: 15"
               vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
-              collision-detector="targetSelector: .collidable; cooldown: 1000"
             >
               <Entity
                 ref={hitboxRef}
+                collision-detector="targetSelector: .collidable; cooldown: 1000"
                 primitive="a-box"
                 position="0 -0.8 0"
-                scale=".1 1.6 .1"
+                scale=".6 1.6 .6"
                 material="opacity: 0.5; color: red; wireframe: true"
                 visible={true}
                 className="depth-ignore"
-                collision-detector="targetSelector: .collidable; cooldown: 1000"
               />
             </Entity>
           </Scene>
