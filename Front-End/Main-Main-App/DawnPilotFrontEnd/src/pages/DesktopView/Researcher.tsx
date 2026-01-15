@@ -40,6 +40,20 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// Helper to map vision mode to backend stage
+const getStageFromVisionMode = (mode: string): string => {
+  switch (mode) {
+    case "normal":
+      return "passthrough";
+    case "prosthetic":
+      return "phosphene";
+    case "low_res":
+      return "edge_mode";
+    default:
+      return "phosphene";
+  }
+};
+
 function ResearcherView() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
@@ -114,19 +128,24 @@ function ResearcherView() {
 
       try {
         const rgbBase64 = await blobToBase64(rgbBlob);
-        const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
-
-        if (!depthBase64) return;
+        
+        // Only encode depth for prosthetic mode (phosphene pipeline needs it)
+        const needsDepth = visionMode === "prosthetic";
+        const depthBase64 = (needsDepth && depthBlob) ? await blobToBase64(depthBlob) : null;
 
         frameIdRef.current++;
 
-        const message = {
+        const message: any = {
           type: "frame",
           frame_id: String(frameIdRef.current).padStart(3, "0"),
           rgb: rgbBase64,
-          depth: depthBase64,
-          stage: "phosphene",
+          stage: getStageFromVisionMode(visionMode),
         };
+        
+        // Only include depth if available and needed
+        if (depthBase64) {
+          message.depth = depthBase64;
+        }
 
         aiWebSocket.send(JSON.stringify(message));
       } catch (error) {
@@ -147,6 +166,44 @@ function ResearcherView() {
       socket.off("camera:updated", handleCameraUpdate);
     };
   }, [socket]);
+
+  // Sync vision mode to Mobile Viewer
+  useEffect(() => {
+    if (socket && socket.connected) {
+      socket.emit('vision-mode:update', { mode: visionMode });
+      console.log(`📡 Synced vision mode: ${visionMode}`);
+    }
+  }, [visionMode, socket]);
+
+  // Reconnect AI WebSocket on mode switch to clear frame queue
+  useEffect(() => {
+    if (!aiWebSocket) return;
+    
+    console.log(`🔄 Mode switched to: ${visionMode}, reconnecting AI WebSocket...`);
+    
+    // Close existing connection
+    if (aiWebSocket.readyState === WebSocket.OPEN) {
+      aiWebSocket.close();
+    }
+    
+    // Reconnect after brief delay
+    const reconnectTimer = setTimeout(() => {
+      const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
+      
+      ws.onopen = () => {
+        console.log(`🟢 [Researcher] AI WebSocket Reconnected for ${visionMode} mode`);
+        setAiWebSocket(ws);
+      };
+      
+      ws.onerror = (error) => console.error('🔴 AI WebSocket Error:', error);
+      ws.onclose = () => {
+        console.log('🔴 AI WebSocket Disconnected');
+        setAiWebSocket(null);
+      };
+    }, 100);
+    
+    return () => clearTimeout(reconnectTimer);
+  }, [visionMode]);
 
   useEffect(() => {
     loadWorld().catch((err) =>
