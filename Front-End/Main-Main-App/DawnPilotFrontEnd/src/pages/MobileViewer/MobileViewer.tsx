@@ -282,21 +282,21 @@ function MobileView() {
           >
             {/* HUD Plane - Displays the Stream from AI */}
             {/* The canvas-updater component watches #hud-buffer which uses useBinaryStream to update */}
-            {/* <Entity
+            <Entity
               className="hud-ignore"
               geometry="primitive: plane; width: 1.6; height: 0.9"
               position="0 0 -1" 
               canvas-updater="src: #hud-buffer"
               material="shader: flat; transparent: true; opacity: 1.0; depthTest: false"
               visible={true}
-            /> */}
+            />
 
             {/* Optional Background for Contrast */}
-            {/* <Entity
+            <Entity
               geometry="primitive: plane; width: 10; height: 10"
               position="0 0 -1.1"
-              material="color: red; opacity: 0.0; transparent: true"
-            /> */}
+              material="color: black;"
+            />
           </Entity>
         </Entity>
       </Scene>

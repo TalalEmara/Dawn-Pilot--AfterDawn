@@ -1,0 +1,155 @@
+{
+  "name": "Hard Scenario 1",
+  "description": "15/1",
+  "createdAt": "2026-01-15T09:19:06.803Z",
+  "entityCount": 3,
+  "camera": {
+    "position": {
+      "x": -0.23978603820225855,
+      "y": 2,
+      "z": 9.976400937054107
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1768468538759-7et2q1cpn",
+      "Position": {
+        "x": 9,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#ffffff"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 10
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1768468680636-rcvgjynou",
+      "Position": {
+        "x": 2,
+        "y": 0,
+        "z": 1
+      },
+      "Rotation": {
+        "x": 0,
+        "y": -90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768468712324-7o6014hx0",
+      "Position": {
+        "x": 5.5,
+        "y": 0,
+        "z": -7
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1768468712324-7o6014hx0",
+      "Position": {
+        "x": 8,
+        "y": 0,
+        "z": -17
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768468712324-7o6014hx0",
+      "Position": {
+        "x": 4,
+        "y": 0,
+        "z": -17
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768468712324-7o6014hx0",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": -17
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+  ]
+}
