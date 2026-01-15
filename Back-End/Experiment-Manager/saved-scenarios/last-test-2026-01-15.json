@@ -1,0 +1,64 @@
+{
+  "name": "last_test",
+  "description": "hisham",
+  "createdAt": "2026-01-15T01:20:18.107Z",
+  "entityCount": 2,
+  "camera": {
+    "position": {
+      "x": 3.5666131398823557,
+      "y": 2,
+      "z": 4
+    },
+    "rotation": {
+      "x": -1.6042818263663068,
+      "y": 5.500394833255905,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1768439917588-434y3hni9",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.00005,
+        "y": 0.00005,
+        "z": 0.00005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768439934114-xtlzx2j9q",
+      "Position": {
+        "x": 5,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    }
+  ]
+}
