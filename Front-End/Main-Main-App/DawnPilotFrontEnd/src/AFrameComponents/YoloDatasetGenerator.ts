@@ -3,12 +3,14 @@ import "aframe";
 // Import class mapping from backend
 // This will be loaded dynamically from the JSON file
 const YOLO_CLASS_MAPPING = {
-  "0": "Car",
-  "5": "Tree Trunk",
-  "15": "Plotted Plant",
-  "3": "Bus station",
-  "1": "Pole",
-  "6": "Person"
+    "0": "Person",
+    "1": "Crossway",
+    "2": "Potted Plant",
+    "3": "Pole",
+    "4": "Garbage",
+    "5": "Bus station",
+    "6": "Car",
+    "7": "Tree Trunk"
 };
 
 // Detectable models from modelsDeclare.ts (exclude Light and environmental objects)
