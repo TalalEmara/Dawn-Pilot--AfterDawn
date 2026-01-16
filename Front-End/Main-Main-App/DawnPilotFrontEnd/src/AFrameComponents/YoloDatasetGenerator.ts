@@ -1,14 +1,39 @@
 import "aframe";
 
+// Import class mapping from backend
+// This will be loaded dynamically from the JSON file
+const YOLO_CLASS_MAPPING = {
+  "0": "Car",
+  "5": "Tree Trunk",
+  "15": "Potted Plant",
+  "3": "Bus station",
+  "1": "Pole",
+  "6": "Person"
+};
+
+// Detectable models from modelsDeclare.ts (exclude Light and environmental objects)
+const DETECTABLE_MODELS = [
+  "Car",
+  "Tree Trunk", 
+  "TreeTrunk",
+  "Pole",
+  "Plotted Plant",
+  "PlottedPlant",
+  "Man",
+  "Person",
+  "Bus Stop",
+  "BusStop",
+  "Garbage"
+];
+
 interface YoloDatasetGeneratorData {
   enabled: boolean;
-  targetClass: string;
   captureInterval: number;
   autoDownload: boolean;
   logToConsole: boolean;
   occlusionCheckLayers: string;
-  classMapping: string; // JSON string: {"Box": 0, "Sphere": 1, "Car": 2}
   minVisiblePixels: number;
+  outputFormat: string; // 'yolo' or 'json'
 }
 
 interface YoloDatasetGenerator {
@@ -21,6 +46,7 @@ interface YoloDatasetGenerator {
   captureCount: number;
   raycaster: THREE.Raycaster;
   classMap: Record<string, number>;
+  reverseClassMap: Record<number, string>;
 
   captureFrame: () => void;
   getScreenBoundingBox: (
@@ -42,16 +68,12 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
   AFRAME.registerComponent("yolo-dataset-generator", {
     schema: {
       enabled: { type: "boolean", default: true },
-      targetClass: { type: "string", default: "detectable" }, // Class name to target
-      captureInterval: { type: "number", default: 60 }, // Capture every N frames (60 = ~1 per second at 60fps)
+      captureInterval: { type: "number", default: 60 }, // Capture every N frames (60 = ~1/sec at 60fps)
       autoDownload: { type: "boolean", default: true }, // Auto-download files
-      logToConsole: { type: "boolean", default: true }, // Also log to console
-      occlusionCheckLayers: { type: "string", default: "collidable" }, // Classes to check for occlusion
-      classMapping: {
-        type: "string",
-        default: '{"Box": 0, "Sphere": 1, "Cylinder": 2, "Car": 3, "Light": 4}',
-      }, // Entity name -> YOLO class ID
-      minVisiblePixels: { type: "number", default: 10 }, // Min pixels to consider visible
+      logToConsole: { type: "boolean", default: true }, // Log to console
+      occlusionCheckLayers: { type: "string", default: "collidable" }, // Occlusion check classes
+      minVisiblePixels: { type: "number", default: 10 }, // Min bbox area
+      outputFormat: { type: "string", default: "both" }, // 'yolo', 'json', or 'both'
     },
 
     init: function (this: YoloDatasetGenerator) {
@@ -69,15 +91,24 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       // Raycaster for occlusion checking
       this.raycaster = new AFRAME.THREE.Raycaster();
 
-      // Parse class mapping
-      try {
-        this.classMap = JSON.parse(this.data.classMapping);
-      } catch (e) {
-        console.error("❌ Invalid classMapping JSON, using defaults");
-        this.classMap = { Box: 0, Sphere: 1, Cylinder: 2, Car: 3, Light: 4 };
-      }
+      // Build class mappings from YOLO_CLASS_MAPPING
+      // classMap: "Car" -> 0, "Pole" -> 1, etc.
+      // reverseClassMap: 0 -> "Car", 1 -> "Pole", etc.
+      this.classMap = {};
+      this.reverseClassMap = {};
+      
+      Object.entries(YOLO_CLASS_MAPPING).forEach(([classId, className]) => {
+        const id = parseInt(classId);
+        this.classMap[className] = id;
+        this.reverseClassMap[id] = className;
+        
+        // Handle name variations (e.g., "Bus Stop" vs "BusStop")
+        const normalized = className.replace(/\s+/g, "");
+        this.classMap[normalized] = id;
+      });
 
-      console.log("📊 YOLO Class Mapping:", this.classMap);
+      console.log("📊 YOLO Class Mapping (backend):", this.classMap);
+      console.log("🎯 Detectable Models:", DETECTABLE_MODELS);
     },
 
     tick: function (this: YoloDatasetGenerator) {
@@ -96,63 +127,105 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
         console.warn("⚠️ Camera or renderer not ready");
         return;
       }
+      
+      // Query entities - try multiple selectors for compatibility
+      let allEntities = this.scene.querySelectorAll("[ecs-entity]");
+      
+      // Fallback: query for gltf-model entities if no ecs-entity found
+      if (allEntities.length === 0) {
+        allEntities = this.scene.querySelectorAll("[gltf-model]");
+        console.log("🔄 Using fallback selector [gltf-model], found:", allEntities.length);
+      }
 
-      const canvas = this.renderer.domElement;
-      const width = canvas.width;
-      const height = canvas.height;
-
-      // Find all entities with target class
-      const targetEntities = this.scene.querySelectorAll(`.${this.data.targetClass}`);
-
-      if (targetEntities.length === 0) {
-        console.warn(`⚠️ No entities found with class "${this.data.targetClass}"`);
+      if (allEntities.length === 0) {
+        console.warn("⚠️ No detectable entities found in scene");
         return;
       }
 
       const yoloAnnotations: string[] = [];
+      const jsonDetections: any[] = [];
       let validDetections = 0;
+      let detectionId = 1;
 
-      targetEntities.forEach((entity: any) => {
+      allEntities.forEach((entity: any) => {
         const object3D = entity.object3D;
         if (!object3D) return;
 
-        // Get entity name for class ID lookup
-        const entityName = entity.getAttribute("data-entity-name") || entity.id || "Unknown";
-
-        // Check if entity name is in class map
-        const classId = this.classMap[entityName];
-        if (classId === undefined) {
-          console.warn(`⚠️ Entity "${entityName}" not in class mapping, skipping`);
+        // Get entity name from multiple sources
+        const entityName = entity.getAttribute("data-entity-name") || 
+                          entity.getAttribute("ecs-entity") ||
+                          entity.getAttribute("class") ||
+                          entity.id ||
+                          "Unknown";
+        
+        // Skip camera hitbox and depth-ignore elements
+        if (entity.classList.contains("depth-ignore") || 
+            entityName === "Unknown" ||
+            !entityName) {
           return;
         }
 
-        // 1. Check if occluded
+        // Check if this entity type is detectable
+        const isDetectable = DETECTABLE_MODELS.some(model => 
+          entityName.toLowerCase().includes(model.toLowerCase()) ||
+          model.toLowerCase().includes(entityName.toLowerCase())
+        );
+
+        if (!isDetectable) {
+          return; // Skip non-detectable entities (Light, Box, Sphere, etc.)
+        }
+
+        // Get class ID from mapping
+        const classId = this.classMap[entityName] || 
+                       this.classMap[entityName.replace(/\s+/g, "")];
+        
+        if (classId === undefined) {
+          console.warn(`⚠️ Entity "${entityName}" not in YOLO class mapping, skipping`);
+          return;
+        }
+
+        // Check if occluded
         if (this.isOccluded(object3D, this.camera)) {
           console.log(`🚫 Object "${entityName}" is occluded, skipping`);
           return;
         }
 
-        // 2. Get 2D bounding box
+        // Get 2D bounding box in screen space
         const bbox = this.getScreenBoundingBox(object3D, this.camera);
-
         if (!bbox || !bbox.visible) {
-          console.log(`👁️ Object "${entityName}" not visible in frame, skipping`);
           return;
         }
 
         // Check minimum size
-        const bboxWidth = bbox.x_max - bbox.x_min;
-        const bboxHeight = bbox.y_max - bbox.y_min;
-        const area = bboxWidth * bboxHeight;
-
+        const area = (bbox.x_max - bbox.x_min) * (bbox.y_max - bbox.y_min);
         if (area < this.data.minVisiblePixels) {
-          console.log(`📏 Object "${entityName}" too small (${area.toFixed(0)}px²), skipping`);
+          console.log(`🚫 Object "${entityName}" too small (${area.toFixed(0)} pixels), skipping`);
           return;
         }
 
-        // 3. Convert to YOLO format
-        const yoloLine = this.convertToYolo(bbox, width, height, classId);
+        // Convert to YOLO format
+        const canvas = this.renderer.domElement;
+        const yoloLine = this.convertToYolo(bbox, canvas.width, canvas.height, classId);
         yoloAnnotations.push(yoloLine);
+
+        // Create JSON detection entry (compatible with existing format)
+        const jsonDetection = {
+          id: detectionId++,
+          class: this.reverseClassMap[classId],
+          shape: null,
+          bbox: [
+            Math.round(bbox.x_min),
+            Math.round(bbox.y_min),
+            Math.round(bbox.x_max - bbox.x_min),
+            Math.round(bbox.y_max - bbox.y_min)
+          ],
+          distance_m: null,
+          mask_path: null,
+          velocity: null,
+          hazard: null
+        };
+        jsonDetections.push(jsonDetection);
+
         validDetections++;
 
         console.log(`✅ Detected "${entityName}" [class ${classId}]: ${yoloLine}`);
@@ -164,23 +237,47 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       }
 
       // Output results
-      const annotationText = yoloAnnotations.join("\n");
-      const timestamp = Date.now();
       const frameId = this.captureCount.toString().padStart(4, "0");
+      const timestamp = Date.now();
 
       if (this.data.logToConsole) {
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         console.log(`📸 Frame ${frameId} (${validDetections} detections):`);
-        console.log(annotationText);
+        yoloAnnotations.forEach(line => console.log(line));
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       }
 
       if (this.data.autoDownload) {
-        // Download annotation file
-        this.downloadTextFile(annotationText, `frame_${frameId}.txt`);
+        const format = this.data.outputFormat;
 
-        // Capture screenshot
+        // Always capture screenshot
         this.captureScreenshot(`frame_${frameId}.jpg`);
+
+        // Download YOLO format (.txt)
+        if (format === "yolo" || format === "both") {
+          const annotationText = yoloAnnotations.join("\n");
+          this.downloadTextFile(annotationText, `frame_${frameId}.txt`);
+        }
+
+        // Download JSON format (compatible with existing backend)
+        if (format === "json" || format === "both") {
+          const jsonOutput = {
+            frame_id: `frame_${frameId}`,
+            file_path: `frame_${frameId}.jpg`,
+            timestamp: timestamp,
+            camera_intrinsics: {
+              fx: null,
+              fy: null,
+              cx: null,
+              cy: null
+            },
+            obstacles: jsonDetections
+          };
+          this.downloadTextFile(
+            JSON.stringify(jsonOutput, null, 2), 
+            `frame_${frameId}.json`
+          );
+        }
       }
 
       this.captureCount++;

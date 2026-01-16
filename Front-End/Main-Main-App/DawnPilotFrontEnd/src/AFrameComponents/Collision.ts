@@ -1,7 +1,7 @@
 import "aframe";
 
 // ============== DEBUG CONTROL ==============
-const DEBUG_COLLISION = true; // <-- SET TO false TO DISABLE ALL LOGS
+const DEBUG_COLLISION = false; // <-- SET TO true TO ENABLE DEBUG LOGS
 // ===========================================
 
 const log = (...args: any[]) => DEBUG_COLLISION && console.log('[Collision]', ...args);
@@ -180,8 +180,8 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       
       const delta = currentPos.clone().sub(this.lastSafePosition);
 
-      // Log every 60 ticks (~1 second)
-      if (this.tickCount % 60 === 0) {
+      // Log every 300 ticks (~5 seconds) to reduce console spam
+      if (this.tickCount % 300 === 0) {
         log('--- Tick #' + this.tickCount + ' ---');
         log('currentPos:', currentPos.x.toFixed(2), currentPos.y.toFixed(2), currentPos.z.toFixed(2));
         log('lastSafePosition:', this.lastSafePosition.x.toFixed(2), this.lastSafePosition.y.toFixed(2), this.lastSafePosition.z.toFixed(2));
@@ -189,7 +189,9 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
         log('delta.lengthSq:', delta.lengthSq().toFixed(6));
       }
 
-      if (delta.lengthSq() < 0.000001) return;
+      // Increased threshold to prevent false positives from micro-movements
+      // 0.0001 = ~0.1mm movement threshold
+      if (delta.lengthSq() < 0.0001) return;
 
       let hitOccurred = false;
 

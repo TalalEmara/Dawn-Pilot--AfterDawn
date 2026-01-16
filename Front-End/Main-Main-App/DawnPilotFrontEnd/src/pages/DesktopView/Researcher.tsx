@@ -1,5 +1,6 @@
 import "aframe";
 import "../../AFrameComponents/VRMovementControls";
+import "../../AFrameComponents/YoloDatasetGenerator";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from "aframe-react";
@@ -690,6 +691,7 @@ function ResearcherView() {
             vr-mode-ui="enabled: false"
             style={{ width: "100%", height: "100%" }}
             renderer="preserveDrawingBuffer: true; antialias: false"
+            yolo-dataset-generator="enabled: true; captureInterval: 60; outputFormat: both"
           >
             <Entity
               primitive="a-sky"
@@ -724,6 +726,8 @@ function ResearcherView() {
                 return (
                   <Entity
                     key={e.id}
+                    ecs-entity
+                    data-entity-name={e.name}
                     primitive={tag}
                     position={`${pos.x} ${pos.y} ${pos.z}`}
                     rotation={`${rot.x} ${rot.y} ${rot.z}`}
@@ -736,6 +740,8 @@ function ResearcherView() {
               return (
                 <Entity
                   key={e.id}
+                  ecs-entity
+                  data-entity-name={e.name}
                   className={isObstacle ? "collidable" : ""}
                   gltf-model={`models${url}${url}.glb`}
                   position={`${pos.x} ${pos.y} ${pos.z}`}
