@@ -12,9 +12,10 @@ Pipeline stages:
 
 COLOR SPACE: Works in RGB throughout (optimal for ML models)
 
-ARCHITECTURE: Simple Producer-Consumer pattern with asyncio.to_thread
+ARCHITECTURE: Simple Producer-Consumer pattern with asyncio.to_thread + Broadcasting
 - Producer: Receives frames from WebSocket (non-blocking)
 - Consumer: Processes frames in background thread (no Event Loop blocking)
+- Broadcaster: Sends results to ALL connected clients (Desktop + Mobile)
 - Automatic frame dropping when processing is slower than input rate
 """
 
@@ -25,11 +26,64 @@ import numpy as np
 import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from core import decode_base64_to_rgb
+from typing import Set
 
 logger = logging.getLogger(__name__)
 
 # Global service (injected from websocket_routes)
 navigation_detector_service = None
+
+
+class ConnectionManager:
+    """Manages multiple WebSocket connections for broadcasting"""
+    
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+        self._lock = asyncio.Lock()
+    
+    async def connect(self, websocket: WebSocket):
+        """Register a new connection"""
+        async with self._lock:
+            self.active_connections.add(websocket)
+            logger.info(f"✅ Client connected: {websocket.client}. Total connections: {len(self.active_connections)}")
+    
+    async def disconnect(self, websocket: WebSocket):
+        """Unregister a connection"""
+        async with self._lock:
+            self.active_connections.discard(websocket)
+            logger.info(f"❌ Client disconnected: {websocket.client}. Total connections: {len(self.active_connections)}")
+    
+    async def broadcast(self, message: dict):
+        """
+        Broadcast message to all connected clients.
+        Automatically removes failed connections.
+        """
+        failed_connections = []
+        
+        async with self._lock:
+            connections = list(self.active_connections)
+        
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Failed to send to {connection.client}: {e}")
+                failed_connections.append(connection)
+        
+        # Remove failed connections
+        if failed_connections:
+            async with self._lock:
+                for conn in failed_connections:
+                    self.active_connections.discard(conn)
+                    logger.warning(f"Removed failed connection: {conn.client}")
+    
+    def get_connection_count(self) -> int:
+        """Get current number of active connections"""
+        return len(self.active_connections)
+
+
+# Global connection manager
+connection_manager = ConnectionManager()
 
 def convert_to_json_serializable(obj):
     """Helper to convert numpy types to JSON-serializable types"""
@@ -50,16 +104,17 @@ def convert_to_json_serializable(obj):
 
 async def handle_navigation_phosphene_websocket(websocket: WebSocket):
     """
-    WebSocket handler for full navigation pipeline with phosphene rendering
+    WebSocket handler for full navigation pipeline with phosphene rendering + Broadcasting
     
     Protocol:
     - Client sends: {"type": "frame", "frame_id": str, "rgb": base64, "depth": base64, "stage": str, "debug": bool}
-    - Server responds: {"type": "result", "data": {...}}
+    - Server broadcasts: {"type": "result", "data": {...}} to ALL connected clients
     
     Architecture:
-    - Simple Producer-Consumer pattern with shared state
+    - Simple Producer-Consumer pattern with shared state + Broadcasting
     - Heavy processing (decoding + inference) runs in background thread via asyncio.to_thread
     - Zero Event Loop blocking during 700ms GPU inference
+    - Results broadcast to all clients (Desktop sends frames, Desktop + Mobile receive broadcasts)
     
     Optimizations:
     - RGB color space throughout (no BGR conversions except final encode)
@@ -67,18 +122,21 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
     - Debug images only saved when debug=True flag is set
     """
     await websocket.accept()
-    logger.info(f"Navigation-Phosphene WebSocket connected: {websocket.client}")
+    await connection_manager.connect(websocket)
+    logger.info(f"🌐 Navigation-Phosphene WebSocket connected: {websocket.client}")
     
     if navigation_detector_service is None:
         await websocket.send_json({"type": "error", "error": "Navigation detector service not available"})
+        await connection_manager.disconnect(websocket)
         await websocket.close()
         return
     
-    # Send welcome message
+    # Send welcome message to this client only
     await websocket.send_json({
         "type": "connected",
         "message": "Navigation-Phosphene WebSocket ready",
-        "service_ready": navigation_detector_service.is_loaded
+        "service_ready": navigation_detector_service.is_loaded,
+        "total_connections": connection_manager.get_connection_count()
     })
     
     # Shared state for Producer-Consumer pattern
@@ -138,6 +196,10 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 try:
                     message = await websocket.receive_json()
                     
+                    # Ignore heartbeat/ping messages from Mobile viewer
+                    if message.get("type") == "ping":
+                        continue
+                    
                     if message.get("type") == "frame":
                         frame_id = message.get("frame_id", "unknown")
                         stage = message.get("stage", "phosphene")
@@ -146,7 +208,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         
                         valid_stages = ["passthrough", "edge_mode", "detector", "translator", "pre_phosphene", "phosphene"]
                         if stage not in valid_stages:
-                            await websocket.send_json({
+                            await connection_manager.broadcast({
                                 "type": "error",
                                 "frame_id": frame_id,
                                 "error": f"Invalid stage '{stage}'. Valid: {valid_stages}"
@@ -158,7 +220,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         
                         # RGB is always required
                         if not rgb_b64:
-                            await websocket.send_json({
+                            await connection_manager.broadcast({
                                 "type": "error",
                                 "frame_id": frame_id,
                                 "error": "Missing rgb image"
@@ -168,7 +230,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         # Depth is only required for detector/translator/phosphene stages
                         depth_required_stages = ["detector", "translator", "pre_phosphene", "phosphene"]
                         if stage in depth_required_stages and not depth_b64:
-                            await websocket.send_json({
+                            await connection_manager.broadcast({
                                 "type": "error",
                                 "frame_id": frame_id,
                                 "error": f"Depth image is required for stage '{stage}'. Use 'passthrough' or 'edge_mode' for RGB-only processing."
@@ -198,7 +260,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
     
     # Consumer Task: Process frames in background thread
     async def consumer():
-        """Wait for frames and process them without blocking Event Loop"""
+        """Wait for frames and process them without blocking Event Loop, then broadcast results"""
         nonlocal frames_processed
         
         try:
@@ -220,7 +282,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 inference_result = await asyncio.to_thread(run_heavy_inference, payload)
                 
                 if not inference_result["success"]:
-                    await websocket.send_json({
+                    await connection_manager.broadcast({
                         "type": "error",
                         "frame_id": frame_id,
                         "error": inference_result.get("error", "Processing failed")
@@ -229,7 +291,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 
                 result = inference_result["result"]
                 
-                # Send response
+                # Broadcast response to ALL connected clients (Desktop + Mobile)
                 response = {
                     "type": "result",
                     "data": convert_to_json_serializable({
@@ -245,11 +307,11 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     })
                 }
                 
-                await websocket.send_json(response)
+                await connection_manager.broadcast(response)
                 frames_processed += 1
                 
                 total_time = sum(result.get("stats", {}).values())
-                logger.info(f"✅ Processed frame {frame_id} in {total_time:.2f}ms")
+                logger.info(f"📡 Broadcasted frame {frame_id} to {connection_manager.get_connection_count()} clients (processed in {total_time:.2f}ms)")
                 
         except Exception as e:
             logger.error(f"Consumer error: {e}", exc_info=True)
@@ -279,8 +341,9 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
         shared_state["is_running"] = False
+        await connection_manager.disconnect(websocket)
         try:
             await websocket.close()
         except:
             pass
-        logger.info(f"Navigation-Phosphene WebSocket closed (Processed: {frames_processed} frames)")
+        logger.info(f"🌐 Navigation-Phosphene WebSocket closed: {websocket.client} (Processed: {frames_processed} frames)")
