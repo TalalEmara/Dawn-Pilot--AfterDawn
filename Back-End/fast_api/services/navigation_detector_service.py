@@ -99,6 +99,12 @@ class NavigationDetectorService:
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
         self.debug_mode = True
         
+        # Configurable parameters (can be updated via API)
+        self.conf_threshold = 0.2  # YOLO detection confidence threshold
+        self.t_min = 0.3  # Translator minimum score threshold
+        self.k_min = 1    # Translator minimum objects to select
+        self.k_max = 5    # Translator maximum objects to select
+        
         # Default cropping config
         self.cropping_config = {
             "type": "fov_based",
@@ -269,7 +275,7 @@ class NavigationDetectorService:
             
             # Warm up object detector
             print("  Warming up object detector...")
-            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=0.2)
+            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=self.conf_threshold)
             print("✓ Object detector warmed up")
             
             # Warm up freepath detector
@@ -306,7 +312,7 @@ class NavigationDetectorService:
             depth = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint16)
         
         # Run object detection only
-        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=0.2)
+        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=self.conf_threshold)
         
         # Convert to standard format with proper type conversion
         standardized_detections = []
@@ -422,6 +428,7 @@ class NavigationDetectorService:
                 bbox = [int(x) for x in bbox]
                 cx = int(bbox[0] + bbox[2] // 2)
                 cy = int(bbox[1] + bbox[3] // 2)
+                real_confidence = det.get("detection_score", 0.001)
                 
                 # Use distance as confidence if available
                 confidence = 0.8
@@ -431,7 +438,7 @@ class NavigationDetectorService:
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
-                    "confidence": float(confidence),
+                    "confidence": float(real_confidence),
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
                     "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
@@ -512,7 +519,7 @@ class NavigationDetectorService:
         import time
         start = time.time()
         
-        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.2)
+        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=self.conf_threshold)
         
         elapsed_ms = (time.time() - start) * 1000
         logger.debug(f"Frame {frame_id}: Object detection completed in {elapsed_ms:.2f}ms")
@@ -1193,6 +1200,11 @@ class NavigationDetectorService:
                 translator.input_height = h
                 translator.canvas_size = (w, h)
                 translator.params['canvas_size'] = [h, w]
+                
+                # Update configurable translator parameters
+                translator.params['T_min'] = self.t_min
+                translator.params['K_min'] = self.k_min
+                translator.params['K_max'] = self.k_max
             
             # Get simplified canvas output - ALWAYS output full-sized image for translator stage
             crop_type = effective_cropping_config.get("type", "central_crop")
@@ -1468,8 +1480,9 @@ class NavigationDetectorService:
                 
                 # Prepare label text
                 class_name = det.get('class', 'unknown')
-                confidence = det.get('confidence', 0.0)
-                label = f"{class_name}: {confidence:.2f}"
+                # Use actual model probability if available, otherwise use very low confidence
+                confidence = det.get('confidence', 0.001)
+                label = f"{class_name}: {confidence*100:.1f}%"
                 
                 # Draw label background
                 (text_width, text_height), baseline = cv2.getTextSize(
