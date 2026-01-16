@@ -1,0 +1,41 @@
+{
+  "name": "red car only",
+  "createdAt": "2026-01-15T10:08:51.620Z",
+  "entityCount": 1,
+  "camera": {
+    "position": {
+      "x": 0,
+      "y": 2,
+      "z": 4
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1768471715570-4pqyvoxsm",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": -2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.00005,
+        "y": 0.00005,
+        "z": 0.00005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    }
+  ]
+}

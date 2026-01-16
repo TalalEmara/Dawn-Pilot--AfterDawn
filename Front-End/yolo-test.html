@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>YOLO Dataset Generator - Test</title>
+  <meta name="description" content="Test YOLO Dataset Generator Component">
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px 0;
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    button.stop {
+      background: #f44336;
+    }
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 8px;
+      background: #333;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- Control Panel -->
+  <div id="controls">
+    <h3 style="margin-top: 0;">🎯 YOLO Dataset Generator Test</h3>
+    
+    <div>
+      <label>
+        Interval (frames):
+        <input type="number" id="intervalInput" value="60" style="width: 60px; margin-left: 8px;">
+      </label>
+    </div>
+    
+    <button id="startBtn" onclick="startCapture()">▶️ Start Capture</button>
+    <button id="stopBtn" onclick="stopCapture()" class="stop" disabled>⏹️ Stop Capture</button>
+    
+    <div class="status">
+      Status: <span id="status">⚪ Idle</span><br>
+      Frames: <span id="frameCount">0</span>
+    </div>
+
+    <div style="margin-top: 15px; font-size: 12px; color: #aaa;">
+      Controls:<br>
+      • WASD - Move<br>
+      • Mouse - Look<br>
+      • C - Capture frame<br>
+    </div>
+  </div>
+
+  <!-- A-Frame Scene -->
+  <a-scene
+    renderer="preserveDrawingBuffer: true; antialias: false"
+    yolo-dataset-generator="
+      enabled: false;
+      targetClass: detectable;
+      captureInterval: 60;
+      autoDownload: true;
+      logToConsole: true;
+      occlusionCheckLayers: collidable;
+      classMapping: {&quot;Box&quot;: 0, &quot;Sphere&quot;: 1, &quot;Cylinder&quot;: 2};
+      minVisiblePixels: 10;
+    "
+  >
+    <!-- Sky -->
+    <a-sky color="#87CEEB"></a-sky>
+
+    <!-- Lighting -->
+    <a-light type="ambient" color="#FFF" intensity="0.8"></a-light>
+    <a-light type="directional" color="#FFF" intensity="0.6" position="5 10 5"></a-light>
+
+    <!-- Ground -->
+    <a-plane
+      rotation="-90 0 0"
+      width="50"
+      height="50"
+      color="#7CFC00"
+      class="collidable"
+    ></a-plane>
+
+    <!-- Detectable Objects -->
+    
+    <!-- Red boxes -->
+    <a-box
+      position="-3 0.5 -5"
+      color="#FF0000"
+      class="detectable collidable"
+      data-entity-name="Box"
+    ></a-box>
+
+    <a-box
+      position="3 0.5 -5"
+      color="#FF4444"
+      class="detectable collidable"
+      data-entity-name="Box"
+    ></a-box>
+
+    <!-- Blue spheres -->
+    <a-sphere
+      position="-1 1 -7"
+      color="#0000FF"
+      class="detectable"
+      data-entity-name="Sphere"
+    ></a-sphere>
+
+    <a-sphere
+      position="1 1 -7"
+      radius="0.8"
+      color="#4444FF"
+      class="detectable"
+      data-entity-name="Sphere"
+    ></a-sphere>
+
+    <!-- Green cylinder -->
+    <a-cylinder
+      position="0 1 -10"
+      color="#00FF00"
+      class="detectable collidable"
+      data-entity-name="Cylinder"
+    ></a-cylinder>
+
+    <!-- Occluding wall (semi-transparent) -->
+    <a-box
+      position="0 2 -8"
+      width="6"
+      height="4"
+      depth="0.5"
+      color="#888888"
+      material="opacity: 0.7; transparent: true"
+      class="collidable"
+    ></a-box>
+
+    <!-- Object behind wall (should be occluded from certain angles) -->
+    <a-sphere
+      position="0 1 -9"
+      color="#FF00FF"
+      class="detectable"
+      data-entity-name="Sphere"
+    ></a-sphere>
+
+    <!-- Additional objects for variety -->
+    <a-box
+      position="-5 0.5 -10"
+      rotation="0 45 0"
+      color="#FFFF00"
+      class="detectable collidable"
+      data-entity-name="Box"
+    ></a-box>
+
+    <a-sphere
+      position="5 1 -12"
+      radius="1.2"
+      color="#00FFFF"
+      class="detectable"
+      data-entity-name="Sphere"
+    ></a-sphere>
+
+    <!-- Camera with controls -->
+    <a-camera
+      position="0 1.6 5"
+      look-controls="enabled: true"
+      wasd-controls="enabled: true; acceleration: 65"
+    >
+    </a-camera>
+  </a-scene>
+
+  <script>
+    // YOLO Dataset Generator Component
+    if (typeof AFRAME !== 'undefined' && !AFRAME.components['yolo-dataset-generator']) {
+      AFRAME.registerComponent('yolo-dataset-generator', {
+        schema: {
+          enabled: { type: 'boolean', default: false },
+          targetClass: { type: 'string', default: 'detectable' },
+          captureInterval: { type: 'number', default: 60 },
+          autoDownload: { type: 'boolean', default: true },
+          logToConsole: { type: 'boolean', default: true },
+          occlusionCheckLayers: { type: 'string', default: 'collidable' },
+          classMapping: { type: 'string', default: '{"Box": 0, "Sphere": 1, "Cylinder": 2}' },
+          minVisiblePixels: { type: 'number', default: 10 },
+        },
+
+        init: function () {
+          console.log('🎯 YOLO Dataset Generator initialized');
+          this.scene = this.el.sceneEl;
+          this.camera = this.scene.camera;
+          this.renderer = this.scene.renderer;
+          this.frameCount = 0;
+          this.captureCount = 0;
+          this.raycaster = new THREE.Raycaster();
+
+          try {
+            this.classMap = JSON.parse(this.data.classMapping);
+          } catch (e) {
+            console.error('❌ Invalid classMapping JSON');
+            this.classMap = { Box: 0, Sphere: 1, Cylinder: 2 };
+          }
+
+          console.log('📊 YOLO Class Mapping:', this.classMap);
+        },
+
+        tick: function () {
+          if (!this.data.enabled) return;
+          this.frameCount++;
+
+          // Update UI
+          document.getElementById('frameCount').textContent = this.captureCount;
+
+          if (this.frameCount % this.data.captureInterval === 0) {
+            this.captureFrame();
+          }
+        },
+
+        captureFrame: function () {
+          if (!this.camera || !this.renderer) return;
+
+          const canvas = this.renderer.domElement;
+          const width = canvas.width;
+          const height = canvas.height;
+
+          const targetEntities = this.scene.querySelectorAll(`.${this.data.targetClass}`);
+          if (targetEntities.length === 0) {
+            console.warn(`⚠️ No entities with class "${this.data.targetClass}"`);
+            return;
+          }
+
+          const yoloAnnotations = [];
+          let validDetections = 0;
+
+          targetEntities.forEach((entity) => {
+            const object3D = entity.object3D;
+            if (!object3D) return;
+
+            const entityName = entity.getAttribute('data-entity-name') || 'Unknown';
+            const classId = this.classMap[entityName];
+            
+            if (classId === undefined) {
+              console.warn(`⚠️ "${entityName}" not in class mapping`);
+              return;
+            }
+
+            if (this.isOccluded(object3D, this.camera)) {
+              console.log(`🚫 "${entityName}" is occluded`);
+              return;
+            }
+
+            const bbox = this.getScreenBoundingBox(object3D, this.camera);
+            if (!bbox || !bbox.visible) {
+              console.log(`👁️ "${entityName}" not visible`);
+              return;
+            }
+
+            const area = (bbox.x_max - bbox.x_min) * (bbox.y_max - bbox.y_min);
+            if (area < this.data.minVisiblePixels) {
+              console.log(`📏 "${entityName}" too small`);
+              return;
+            }
+
+            const yoloLine = this.convertToYolo(bbox, width, height, classId);
+            yoloAnnotations.push(yoloLine);
+            validDetections++;
+
+            console.log(`✅ Detected "${entityName}" [${classId}]: ${yoloLine}`);
+          });
+
+          if (validDetections === 0) {
+            console.log('📭 No valid detections');
+            return;
+          }
+
+          const annotationText = yoloAnnotations.join('\n');
+          const frameId = this.captureCount.toString().padStart(4, '0');
+
+          if (this.data.logToConsole) {
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`📸 Frame ${frameId} (${validDetections} detections):`);
+            console.log(annotationText);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          }
+
+          if (this.data.autoDownload) {
+            this.downloadTextFile(annotationText, `frame_${frameId}.txt`);
+            this.captureScreenshot(`frame_${frameId}.jpg`);
+          }
+
+          this.captureCount++;
+        },
+
+        getScreenBoundingBox: function (object3D, camera) {
+          const box3 = new THREE.Box3().setFromObject(object3D);
+          if (box3.isEmpty()) return null;
+
+          const corners = [
+            new THREE.Vector3(box3.min.x, box3.min.y, box3.min.z),
+            new THREE.Vector3(box3.min.x, box3.min.y, box3.max.z),
+            new THREE.Vector3(box3.min.x, box3.max.y, box3.min.z),
+            new THREE.Vector3(box3.min.x, box3.max.y, box3.max.z),
+            new THREE.Vector3(box3.max.x, box3.min.y, box3.min.z),
+            new THREE.Vector3(box3.max.x, box3.min.y, box3.max.z),
+            new THREE.Vector3(box3.max.x, box3.max.y, box3.min.z),
+            new THREE.Vector3(box3.max.x, box3.max.y, box3.max.z),
+          ];
+
+          const canvas = this.renderer.domElement;
+          const width = canvas.width;
+          const height = canvas.height;
+
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          let anyInFront = false;
+
+          corners.forEach((corner) => {
+            const projected = corner.clone().project(camera);
+            if (projected.z > 1) return;
+
+            anyInFront = true;
+            const x = ((projected.x + 1) / 2) * width;
+            const y = ((-projected.y + 1) / 2) * height;
+
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          });
+
+          if (!anyInFront) return null;
+
+          minX = Math.max(0, Math.min(width, minX));
+          minY = Math.max(0, Math.min(height, minY));
+          maxX = Math.max(0, Math.min(width, maxX));
+          maxY = Math.max(0, Math.min(height, maxY));
+
+          if (maxX <= minX || maxY <= minY) return null;
+
+          return { x_min: minX, y_min: minY, x_max: maxX, y_max: maxY, visible: true };
+        },
+
+        convertToYolo: function (bbox, width, height, classId) {
+          const x_center = (bbox.x_min + bbox.x_max) / 2 / width;
+          const y_center = (bbox.y_min + bbox.y_max) / 2 / height;
+          const box_width = (bbox.x_max - bbox.x_min) / width;
+          const box_height = (bbox.y_max - bbox.y_min) / height;
+
+          const clamp = (val) => Math.max(0, Math.min(1, val));
+
+          return `${classId} ${clamp(x_center).toFixed(6)} ${clamp(y_center).toFixed(6)} ${clamp(box_width).toFixed(6)} ${clamp(box_height).toFixed(6)}`;
+        },
+
+        isOccluded: function (targetObject, camera) {
+          const objectCenter = new THREE.Vector3();
+          const box = new THREE.Box3().setFromObject(targetObject);
+          box.getCenter(objectCenter);
+
+          const cameraPosition = camera.position.clone();
+          const direction = objectCenter.clone().sub(cameraPosition).normalize();
+          const distanceToObject = cameraPosition.distanceTo(objectCenter);
+
+          this.raycaster.set(cameraPosition, direction);
+          this.raycaster.far = distanceToObject - 0.1;
+
+          const occludingElements = this.scene.querySelectorAll(`.${this.data.occlusionCheckLayers}`);
+          const occludingObjects = [];
+
+          occludingElements.forEach((el) => {
+            if (el.object3D && el.object3D !== targetObject) {
+              el.object3D.traverse((child) => {
+                if (child.isMesh) occludingObjects.push(child);
+              });
+            }
+          });
+
+          const intersections = this.raycaster.intersectObjects(occludingObjects, true);
+          return intersections.length > 0;
+        },
+
+        downloadTextFile: function (content, filename) {
+          const blob = new Blob([content], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        },
+
+        captureScreenshot: function (filename) {
+          try {
+            const canvas = this.renderer.domElement;
+            canvas.toBlob((blob) => {
+              if (!blob) return;
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            }, 'image/jpeg');
+          } catch (error) {
+            console.error('❌ Screenshot failed:', error);
+          }
+        },
+      });
+    }
+
+    // Control functions
+    function startCapture() {
+      const scene = document.querySelector('a-scene');
+      const interval = parseInt(document.getElementById('intervalInput').value);
+      
+      scene.setAttribute('yolo-dataset-generator', `captureInterval: ${interval}; enabled: true`);
+      
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      document.getElementById('status').textContent = '🔴 Recording';
+      
+      console.log('▶️ Started capture');
+    }
+
+    function stopCapture() {
+      const scene = document.querySelector('a-scene');
+      scene.setAttribute('yolo-dataset-generator', 'enabled', false);
+      
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+      document.getElementById('status').textContent = '⚪ Idle';
+      
+      console.log('⏹️ Stopped capture');
+    }
+
+    // Keyboard shortcut (C key to capture)
+    document.addEventListener('keypress', (e) => {
+      if (e.key === 'c' || e.key === 'C') {
+        const scene = document.querySelector('a-scene');
+        const component = scene.components['yolo-dataset-generator'];
+        if (component) {
+          component.captureFrame();
+          console.log('📸 Manual capture triggered');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
