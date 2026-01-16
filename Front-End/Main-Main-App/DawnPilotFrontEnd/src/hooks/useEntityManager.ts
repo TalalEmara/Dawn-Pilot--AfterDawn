@@ -5,7 +5,7 @@ import type { Entity } from './useScenarioWorld';
 import { URLS } from '../ApiConfig';
 // const SOCKET_URL = "http://192.168.1.107:5000";
 
-const API_BASE_URL = URLS.SYNC_SOCKET;
+const API_BASE_URL = URLS.SCENARIO_API;
 
 interface CreateEntityFromModelParams {
   modelName: string;
@@ -127,13 +127,22 @@ export function useEntityManager(onWorldUpdate?: (entities: Entity[]) => void) {
   }, []);
 
   /**
-   * Delete entity by ID
+   * Delete entity by ID with optimistic update
    */
   const deleteEntity = useCallback(async (entityId: string) => {
     try {
-      setLoading(true);
       setError(null);
       
+      // ✅ OPTIMISTIC DELETE: Remove from UI immediately
+      if (onWorldUpdate) {
+        // This callback should update React state optimistically
+        // We'll pass a flag to indicate this is a delete operation
+        onWorldUpdate(entityId, 'delete');
+      }
+      
+      setLoading(true);
+      
+      // Send delete request to backend
       const response = await fetch(`${API_BASE_URL}/entities/${entityId}`, {
         method: 'DELETE'
       });
@@ -143,19 +152,21 @@ export function useEntityManager(onWorldUpdate?: (entities: Entity[]) => void) {
       }
       
       const data = await response.json();
-      
-      // Reload world to get updated state
-      if (onWorldUpdate) {
-        const worldResponse = await fetch(`${API_BASE_URL}/scenario-world`);
-        const worldData = await worldResponse.json();
-        onWorldUpdate(worldData.entities);
-      }
+      console.log(`✅ Entity ${entityId} deleted from backend`);
       
       return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete entity';
       setError(message);
       console.error('Error deleting entity:', err);
+      
+      // On error, reload to restore correct state
+      if (onWorldUpdate) {
+        const worldResponse = await fetch(`${API_BASE_URL}/scenario-world`);
+        const worldData = await worldResponse.json();
+        onWorldUpdate(worldData.entities);
+      }
+      
       throw err;
     } finally {
       setLoading(false);

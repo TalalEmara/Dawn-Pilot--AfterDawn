@@ -156,6 +156,9 @@ export function createEntity(components?: Record<string, any>): any {
     }
   }
 
+  // Auto-save after creating entity
+  saveScenarioWorld();
+
   return entityToObject(objectId, entity);
 }
 
@@ -231,6 +234,9 @@ export function updateComponentOnEntity(
   // Update component properties
   Object.assign(component, componentData);
 
+  // Auto-save to persist changes (important for reload/save scenario)
+  saveScenarioWorld();
+
   return entityToObject(entityId, entity);
 }
 
@@ -243,6 +249,9 @@ export function removeEntity(entityId: string): boolean {
 
   entityManager.removeEntity(entity);
   objectMap.delete(entityId);
+  
+  // Auto-save to persist deletion
+  saveScenarioWorld();
   
   return true;
 }
@@ -320,10 +329,21 @@ export function getAvailableModels(): any {
 // ========================================
 
 const SAVED_SCENARIOS_DIR = path.join(__dirname, '../saved-scenarios');
+const WORLD_STATE_FILE = path.join(__dirname, '../world-state.json');
 
 // Ensure saved-scenarios directory exists
 if (!fs.existsSync(SAVED_SCENARIOS_DIR)) {
   fs.mkdirSync(SAVED_SCENARIOS_DIR, { recursive: true });
+}
+
+/**
+ * Save current scenario world state to disk (auto-save)
+ * This ensures changes persist across restarts and scenario loads
+ */
+function saveScenarioWorld(): void {
+  const world = getScenarioWorld();
+  fs.writeFileSync(WORLD_STATE_FILE, JSON.stringify(world, null, 2), 'utf-8');
+  console.log(`💾 World state auto-saved (${world.entities.length} entities)`);
 }
 
 export interface SavedScenario {

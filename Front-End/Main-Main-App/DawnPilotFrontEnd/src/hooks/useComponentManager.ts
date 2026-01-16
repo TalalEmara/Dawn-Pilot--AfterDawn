@@ -5,7 +5,7 @@ import type { Entity } from './useScenarioWorld';
 import { URLS } from '../ApiConfig';
 // const SOCKET_URL = "http://192.168.1.107:5000";
 
-const API_BASE_URL = URLS.SYNC_SOCKET;
+const API_BASE_URL = URLS.SCENARIO_API;
 
 
 export function useComponentManager(onEntityUpdate?: (entity: Entity) => void) {

@@ -32,7 +32,7 @@ const BuilderPage = () => {
     setWorld,
   } = useScenarioWorld();
 
-  // Entity operations – callback receives full entities array
+  // Entity operations – callback handles both updates and deletes
   const {
     loading: entityLoading,
     error: entityError,
@@ -40,8 +40,16 @@ const BuilderPage = () => {
     createCustomEntity,
     deleteEntity,
     queryEntities,
-  } = useEntityManager((updatedEntities) => {
-    setWorld({ entities: updatedEntities });
+  } = useEntityManager((dataOrId, action) => {
+    if (action === 'delete' && typeof dataOrId === 'string') {
+      // Optimistic delete: remove from UI immediately
+      setWorld((prevWorld) => ({
+        entities: prevWorld.entities.filter(e => e.id !== dataOrId)
+      }));
+    } else if (Array.isArray(dataOrId)) {
+      // Full entity array update (for create operations)
+      setWorld({ entities: dataOrId });
+    }
   });
 
   // Component operations (used by inspector sync) – callback receives single entity
