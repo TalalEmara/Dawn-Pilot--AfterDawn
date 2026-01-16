@@ -758,14 +758,14 @@ function ResearcherView() {
               distance="15"
               position="0 4 2"
             />
-            <Entity
+            {/* <Entity
               primitive="a-plane"
               position="0 2 -2"
               rotation="0 0 0"
               width="10"
               height="5"
               material={{ src: datasetTest, repeat: "1 1" }}
-            />
+            /> */}
             <Entity
               ref={cameraRef}
               primitive="a-camera"
