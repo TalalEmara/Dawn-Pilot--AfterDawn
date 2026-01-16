@@ -5,7 +5,7 @@ import "aframe";
 const YOLO_CLASS_MAPPING = {
   "0": "Car",
   "5": "Tree Trunk",
-  "15": "Potted Plant",
+  "15": "Plotted Plant",
   "3": "Bus station",
   "1": "Pole",
   "6": "Person"
@@ -47,6 +47,8 @@ interface YoloDatasetGenerator {
   raycaster: THREE.Raycaster;
   classMap: Record<string, number>;
   reverseClassMap: Record<number, string>;
+  captureQueue: Array<{ filename: string; blob: Blob; type: string }>;
+  downloadInterval: number | null;
 
   captureFrame: () => void;
   getScreenBoundingBox: (
@@ -70,10 +72,10 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       enabled: { type: "boolean", default: true },
       captureInterval: { type: "number", default: 60 }, // Capture every N frames (60 = ~1/sec at 60fps)
       autoDownload: { type: "boolean", default: true }, // Auto-download files
-      logToConsole: { type: "boolean", default: true }, // Log to console
+      logToConsole: { type: "boolean", default: false }, // Log to console
       occlusionCheckLayers: { type: "string", default: "collidable" }, // Occlusion check classes
       minVisiblePixels: { type: "number", default: 10 }, // Min bbox area
-      outputFormat: { type: "string", default: "both" }, // 'yolo', 'json', or 'both'
+      outputFormat: { type: "string", default: "yolo" }, // 'yolo', 'json', or 'both'
     },
 
     init: function (this: YoloDatasetGenerator) {
@@ -87,6 +89,18 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       // Frame counters
       this.frameCount = 0;
       this.captureCount = 0;
+
+      // Download queue to batch file downloads (reduces browser prompts)
+      this.captureQueue = [];
+      this.downloadInterval = null;
+
+      // Start batch download processor (downloads one file every 200ms)
+      this.downloadInterval = window.setInterval(() => {
+        if (this.captureQueue.length > 0) {
+          const item = this.captureQueue.shift()!;
+          this.downloadFile(item.blob, item.filename);
+        }
+      }, 200);
 
       // Raycaster for occlusion checking
       this.raycaster = new AFRAME.THREE.Raycaster();
@@ -434,14 +448,27 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
      */
     downloadTextFile: function (this: YoloDatasetGenerator, content: string, filename: string) {
       const blob = new Blob([content], { type: "text/plain" });
+      // Add to download queue instead of immediate download
+      this.captureQueue.push({ filename, blob, type: 'text' });
+    },
+
+    /**
+     * Download a file (used by queue processor)
+     */
+    downloadFile: function (this: YoloDatasetGenerator, blob: Blob, filename: string) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = filename;
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Cleanup after short delay
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
     },
 
     /**
@@ -449,28 +476,30 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
      */
     captureScreenshot: function (this: YoloDatasetGenerator, filename: string) {
       try {
+        // Force a render to ensure canvas is up-to-date
+        this.renderer.render(this.scene.object3D, this.camera);
+        
         const canvas = this.renderer.domElement;
+        
+        // Use toBlob with quality setting for JPEG
         canvas.toBlob((blob: Blob | null) => {
           if (!blob) {
             console.error("❌ Failed to create screenshot blob");
             return;
           }
 
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }, "image/jpeg");
+          // Add to download queue instead of immediate download
+          this.captureQueue.push({ filename, blob, type: 'image' });
+        }, "image/jpeg", 0.95);
       } catch (error) {
         console.error("❌ Screenshot capture failed:", error);
       }
     },
 
     remove: function (this: YoloDatasetGenerator) {
+      if (this.downloadInterval) {
+        clearInterval(this.downloadInterval);
+      }
       console.log("🎯 YOLO Dataset Generator removed");
     },
   });

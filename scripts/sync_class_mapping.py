@@ -90,7 +90,7 @@ Example Output:
 🔄 Syncing YOLO class mapping...
 
 📊 Loaded mapping from yolo_class_mapping.json
-   Classes: ['Car', 'Pole', 'Bus station', 'Tree Trunk', 'Person', 'Potted Plant']
+   Classes: ['Car', 'Pole', 'Bus station', 'Tree Trunk', 'Person', 'Plotted Plant']
 ✅ Updated YoloDatasetGenerator.ts
 
 ✅ Class mapping synchronized!

@@ -35,7 +35,7 @@ class YoloVisualizer:
                 "3": "Bus station",
                 "5": "Tree Trunk",
                 "6": "Person",
-                "15": "Potted Plant"
+                "15": "Plotted Plant"
             }
         
         print(f"📊 Loaded class mapping: {self.class_map}")
