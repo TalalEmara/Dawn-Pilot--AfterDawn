@@ -66,6 +66,7 @@ function ResearcherView() {
   const [visionMode, setVisionMode] = useState("prosthetic");
   const [currentScenarioId, setCurrentScenarioId] = useState("default_world");
   const [mobileId, setMobileId] = useState<string>("");
+  const [kMaxValue, setKMaxValue] = useState<number>(2); // Default k_max value
 
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [collisionCount, setCollisionCount] = useState<number>(0);
@@ -310,6 +311,27 @@ const {
     setShowLoadDialog(true);
   };
 
+  // Handle k_max configuration
+  const handleConfigureKMax = async (k: number) => {
+    try {
+      const response = await fetch(`http://${SERVER_IP}:8000/api/configure_new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ k_max: k }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to configure k_max: ${response.statusText}`);
+      }
+      
+      setKMaxValue(k);
+      console.log(`✅ k_max configured to ${k}`);
+    } catch (error) {
+      console.error("❌ Error configuring k_max:", error);
+      alert(`Error configuring k_max: ${error}`);
+    }
+  };
+
   return (
     <div
       style={{
@@ -413,6 +435,59 @@ const {
                 <option value="low_res">Low Resolution</option>
               </select>
             </div>
+
+            {/* k_max Configuration - Segmented Control */}
+            <div style={{ marginBottom: "10px" }}>
+              <label style={{ fontSize: "11px", color: "#aaa", marginBottom: "5px", display: "block" }}>
+                k_max Configuration
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "4px",
+                  background: "#222",
+                  padding: "4px",
+                  borderRadius: "6px",
+                  border: "1px solid #444",
+                }}
+              >
+                {[1, 2, 3].map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => handleConfigureKMax(k)}
+                    disabled={vault.isRecording}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      background: kMaxValue === k ? "#4CAF50" : "transparent",
+                      color: kMaxValue === k ? "#fff" : "#aaa",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: vault.isRecording ? "not-allowed" : "pointer",
+                      fontWeight: kMaxValue === k ? "bold" : "normal",
+                      fontSize: "14px",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!vault.isRecording && kMaxValue !== k) {
+                        e.currentTarget.style.background = "#333";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (kMaxValue !== k) {
+                        e.currentTarget.style.background = "transparent";
+                      }
+                    }}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: "10px", color: "#666", marginTop: "4px" }}>
+                Current: k_max = {kMaxValue}
+              </div>
+            </div>
+
             {!vault.isRecording ? (
               <button
                 onClick={handleStartExperiment}
