@@ -17,6 +17,7 @@ import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
 import datasetTest from "../../assets/testing/dataset.png";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
+import { useAiStream } from "../../hooks/useAiStream";
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -71,10 +72,14 @@ function ResearcherView() {
   const [collisionLog, setCollisionLog] = useState<string[]>([]);
 
   // AI Socket State
-  const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
-  const frameIdRef = useRef<number>(0);
-
-  const aiHudCanvasRef = useBinaryStream(aiWebSocket);
+ const frameIdRef = useRef<number>(0);
+// Replaces all manual socket state, connection effects, and binary stream hooks
+const { 
+  socket: aiWebSocket, 
+  canvasRef: aiHudCanvasRef 
+} = useAiStream({ 
+  reconnectDependency: visionMode 
+});
 
   // 1. Get socket from CameraSync
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
@@ -98,26 +103,7 @@ function ResearcherView() {
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
 
-  // --- AI WebSocket Connection ---
-  useEffect(() => {
-    const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
 
-    ws.onopen = () => {
-      console.log("🟢 [Researcher] AI WebSocket Connected");
-      setAiWebSocket(ws);
-    };
-
-    ws.onerror = (error) =>
-      console.error("🔴 [Researcher] AI WebSocket Error:", error);
-    ws.onclose = () => {
-      console.log("🔴 [Researcher] AI WebSocket Disconnected");
-      setAiWebSocket(null);
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) ws.close();
-    };
-  }, []);
 
   // --- Frame Capture & Sending ---
   useFrameBuffer({
@@ -176,35 +162,9 @@ function ResearcherView() {
     }
   }, [visionMode, socket]);
 
-  // Reconnect AI WebSocket on mode switch to clear frame queue
-  useEffect(() => {
-    if (!aiWebSocket) return;
+
     
-    console.log(`🔄 Mode switched to: ${visionMode}, reconnecting AI WebSocket...`);
-    
-    // Close existing connection
-    if (aiWebSocket.readyState === WebSocket.OPEN) {
-      aiWebSocket.close();
-    }
-    
-    // Reconnect after brief delay
-    const reconnectTimer = setTimeout(() => {
-      const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
-      
-      ws.onopen = () => {
-        console.log(`🟢 [Researcher] AI WebSocket Reconnected for ${visionMode} mode`);
-        setAiWebSocket(ws);
-      };
-      
-      ws.onerror = (error) => console.error('🔴 AI WebSocket Error:', error);
-      ws.onclose = () => {
-        console.log('🔴 AI WebSocket Disconnected');
-        setAiWebSocket(null);
-      };
-    }, 100);
-    
-    return () => clearTimeout(reconnectTimer);
-  }, [visionMode]);
+
 
   useEffect(() => {
     loadWorld().catch((err) =>
