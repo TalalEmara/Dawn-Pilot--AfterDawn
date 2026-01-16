@@ -691,7 +691,7 @@ function ResearcherView() {
             vr-mode-ui="enabled: false"
             style={{ width: "100%", height: "100%" }}
             renderer="preserveDrawingBuffer: true; antialias: false"
-            yolo-dataset-generator="enabled: true; captureInterval: 60; outputFormat: both"
+            yolo-dataset-generator="enabled: true;"
           >
             <Entity
               primitive="a-sky"
