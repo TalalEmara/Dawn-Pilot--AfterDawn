@@ -72,6 +72,15 @@
             ],
             "dependsOrder": "parallel",
             "problemMatcher": []
+        },
+        {
+            "label": "dev:no-ai",
+            "dependsOn": [
+                "dev:frontend",
+                "dev:experiment-manager"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
         }
     ]
 }
