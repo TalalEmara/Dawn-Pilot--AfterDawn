@@ -99,6 +99,12 @@ class NavigationDetectorService:
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
         self.debug_mode = True
         
+        # Configurable parameters (can be updated via API)
+        self.conf_threshold = 0.2  # YOLO detection confidence threshold
+        self.t_min = 0.3  # Translator minimum score threshold
+        self.k_min = 1    # Translator minimum objects to select
+        self.k_max = 5    # Translator maximum objects to select
+        
         # Default cropping config
         self.cropping_config = {
             "type": "fov_based",
@@ -249,21 +255,39 @@ class NavigationDetectorService:
     def _warmup_models(self):
         """Warm up GPU models to reduce first-inference latency variability"""
         try:
-            # Create dummy input for warmup
+            print("🔥 Warming up models...")
+            
+            # Warmup phosphene and edge encoders if available
+            if torch.cuda.is_available() and self.pipeline2:
+                print("  Warming up phosphene encoder (373x349)...")
+                dummy_phosphene_input = np.random.rand(349, 373).astype(np.float32)
+                _ = self.pipeline2.input2phosphenes(dummy_phosphene_input, use_edge_encoder=False)
+                print("✓ Phosphene encoder warmed up")
+                
+                print("  Warming up edge encoder (128x128)...")
+                dummy_edge_input = np.random.rand(128, 128).astype(np.float32)
+                _ = self.pipeline2.input2phosphenes(dummy_edge_input, use_edge_encoder=True)
+                print("✓ Edge encoder warmed up")
+            
+            # Create dummy input for detector warmup
             dummy_rgb = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
             dummy_depth = np.random.rand(480, 640).astype(np.float32)
             
             # Warm up object detector
             print("  Warming up object detector...")
-            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=0.2)
+            self.object_detector.detect_per_frame(dummy_rgb, dummy_depth, conf_thresh=self.conf_threshold)
+            print("✓ Object detector warmed up")
             
             # Warm up freepath detector
             print("  Warming up freepath detector...")
             self._infer_freepath_from_array(dummy_rgb, 0, save_debug=False)
+            print("✓ Freepath detector warmed up")
             
             # Force GPU synchronization
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
+            
+            print("✓ All models warmed up successfully")
                 
         except Exception as e:
             print(f"  Warning: Model warmup failed: {e}")
@@ -288,7 +312,7 @@ class NavigationDetectorService:
             depth = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint16)
         
         # Run object detection only
-        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=0.2)
+        detections = self.object_detector.detect_per_frame(frame, depth, conf_thresh=self.conf_threshold)
         
         # Convert to standard format with proper type conversion
         standardized_detections = []
@@ -404,6 +428,7 @@ class NavigationDetectorService:
                 bbox = [int(x) for x in bbox]
                 cx = int(bbox[0] + bbox[2] // 2)
                 cy = int(bbox[1] + bbox[3] // 2)
+                real_confidence = det.get("detection_score", 0.001)
                 
                 # Use distance as confidence if available
                 confidence = 0.8
@@ -413,7 +438,7 @@ class NavigationDetectorService:
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
-                    "confidence": float(confidence),
+                    "confidence": float(real_confidence),
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
                     "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
@@ -454,17 +479,23 @@ class NavigationDetectorService:
             result["error"] = str(e)
             result["success"] = False
         
-        # Periodic GPU memory cleanup if optimization is enabled
-        if self.gpu_memory_optimization and torch.cuda.is_available():
-            # Clear cache every 100 frames to prevent memory buildup
-            if hasattr(self, '_frame_count'):
-                self._frame_count += 1
-            else:
-                self._frame_count = 1
+        # Periodic GPU memory cleanup and watchdog
+        if torch.cuda.is_available():
+            if not hasattr(self, '_frame_count'):
+                self._frame_count = 0
+            self._frame_count += 1
             
-            if self._frame_count % 100 == 0:
+            # GPU Watchdog: Force sync every 50 frames to prevent Windows TDR timeout
+            if self._frame_count % 50 == 0:
+                torch.cuda.synchronize()
+                logger.debug(f"GPU watchdog sync at frame {frame_id}")
+            
+            # Memory cleanup every 100 frames if optimization enabled
+            if self.gpu_memory_optimization and self._frame_count % 100 == 0:
                 torch.cuda.empty_cache()
-                logger.debug(f"GPU cache cleared at frame {frame_id}")
+                allocated_gb = torch.cuda.memory_allocated() / (1024**3)
+                reserved_gb = torch.cuda.memory_reserved() / (1024**3)
+                logger.debug(f"GPU cache cleared at frame {frame_id} | Allocated: {allocated_gb:.3f}GB, Reserved: {reserved_gb:.3f}GB")
         
         return result
     
@@ -488,7 +519,7 @@ class NavigationDetectorService:
         import time
         start = time.time()
         
-        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=0.2)
+        detections = self.object_detector.detect_per_frame(rgb, depth, conf_thresh=self.conf_threshold)
         
         elapsed_ms = (time.time() - start) * 1000
         logger.debug(f"Frame {frame_id}: Object detection completed in {elapsed_ms:.2f}ms")
@@ -895,26 +926,28 @@ class NavigationDetectorService:
     def process_full_pipeline(
         self,
         rgb: np.ndarray,
-        depth: np.ndarray,
         frame_id: int,
+        depth: Optional[np.ndarray] = None,
         stop_at: str = "phosphene",
-        debug_mode: bool = True,
+        debug_mode: bool = False,
         cropping_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process frame through full modular pipeline with stop points (optimized)
         
         Pipeline stages:
-        1. 'detector': Object detection + freepath detection -> RGB with bboxes
-        2. 'translator': Translator simplification -> Simplified image with freepath circle
-        3. 'pre_phosphene': Crop/resize to target size -> Image ready for phosphene
-        4. 'phosphene': Final phosphene rendering -> Phosphene output
+        1. 'passthrough': FOV crop only, no processing -> Cropped RGB view
+        2. 'edge_mode': Crop + Edge detection + Encoder + Simulator -> Edge-based phosphene
+        3. 'detector': Object detection + freepath detection -> RGB with bboxes
+        4. 'translator': Translator simplification -> Simplified image with freepath circle
+        5. 'pre_phosphene': Crop/resize to target size -> Image ready for phosphene
+        6. 'phosphene': Final phosphene rendering -> Phosphene output
         
         Args:
             rgb: RGB image (H, W, 3)
-            depth: Depth image (H, W)
+            depth: Depth image (H, W) - Optional, required only for detector/translator/phosphene stages
             frame_id: Frame identifier
-            stop_at: Stage to stop at ('detector', 'translator', 'pre_phosphene', 'phosphene')
+            stop_at: Stage to stop at ('passthrough', 'edge_mode', 'detector', 'translator', 'pre_phosphene', 'phosphene')
             debug_mode: If True, save intermediate outputs (default False for speed)
             cropping_config: Override cropping configuration (optional)
             
@@ -961,6 +994,98 @@ class NavigationDetectorService:
         }
         
         try:
+            # === NEW BRANCH 1: PASSTHROUGH MODE (Normal Vision) ===
+            if stop_at == "passthrough":
+                stage_start = time.time()
+                
+                # Apply FOV cropping only, no processing
+                cropped = self._fov_based_crop(rgb, effective_cropping_config)
+                
+                stage_times["passthrough"] = (time.time() - stage_start) * 1000
+                
+                # Optional debug
+                if debug_mode:
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    debug_prefix = f"{self.debug_output_dir}/passthrough_{frame_id}_{timestamp}"
+                    cv2.imwrite(f"{debug_prefix}_output.jpg", cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+                    logger.info(f"💾 Saved PASSTHROUGH output: {cropped.shape}")
+                
+                # Encode and return
+                output_b64 = encode_ndarray_to_base64(cropped, color_space='RGB')
+                
+                result.update({
+                    "success": True,
+                    "output_image": output_b64,
+                    "stage": "passthrough",
+                    "stats": stage_times
+                })
+                return result
+            
+            # === NEW BRANCH 2: EDGE_MODE (Low-Res Vision) ===
+            if stop_at == "edge_mode":
+                stage_start = time.time()
+                
+                # Step 1: Apply FOV cropping
+                cropped = self._fov_based_crop(rgb, effective_cropping_config)
+                stage_times["crop"] = (time.time() - stage_start) * 1000
+                
+                # Step 2: Apply edge detection
+                stage_start = time.time()
+                edges = self.apply_edge_detection(cropped)
+                stage_times["edge_detection"] = (time.time() - stage_start) * 1000
+                
+                # Optional debug: Save edge detection output
+                if debug_mode:
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    debug_prefix = f"{self.debug_output_dir}/edge_mode_{frame_id}_{timestamp}"
+                    cv2.imwrite(f"{debug_prefix}_01_cropped.jpg", cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+                    cv2.imwrite(f"{debug_prefix}_02_edges.jpg", cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR))
+                    logger.info(f"💾 Saved EDGE_MODE intermediate images")
+                
+                # Step 3: Run through edge encoder/simulator
+                stage_start = time.time()
+                
+                # Pipeline2 expects grayscale normalized input [0, 1]
+                if len(edges.shape) == 3:
+                    edges_gray = cv2.cvtColor(edges, cv2.COLOR_RGB2GRAY)
+                else:
+                    edges_gray = edges
+                
+                edges_normalized = edges_gray #.astype(np.float32) / 255.0
+                
+                # Run edge encoder rendering (uses 128x128 edge encoder)
+                if self.pipeline2 is None:
+                    raise RuntimeError("Pipeline2Integration not initialized")
+                
+                phosphene_output = self.pipeline2.input2phosphenes(edges_normalized, use_edge_encoder=True)
+                stage_times["phosphene_encoder"] = (time.time() - stage_start) * 1000
+                
+                # Convert to image
+                phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
+                
+                # Optional debug: Save final output
+                if debug_mode:
+                    cv2.imwrite(f"{debug_prefix}_03_phosphene_output.png", phosphene_img)
+                    logger.info(f"💾 Saved EDGE_MODE phosphene output")
+                
+                # Encode and return
+                output_b64 = encode_ndarray_to_base64(phosphene_img, color_space='BGR')
+                
+                result.update({
+                    "success": True,
+                    "output_image": output_b64,
+                    "stage": "edge_mode",
+                    "stats": stage_times
+                })
+                return result
+            
+            # === EXISTING STAGES: Require depth ===
+            if depth is None:
+                result["error"] = f"Depth image is required for stage '{stop_at}'. Please send depth data or use 'passthrough' or 'edge_mode' stages."
+                return result
+            
             # Optional debug: Save input images only if debug_mode=True
             debug_input_prefix = None
             if debug_mode:
@@ -1075,6 +1200,11 @@ class NavigationDetectorService:
                 translator.input_height = h
                 translator.canvas_size = (w, h)
                 translator.params['canvas_size'] = [h, w]
+                
+                # Update configurable translator parameters
+                translator.params['T_min'] = self.t_min
+                translator.params['K_min'] = self.k_min
+                translator.params['K_max'] = self.k_max
             
             # Get simplified canvas output - ALWAYS output full-sized image for translator stage
             crop_type = effective_cropping_config.get("type", "central_crop")
@@ -1082,7 +1212,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=True, target_canvas_size=(w, h), draw_freepath=True)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
@@ -1195,7 +1325,7 @@ class NavigationDetectorService:
                 raise RuntimeError("Pipeline2Integration not initialized")
             
             # Normalize 128x128 image to 0-1 range for Pipeline2 (neural network expects normalized input)
-            # Pipeline2 expects grayscale input, so convert if necessary
+            # Pipeline2 expects grayscale input [0, 1], so convert if necessary
             if len(cropped_image.shape) == 3:
                 # Convert BGR/RGB to grayscale
                 pre_phosphene_gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
@@ -1204,8 +1334,8 @@ class NavigationDetectorService:
 
             pre_phosphene_normalized = pre_phosphene_gray.astype(np.float32) / 255.0
             
-            # Run phosphene rendering
-            phosphene_output = self.pipeline2.input2phosphenes(pre_phosphene_normalized)  # Returns (H, W) numpy array
+            # Run phosphene rendering (uses 373x349 phosphene encoder)
+            phosphene_output = self.pipeline2.input2phosphenes(pre_phosphene_normalized, use_edge_encoder=False)  # Returns (H, W) numpy array
             
             stage_times["phosphene"] = (time.time() - stage_start) * 1000
             
@@ -1286,6 +1416,40 @@ class NavigationDetectorService:
         
         return vis_img
     
+    def apply_edge_detection(self, img: np.ndarray) -> np.ndarray:
+        """
+        Apply edge detection for low-res vision mode
+        
+        Args:
+            img: Input RGB image (H, W, 3)
+            
+        Returns:
+            np.ndarray: Edge-detected image as RGB (H, W, 3) ready for encoder
+        """
+        # Edge detection parameters (adjust here)
+        CANNY_THRESHOLD1 = 170
+        CANNY_THRESHOLD2 = 255
+        DILATION_KERNEL_SIZE = (3, 3)
+        DILATION_ITERATIONS = 3
+        
+        # Convert RGB to grayscale
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img
+        
+        # Edge detection (Canny)
+        edges = cv2.Canny(gray, CANNY_THRESHOLD1, CANNY_THRESHOLD2)
+        
+        # Edge dilation
+        kernel = np.ones(DILATION_KERNEL_SIZE, np.uint8)
+        dilated_edges = cv2.dilate(edges, kernel, iterations=DILATION_ITERATIONS)
+        
+        # Convert back to RGB for encoder (expects 3 channels)
+        # edges_rgb = cv2.cvtColor(dilated_edges, cv2.COLOR_GRAY2RGB)
+        
+        return dilated_edges
+    
     def is_ready(self) -> bool:
         """Check if navigation detector service is ready"""
         return self.is_loaded
@@ -1316,8 +1480,9 @@ class NavigationDetectorService:
                 
                 # Prepare label text
                 class_name = det.get('class', 'unknown')
-                confidence = det.get('confidence', 0.0)
-                label = f"{class_name}: {confidence:.2f}"
+                # Use actual model probability if available, otherwise use very low confidence
+                confidence = det.get('confidence', 0.001)
+                label = f"{class_name}: {confidence*100:.1f}%"
                 
                 # Draw label background
                 (text_width, text_height), baseline = cv2.getTextSize(

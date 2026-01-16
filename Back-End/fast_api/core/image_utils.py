@@ -127,6 +127,8 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
             if color_space == 'RGB':
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             # If already BGR, no conversion needed
+
+        # if the image is grayscale, no color conversion needed
         
         # Encode to PNG/JPG bytes
         success, buffer = cv2.imencode(format, img)
@@ -140,7 +142,7 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
     
     except Exception as e:
         logger.error(f"Failed to encode image to base64: {e}")
-        raise
+        raise HTTPException(status_code=500, detail=f"Image encoding error: {str(e)}")
 
 
 def decode_depth_map(depth_base64: str) -> np.ndarray:

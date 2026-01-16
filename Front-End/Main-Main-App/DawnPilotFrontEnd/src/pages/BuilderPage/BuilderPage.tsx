@@ -48,18 +48,12 @@ const BuilderPage = () => {
   // ... inside BuilderPage component ...
 
   // Component operations (used by inspector sync)
+  // No callback needed - we do optimistic updates in handleComponentChange
   const {
     loading: componentLoading,
     updateComponentDebounced,
     clearAllTimers,
-  } = useComponentManager((updatedEntity) => {
-    setWorld((prevWorld) => ({
-      entities: prevWorld.entities.map((e) =>
-        // FIX: Merge the update instead of replacing the whole object
-        e.id === updatedEntity.id ? { ...e, ...updatedEntity } : e
-      ),
-    }));
-  });
+  } = useComponentManager();
 
   // Model library
   const { models } = useModelLibrary();
@@ -88,7 +82,18 @@ const BuilderPage = () => {
 
   useEffect(() => {
     const handleOpen = () => setInspectorActive(true);
-    const handleClose = () => setInspectorActive(false);
+    const handleClose = async () => {
+      setInspectorActive(false);
+      // Wait for any pending debounced updates to complete (500ms + buffer)
+      await new Promise(resolve => setTimeout(resolve, 600));
+      // Reload world state from backend to ensure sync
+      try {
+        await loadWorld();
+        console.log('✅ World state reloaded after inspector close');
+      } catch (err) {
+        console.error('❌ Failed to reload world after inspector close:', err);
+      }
+    };
 
     window.addEventListener("inspector-opened", handleOpen as any);
     window.addEventListener("inspector-closed", handleClose as any);
@@ -97,14 +102,14 @@ const BuilderPage = () => {
       window.removeEventListener("inspector-opened", handleOpen as any);
       window.removeEventListener("inspector-closed", handleClose as any);
     };
-  }, []);
+  }, [loadWorld]);
 
   // Debug: track world object churn
   useEffect(() => {
     console.log("world object changed");
   }, [world]);
 
-  // Stable callback for inspector → backend sync
+  // Stable callback for inspector → backend sync with optimistic update
   const handleComponentChange = useCallback(
     (entityId: string, componentName: string, componentData: unknown) => {
       console.log(
@@ -113,6 +118,17 @@ const BuilderPage = () => {
         componentName,
         componentData
       );
+      
+      // ✅ OPTIMISTIC UPDATE: Immediately update React state
+      setWorld((prevWorld) => ({
+        entities: prevWorld.entities.map((e) =>
+          e.id === entityId 
+            ? { ...e, [componentName]: componentData } 
+            : e
+        ),
+      }));
+      
+      // ⏱️ DEBOUNCED SAVE: Save to backend after 500ms of inactivity
       updateComponentDebounced(entityId, componentName, componentData, 500);
     },
     [updateComponentDebounced]
@@ -316,6 +332,13 @@ const BuilderPage = () => {
             >
               📂 Load Scenario
             </button>
+            <button 
+              style={{ marginLeft: 12, backgroundColor: '#ff4444', color: '#fff', fontWeight: 'bold' }} 
+              onClick={handleCreateNewWorld}
+              disabled={isLoading}
+            >
+              🗑️ Clear World
+            </button>
           </div>
 
           <Scene
@@ -353,15 +376,13 @@ const BuilderPage = () => {
               const color = e.Color?.value || "#fff";
               const url = e.Model?.url;
 
-              const positionAttr = inspectorActive
-                ? undefined
-                : `${pos.x} ${pos.y} ${pos.z}`;
-              const rotationAttr = inspectorActive
-                ? undefined
-                : `${rot.x} ${rot.y} ${rot.z}`;
-              const scaleAttr = inspectorActive
-                ? undefined
-                : `${scl.x} ${scl.y} ${scl.z}`;
+              // Only set attributes when inspector is NOT active
+              // This prevents React from interfering with inspector-controlled positions
+              const entityProps = inspectorActive ? {} : {
+                position: `${pos.x} ${pos.y} ${pos.z}`,
+                rotation: `${rot.x} ${rot.y} ${rot.z}`,
+                scale: `${scl.x} ${scl.y} ${scl.z}`
+              };
 
               if (url === "Aframe") {
                 const primitiveName =
@@ -374,9 +395,7 @@ const BuilderPage = () => {
                     key={e.id}
                     ecs-entity
                     primitive={primitiveName}
-                    position={positionAttr}
-                    rotation={rotationAttr}
-                    scale={scaleAttr}
+                    {...entityProps}
                     material={`color: ${color}`}
                   />
                 );
@@ -387,9 +406,7 @@ const BuilderPage = () => {
                   key={e.id}
                   ecs-entity
                   gltf-model={`models${url}${url}.glb`}
-                  position={positionAttr}
-                  rotation={rotationAttr}
-                  scale={scaleAttr}
+                  {...entityProps}
                   material={`color: ${color}`}
                 />
               );

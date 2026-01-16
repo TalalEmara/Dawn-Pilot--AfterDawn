@@ -361,6 +361,8 @@
                     <div class="stage-selector">
                         <label for="stageSelect">Select Pipeline Stage:</label>
                         <select id="stageSelect" onchange="updateStageInfo()">
+                            <option value="passthrough">Passthrough - Normal Vision (FOV Crop Only)</option>
+                            <option value="edge_mode">Edge Mode - Low Resolution (Edge Detection)</option>
                             <option value="detector">Detector - Object Detection with Bounding Boxes</option>
                             <option value="translator">Translator - Simplified Image with Freepath Circle</option>
                             <option value="pre_phosphene">Pre-Phosphene - Center Cropped 128x128</option>
@@ -462,6 +464,14 @@
         let framesSent = 0;
         
         const stageDescriptions = {
+            'passthrough': {
+                title: 'Passthrough Stage (Normal Vision)',
+                desc: 'FOV crop only, no AI processing - shows actual scene view (RGB only, ~60 FPS)'
+            },
+            'edge_mode': {
+                title: 'Edge Mode (Low Resolution Vision)',
+                desc: 'FOV crop → Edge detection (Canny) → Phosphene encoder/simulator (RGB only, ~15-20 FPS)'
+            },
             'detector': {
                 title: 'Detector Stage',
                 desc: 'Object detection using Faster R-CNN with bounding boxes drawn on RGB image'
@@ -508,10 +518,28 @@
         function updateStageInfo() {
             const stage = document.getElementById('stageSelect').value;
             const info = stageDescriptions[stage];
+            
+            // Update stage description
             document.getElementById('stageInfo').innerHTML = `
                 <div class="stage-info-title">${info.title}</div>
                 <div class="stage-info-desc">${info.desc}</div>
             `;
+            
+            // Update depth requirement indicator
+            const depthRequiredStages = ['detector', 'translator', 'pre_phosphene', 'phosphene'];
+            const needsDepth = depthRequiredStages.includes(stage);
+            const depthFileNameEl = document.getElementById('depthFileName');
+            const depthLabelEl = document.querySelector('label[for="depthInput"]');
+            
+            if (needsDepth) {
+                depthFileNameEl.style.color = '#dc3545';
+                depthFileNameEl.style.fontWeight = '600';
+                if (depthLabelEl) depthLabelEl.style.opacity = '1';
+            } else {
+                depthFileNameEl.style.color = '#28a745';
+                depthFileNameEl.style.fontWeight = '400';
+                if (depthLabelEl) depthLabelEl.style.opacity = '0.5';
+            }
         }
         
         function connectWebSocket() {
@@ -560,12 +588,21 @@
                 return;
             }
             
-            if (!rgbImage || !depthImage) {
-                alert('Please select both RGB and Depth images');
+            if (!rgbImage) {
+                alert('Please select RGB image');
                 return;
             }
             
             const stage = document.getElementById('stageSelect').value;
+            
+            // Check if depth is required for this stage
+            const depthRequiredStages = ['detector', 'translator', 'pre_phosphene', 'phosphene'];
+            const needsDepth = depthRequiredStages.includes(stage);
+            
+            if (needsDepth && !depthImage) {
+                alert(`Depth image is required for stage '${stage}'. Passthrough and Edge Mode only need RGB.`);
+                return;
+            }
             
             // Get cropping configuration
             const croppingConfig = {
@@ -589,11 +626,15 @@
                 type: 'frame',
                 frame_id: String(framesSent + 1).padStart(3, '0'),
                 rgb: rgbImage,
-                depth: depthImage,
                 stage: stage,
-                debug: false,  // Disable debug logging
+                debug_mode: true,  // Disable debug logging
                 cropping_config: croppingConfig
             };
+            
+            // Only include depth if available
+            if (depthImage) {
+                message.depth = depthImage;
+            }
             
             ws.send(JSON.stringify(message));
             framesSent++;

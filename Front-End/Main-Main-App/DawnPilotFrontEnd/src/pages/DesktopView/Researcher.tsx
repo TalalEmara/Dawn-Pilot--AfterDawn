@@ -15,6 +15,9 @@ import Minimap from "../../components/level-0/MiniMap/MiniMap";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
+import datasetTest from "../../assets/testing/dataset.png";
+import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
+import { useAiStream } from "../../hooks/useAiStream";
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -39,9 +42,24 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// Helper to map vision mode to backend stage
+const getStageFromVisionMode = (mode: string): string => {
+  switch (mode) {
+    case "normal":
+      return "passthrough";
+    case "prosthetic":
+      return "phosphene";
+    case "low_res":
+      return "edge_mode";
+    default:
+      return "phosphene";
+  }
+};
+
 function ResearcherView() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
+  const cameraInitialized = useRef<boolean>(false);
 
   // --- Research / Experiment State ---
   const [subjectId, setSubjectId] = useState("test_subject_01");
@@ -54,10 +72,14 @@ function ResearcherView() {
   const [collisionLog, setCollisionLog] = useState<string[]>([]);
 
   // AI Socket State
-  const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
-  const frameIdRef = useRef<number>(0);
-
-  const aiHudCanvasRef = useBinaryStream(aiWebSocket);
+ const frameIdRef = useRef<number>(0);
+// Replaces all manual socket state, connection effects, and binary stream hooks
+const { 
+  socket: aiWebSocket, 
+  canvasRef: aiHudCanvasRef 
+} = useAiStream({ 
+  reconnectDependency: visionMode 
+});
 
   // 1. Get socket from CameraSync
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
@@ -81,50 +103,36 @@ function ResearcherView() {
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
 
-  // --- AI WebSocket Connection ---
-  useEffect(() => {
-    const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/navigation-phosphene`);
 
-    ws.onopen = () => {
-      console.log("🟢 [Researcher] AI WebSocket Connected");
-      setAiWebSocket(ws);
-    };
-
-    ws.onerror = (error) =>
-      console.error("🔴 [Researcher] AI WebSocket Error:", error);
-    ws.onclose = () => {
-      console.log("🔴 [Researcher] AI WebSocket Disconnected");
-      setAiWebSocket(null);
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) ws.close();
-    };
-  }, []);
 
   // --- Frame Capture & Sending ---
   useFrameBuffer({
     downsamplePercentage: 50,
-    enabled: aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 100,
+    enabled: true && aiWebSocket?.readyState === WebSocket.OPEN,
+    logInterval: 2000,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
       try {
         const rgbBase64 = await blobToBase64(rgbBlob);
-        const depthBase64 = depthBlob ? await blobToBase64(depthBlob) : null;
-
-        if (!depthBase64) return;
+        
+        // Only encode depth for prosthetic mode (phosphene pipeline needs it)
+        const needsDepth = visionMode === "prosthetic";
+        const depthBase64 = (needsDepth && depthBlob) ? await blobToBase64(depthBlob) : null;
 
         frameIdRef.current++;
 
-        const message = {
+        const message: any = {
           type: "frame",
           frame_id: String(frameIdRef.current).padStart(3, "0"),
           rgb: rgbBase64,
-          depth: depthBase64,
-          stage: "phosphene",
+          stage: getStageFromVisionMode(visionMode),
         };
+        
+        // Only include depth if available and needed
+        if (depthBase64) {
+          message.depth = depthBase64;
+        }
 
         aiWebSocket.send(JSON.stringify(message));
       } catch (error) {
@@ -146,11 +154,32 @@ function ResearcherView() {
     };
   }, [socket]);
 
+  // Sync vision mode to Mobile Viewer
+  useEffect(() => {
+    if (socket && socket.connected) {
+      socket.emit('vision-mode:update', { mode: visionMode });
+      console.log(`📡 Synced vision mode: ${visionMode}`);
+    }
+  }, [visionMode, socket]);
+
+
+    
+
+
   useEffect(() => {
     loadWorld().catch((err) =>
       console.error("Researcher - Failed to load world:", err)
     );
   }, [loadWorld]);
+
+  // Set initial camera position ONCE (prevent re-render from resetting position)
+  useEffect(() => {
+    if (cameraRef.current?.el && !cameraInitialized.current) {
+      cameraRef.current.el.setAttribute("position", "0 1.6 0");
+      cameraInitialized.current = true;
+      console.log("[Camera] Initial position set to 0 1.6 0");
+    }
+  });
 
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
@@ -617,19 +646,17 @@ function ResearcherView() {
             <div>🎮 VR Controller + ⌨️ WASD</div>
           </div>
 
-          <Scene
-            embedded
-            vr-mode-ui="enabled: false"
-            style={{ width: "100%", height: "100%" }}
-            renderer="preserveDrawingBuffer: true; antialias: false"
-          >
-            <Entity primitive="a-sky" material={{ src: groundTexture, repeat: "20 20" }}
+         <WorldScene entities={world.entities} isMobile={false}>
+            {/* 1. Environment */}
+            <Entity
+              primitive="a-sky"
+              material={{ color: "#fff" }}
               segments-width="50"
-              segments-height="50" />
+              segments-height="50"
+            />
             <Entity
               light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
             />
-            {/* <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" /> */}
             <Entity
               primitive="a-plane"
               position="0 0 0"
@@ -640,61 +667,36 @@ function ResearcherView() {
               segments-width="50"
               segments-height="50"
             />
-            {world.entities.map((e) => {
-              const pos = e.Position || { x: 0, y: 0, z: 0 };
-              const rot = e.Rotation || { x: 0, y: 0, z: 0 };
-              const scl = e.Scale || { x: 1, y: 1, z: 1 };
-              const color = e.Color?.value || "#fff";
-              const url = e.Model?.url;
-              const isObstacle = e.name !== "Light";
+            
+            <Entity
+              primitive="a-light"
+              type="ambient"
+              color="#ffffff"
+              intensity="0"
+              distance="15"
+              position="0 4 2"
+            />
 
-              if (url === "Aframe") {
-                const tag = `a-${e.name.toLowerCase()}`;
-                return (
-                  <Entity
-                    key={e.id}
-                    primitive={tag}
-                    position={`${pos.x} ${pos.y} ${pos.z}`}
-                    rotation={`${rot.x} ${rot.y} ${rot.z}`}
-                    scale={`${scl.x} ${scl.y} ${scl.z}`}
-                    material={`color: ${color}`}
-                    className={isObstacle ? "collidable" : ""}
-                  />
-                );
-              }
-              return (
-                <Entity
-                  key={e.id}
-                  className={isObstacle ? "collidable" : ""}
-                  gltf-model={`models${url}${url}.glb`}
-                  position={`${pos.x} ${pos.y} ${pos.z}`}
-                  rotation={`${rot.x} ${rot.y} ${rot.z}`}
-                  scale={`${scl.x} ${scl.y} ${scl.z}`}
-                />
-              );
-            })}
-
+            {/* 2. Researcher Camera Rig (Unique to this view) */}
             <Entity
               ref={cameraRef}
               primitive="a-camera"
-              position="0 1.0 0"
               look-controls="enabled: false"
-              wasd-controls="enabled: true; acceleration: 30"
+              wasd-controls="enabled: true; acceleration: 15"
               vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
-              collision-detector="targetSelector: .collidable; cooldown: 1000"
             >
               <Entity
                 ref={hitboxRef}
+                collision-detector="targetSelector: .collidable; cooldown: 1000"
                 primitive="a-box"
                 position="0 -0.8 0"
-                scale=".1 1.6 .1"
+                scale=".6 1.6 .6"
                 material="opacity: 0.5; color: red; wireframe: true"
                 visible={true}
                 className="depth-ignore"
-                collision-detector="targetSelector: .collidable; cooldown: 1000"
               />
             </Entity>
-          </Scene>
+          </WorldScene>
         </div>
 
         {showLoadDialog && (

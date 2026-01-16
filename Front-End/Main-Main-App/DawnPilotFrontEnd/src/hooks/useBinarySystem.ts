@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 export function useBinaryStream(ws: WebSocket | null) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastProcessedFrameRef = useRef(0);
 
   useEffect(() => {
     if (!ws) return;
@@ -37,9 +38,17 @@ export function useBinaryStream(ws: WebSocket | null) {
         
         // Handle phosphene result from backend
         if (data.type === 'result' && data.data?.output_image) {
+          // Validate frame ordering to prevent old frame flicker
+          const frameId = parseInt(data.data.frame_id) || 0;
+          if (frameId < lastProcessedFrameRef.current) {
+            console.warn(`⏭️ Skipping old frame ${frameId} (current: ${lastProcessedFrameRef.current})`);
+            return;
+          }
+          lastProcessedFrameRef.current = frameId;
+          
           // Convert base64 to blob
           const base64 = data.data.output_image;
-          console.log(`🖼️ Processing phosphene image: ${base64.length} chars`);
+          console.log(`🖼️ Processing phosphene image frame ${frameId}: ${base64.length} chars`);
           
           const binaryString = atob(base64);
           const bytes = new Uint8Array(binaryString.length);

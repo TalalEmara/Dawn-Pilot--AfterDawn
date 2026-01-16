@@ -164,6 +164,49 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.post("/api/configure_new")
+async def configure_navigation_detector(request: dict):
+    """Configure navigation detector and translator parameters
+    
+    Request body:
+    {
+        "conf_threshold": 0.2,  // YOLO detection confidence threshold (0.0-1.0)
+        "t_min": 0.3,           // Translator minimum score threshold
+        "k_min": 1,             // Translator minimum objects to select
+        "k_max": 5              // Translator maximum objects to select
+    }
+    """
+    t_min = request.get("t_min")
+    k_min = request.get("k_min")
+    k_max = request.get("k_max")
+    conf_thresh = request.get("conf_threshold")
+    
+    # Update parameters if navigation detector is used
+    if navigation_detector_service:
+        if t_min is not None:
+            navigation_detector_service.t_min = float(t_min)
+            logger.info(f"Updated t_min to {navigation_detector_service.t_min}")
+        if k_min is not None:
+            navigation_detector_service.k_min = int(k_min)
+            logger.info(f"Updated k_min to {navigation_detector_service.k_min}")
+        if k_max is not None:
+            navigation_detector_service.k_max = int(k_max)
+            logger.info(f"Updated k_max to {navigation_detector_service.k_max}")
+        if conf_thresh is not None:
+            navigation_detector_service.conf_threshold = float(conf_thresh)
+            logger.info(f"Updated conf_threshold to {navigation_detector_service.conf_threshold}")
+        
+        return {
+            "status": "configured",
+            "parameters": {
+                "conf_threshold": navigation_detector_service.conf_threshold,
+                "t_min": navigation_detector_service.t_min,
+                "k_min": navigation_detector_service.k_min,
+                "k_max": navigation_detector_service.k_max
+            }
+        }
+    else:
+        return {"status": "error", "message": "Navigation detector service not initialized (running in mock mode)"}
 
 app.include_router(router)
 

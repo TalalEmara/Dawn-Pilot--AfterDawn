@@ -1,67 +1,77 @@
 {
-  "version": "2.0.0",
-
-  "windows": {
-    "options": {
-      "shell": {
-        "executable": "cmd.exe",
-        "args": ["/d", "/c"]
-      }
-    }
-  },
-
-  "tasks": [
-    {
-        "label": "dev:frontend",
-        "type": "shell",
-        "command": "pnpm dev",
+    "version": "2.0.0",
+    "windows": {
         "options": {
-            "cwd": "${workspaceFolder}/Front-End/Main-Main-App/DawnPilotFrontEnd"
-        },
-        "presentation": {
-            "group": "dev",
-            "panel": "dedicated",
-            "reveal": "always"
-        },
-        "problemMatcher": []
+            "shell": {
+                "executable": "cmd.exe",
+                "args": [
+                    "/d",
+                    "/c"
+                ]
+            }
+        }
     },
-    {
-        "label": "dev:experiment-manager",
-        "type": "shell",
-        "command": "pnpm dev",
-        "options": {
-            "cwd": "${workspaceFolder}/Back-End/Experiment-Manager"
+    "tasks": [
+        {
+            "label": "dev:frontend",
+            "type": "shell",
+            "command": "pnpm dev",
+            "options": {
+                "cwd": "${workspaceFolder}/Front-End/Main-Main-App/DawnPilotFrontEnd"
+            },
+            "presentation": {
+                "group": "dev",
+                "panel": "dedicated",
+                "reveal": "always"
+            },
+            "problemMatcher": []
         },
-        "presentation": {
-            "group": "dev",
-            "panel": "dedicated",
-            "reveal": "always"
+        {
+            "label": "dev:experiment-manager",
+            "type": "shell",
+            "command": "pnpm dev",
+            "options": {
+                "cwd": "${workspaceFolder}/Back-End/Experiment-Manager"
+            },
+            "presentation": {
+                "group": "dev",
+                "panel": "dedicated",
+                "reveal": "always"
+            },
+            "problemMatcher": []
         },
-        "problemMatcher": []
-    },
-    {
-        "label": "dev:fastapi",
-        "type": "shell",
-        "command": "fastapi dev main.py",
-        "options": {
-            "cwd": "${workspaceFolder}/Back-End/fast_api"
+        {
+            "label": "dev:fastapi",
+            "type": "shell",
+            "command": "& '.\\venv\\Scripts\\Activate.ps1'; python main.py",
+            "options": {
+                "cwd": "${workspaceFolder}/Back-End/fast_api",
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command"
+                    ]
+                }
+            },
+            "presentation": {
+                "group": "dev",
+                "panel": "dedicated",
+                "reveal": "always"
+            },
+            "problemMatcher": []
         },
-        "presentation": {
-            "group": "dev",
-            "panel": "dedicated",
-            "reveal": "always"
-        },
-        "problemMatcher": []
-    },
-    {
-        "label": "dev:all",
-        "dependsOn": [
-            "dev:frontend",
-            "dev:experiment-manager",
-            "dev:fastapi"
-        ],
-        "dependsOrder": "parallel",
-        "problemMatcher": []
-    }
-]
+        {
+            "label": "dev:all",
+            "dependsOn": [
+                "dev:frontend",
+                "dev:experiment-manager",
+                "dev:fastapi"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        }
+    ]
 }
