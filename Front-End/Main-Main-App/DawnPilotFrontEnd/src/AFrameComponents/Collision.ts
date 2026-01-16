@@ -11,6 +11,50 @@ const error = (...args: any[]) => DEBUG_COLLISION && console.error('[Collision]'
 // Access THREE from global
 const THREE = (window as any).AFRAME.THREE;
 
+if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-weight"]) {
+    AFRAME.registerComponent("collision-weight", {
+        schema: {
+            x: { type: 'number', default: 1 },
+            y: { type: 'number', default: 0.5 },
+            z: { type: 'number', default: 0.5 }
+        }
+    });
+}
+
+const applyCollisionWeight = (obstacle: any, box: any) => {
+    let weight = { x: 1, y: 0.5, z: 0.5 }; // Default weight
+    
+    // Check for collision-weight component first
+    if (obstacle.el && obstacle.el.getAttribute) {
+        const componentData = obstacle.el.getAttribute('collision-weight');
+        if (componentData) {
+            // A-Frame returns object for component data
+            weight = componentData;
+        } else {
+            // Fallback to data attribute for backward compatibility if needed
+            const attr = obstacle.el.getAttribute('data-collision-weight');
+            if (attr) {
+                 if (typeof attr === 'object') weight = { ...weight, ...attr };
+                 else if (typeof attr === 'string') {
+                     try { 
+                        const parsed = JSON.parse(attr);
+                        weight = { ...weight, ...parsed };
+                     } catch(e){} 
+                 }
+            }
+        }
+    }
+    
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+    box.setFromCenterAndSize(
+        center, 
+        new THREE.Vector3(size.x * weight.x, size.y * weight.y, size.z * weight.z)
+    );
+};
+
 interface CollisionDetector {
   data: {
     targetSelector: string;
@@ -101,9 +145,16 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       this.playerBox.min.set(x - w, y - 0.8, z - d);
       this.playerBox.max.set(x + w, y + 0.8, z + d);
 
+      const center = new THREE.Vector3();
+      const size = new THREE.Vector3();
+
       for (const obstacle of this.obstacles) {
         if (!obstacle) continue;
         this.obstacleBox.setFromObject(obstacle);
+        
+        // Weighting Logic
+        applyCollisionWeight(obstacle, this.obstacleBox);
+
         if (this.playerBox.intersectsBox(this.obstacleBox)) {
           return true; 
         }
@@ -246,13 +297,19 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       // Always update the mover position to stop movement into obstacles
       this.mover.position.copy(finalPos);
 
-      const now = Date.now();
-      if (hitOccurred && (now - this.lastCollisionTime > this.data.cooldown)) {
+      if (hitOccurred && (now - this.lastCollisionTime > this.data.cooldown) || this.checkCollision(currentPos)) {
         this.lastCollisionTime = now;
         
         let obstacleId = "unknown";
+        const center = new THREE.Vector3();
+        const size = new THREE.Vector3();
+
         for(const obs of this.obstacles) {
            this.obstacleBox.setFromObject(obs);
+           
+           // Apply same weighting
+           applyCollisionWeight(obs, this.obstacleBox);
+
            if(this.playerBox.intersectsBox(this.obstacleBox)) {
                obstacleId = (obs as any).el.id; 
                break;

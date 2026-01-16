@@ -1,0 +1,405 @@
+{
+  "name": "FinalHard_3_Gemini",
+  "createdAt": "2026-01-16T13:30:00.000Z",
+  "entityCount": 18,
+  "camera": {
+    "position": {
+      "x": 4.5,
+      "y": 2,
+      "z": 5
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "wall-left-back",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -14
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 2,
+        "y": 12,
+        "z": 8
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "wall-right-solid",
+      "Position": {
+        "x": 10,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 50
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "car-vertical-top",
+      "Position": {
+        "x": 2,
+        "y": 0,
+        "z": -16
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "car-horizontal-mid",
+      "Position": {
+        "x": -5,
+        "y": 0,
+        "z": -6
+      },
+      "Rotation": {
+        "x": 0,
+        "y": -90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "plant-star-1",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": -12
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "plant-star-2",
+      "Position": {
+        "x": 3,
+        "y": 0,
+        "z": -12
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "plant-star-3",
+      "Position": {
+        "x": 6,
+        "y": 0,
+        "z": -12
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "tree-vert-1",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -6
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-vert-2",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -8
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-vert--1",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": 2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-vert--2",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": 4
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-horiz-bottom-1",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-horiz-bottom-2",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": -2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-horiz-bottom-3",
+      "Position": {
+        "x": 4,
+        "y": 0,
+        "z": -2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "tree-horiz-bottom-4",
+      "Position": {
+        "x": 9,
+        "y": 0,
+        "z": -2
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "crossway-left",
+      "Position": {
+        "x": 2,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "crossway-right",
+      "Position": {
+        "x": 6,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    }
+  ]
+}

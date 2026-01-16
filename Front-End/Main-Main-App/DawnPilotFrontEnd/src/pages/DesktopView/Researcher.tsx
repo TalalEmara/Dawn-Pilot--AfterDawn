@@ -719,6 +719,9 @@ function ResearcherView() {
               const url = e.Model?.url;
               const isObstacle = e.name !== "Light";
 
+              const collisionWeight = e.Collision?.weight || { x: 1, y: 0.5, z: 0.5 };
+              const collisionWeightFormatted = `x: ${collisionWeight.x}; y: ${collisionWeight.y}; z: ${collisionWeight.z}`;
+
               if (url === "Aframe") {
                 const tag = `a-${e.name.toLowerCase()}`;
                 return (
@@ -730,6 +733,7 @@ function ResearcherView() {
                     scale={`${scl.x} ${scl.y} ${scl.z}`}
                     material={`color: ${color}`}
                     className={isObstacle ? "collidable" : ""}
+                    collision-weight={collisionWeightFormatted}
                   />
                 );
               }
@@ -741,6 +745,7 @@ function ResearcherView() {
                   position={`${pos.x} ${pos.y} ${pos.z}`}
                   rotation={`${rot.x} ${rot.y} ${rot.z}`}
                   scale={`${scl.x} ${scl.y} ${scl.z}`}
+                  collision-weight={collisionWeightFormatted}
                 />
               );
             })}
@@ -752,14 +757,14 @@ function ResearcherView() {
               distance="15"
               position="0 4 2"
             />
-            <Entity
+            {/*<Entity
               primitive="a-plane"
               position="0 2 -2"
               rotation="0 0 0"
               width="10"
               height="5"
               material={{ src: datasetTest, repeat: "1 1" }}
-            />
+            />*/}
             <Entity
               ref={cameraRef}
               primitive="a-camera"

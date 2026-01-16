@@ -265,6 +265,9 @@ function DesktopViewer() {
           const scl = e.Scale || { x: 1, y: 1, z: 1 };
           const color = e.Color?.value || '#fff';
           const url = e.Model?.url;
+          // Determine collision weight from backend or default to previously hardcoded 0.5 for Y/Z
+          const colWeight = e.Collision?.weight || { x: 1, y: 0.5, z: 0.5 };
+
 // Assuming everything except "Light" or "Zone" is an obstacle
           const isObstacle = e.name !== "Light";
           if (url === 'Aframe') {

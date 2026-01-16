@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 
 export interface Entity {
+  Collision: any;
   name: string;
   id: string;
   Position?: { x: number; y: number; z: number };

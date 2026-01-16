@@ -1,0 +1,251 @@
+{
+  "name": "Experiment_BlindNav_Slalom",
+  "createdAt": "2026-01-15T14:00:00.000Z",
+  "entityCount": 14,
+  "camera": {
+    "position": {
+      "x": 0,
+      "y": 2,
+      "z": 5
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "wall-left-boundary",
+      "Position": {
+        "x": -10,
+        "y": 0,
+        "z": -8
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 40
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "wall-right-boundary",
+      "Position": {
+        "x": 10,
+        "y": 0,
+        "z": -8
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 40
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "landmark-center-start",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": -5
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "obstacle-right-tree-1",
+      "Position": {
+        "x": 4,
+        "y": 0,
+        "z": -10
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "obstacle-right-tree-2",
+      "Position": {
+        "x": 7,
+        "y": 0,
+        "z": -10
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.003,
+        "y": 0.003,
+        "z": 0.003
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "obstacle-left-car",
+      "Position": {
+        "x": -5,
+        "y": 0,
+        "z": -16
+      },
+      "Rotation": {
+        "x": 0,
+        "y": -90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "goal-marker-left",
+      "Position": {
+        "x": -5,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "goal-marker-right",
+      "Position": {
+        "x": 5,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "crossway-left",
+      "Position": {
+        "x": -2,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "crossway-right",
+      "Position": {
+        "x": 2,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    }
+  ]
+}
