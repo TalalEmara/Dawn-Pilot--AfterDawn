@@ -10,6 +10,7 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
+import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 // Component to update texture from canvas
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
@@ -204,19 +205,10 @@ function MobileView() {
         📱 Mobile Receiver
       </div>
 
-      <Scene
-        embedded
-        vr-mode-ui="enabled: true"
-        device-orientation-permission-ui="enabled: true"
-        style={{ width: "100%", height: "100%" }}
-        renderer="preserveDrawingBuffer: true; antialias: false"
-      >
+   <WorldScene entities={world.entities} isMobile={true}>
+        {/* Environment Children */}
         <Entity primitive="a-sky" color="lightblue" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 1}} />
-        {/* <Entity
-          light={{ type: "directional", color: "#ffffff", intensity: 1.0 }}
-          position="5 10 2"
-        /> */}
         <Entity
           primitive="a-plane"
           position="0 0 0"
@@ -227,43 +219,7 @@ function MobileView() {
           material={{ src: groundTexture, repeat: "20 20" }}
         />
 
-        {/* World Entities */}
-        {world.entities.map((e) => {
-          const pos = e.Position || { x: 0, y: 0, z: 0 };
-          const rot = e.Rotation || { x: 0, y: 0, z: 0 };
-          const scl = e.Scale || { x: 1, y: 1, z: 1 };
-          const color = e.Color?.value || "#fff";
-          const url = e.Model?.url;
-          const isObstacle = e.name !== "Light";
-
-          if (url === "Aframe") {
-            const tag = `a-${e.name.toLowerCase()}`;
-            return (
-              <Entity
-                key={e.id}
-                primitive={tag}
-                position={`${pos.x} ${pos.y} ${pos.z}`}
-                rotation={`${rot.x} ${rot.y} ${rot.z}`}
-                scale={`${scl.x} ${scl.y} ${scl.z}`}
-                material={`color: ${color}`}
-                className={isObstacle ? "collidable" : ""}
-              />
-            );
-          }
-          return (
-            <Entity
-              key={e.id}
-              className={isObstacle ? "collidable" : ""}
-              gltf-model={`models${url}${url}.glb`}
-              material={`color: ${color}`}
-              position={`${pos.x} ${pos.y} ${pos.z}`}
-              rotation={`${rot.x} ${rot.y} ${rot.z}`}
-              scale={`${scl.x} ${scl.y} ${scl.z}`}
-            />
-          );
-        })}
-
-        {/* Rig (Position Controlled by Desktop) */}
+        {/* Mobile Rig (Position Slave, Rotation Master) */}
         <Entity
           ref={rigRef}
           animation__follow={{
@@ -299,7 +255,7 @@ function MobileView() {
             />
           </Entity>
         </Entity>
-      </Scene>
+      </WorldScene>
     </div>
   );
 }

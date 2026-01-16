@@ -16,6 +16,7 @@ import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
 import datasetTest from "../../assets/testing/dataset.png";
+import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -685,12 +686,8 @@ function ResearcherView() {
             <div>🎮 VR Controller + ⌨️ WASD</div>
           </div>
 
-          <Scene
-            embedded
-            vr-mode-ui="enabled: false"
-            style={{ width: "100%", height: "100%" }}
-            renderer="preserveDrawingBuffer: true; antialias: false"
-          >
+         <WorldScene entities={world.entities} isMobile={false}>
+            {/* 1. Environment */}
             <Entity
               primitive="a-sky"
               material={{ color: "#fff" }}
@@ -700,7 +697,6 @@ function ResearcherView() {
             <Entity
               light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
             />
-            {/* <Entity light={{ type: 'directional', color: '#ffffff', intensity: 0.9 }} position="0 2 -6" /> */}
             <Entity
               primitive="a-plane"
               position="0 0 0"
@@ -711,44 +707,7 @@ function ResearcherView() {
               segments-width="50"
               segments-height="50"
             />
-            {world.entities.map((e) => {
-              const pos = e.Position || { x: 0, y: 0, z: 0 };
-              const rot = e.Rotation || { x: 0, y: 0, z: 0 };
-              const scl = e.Scale || { x: 1, y: 1, z: 1 };
-              const color = e.Color?.value || "#fff";
-              const url = e.Model?.url;
-              const isObstacle = e.name !== "Light";
-
-              const collisionWeight = e.Collision?.weight || { x: 1, y: 0.5, z: 0.5 };
-              const collisionWeightFormatted = `x: ${collisionWeight.x}; y: ${collisionWeight.y}; z: ${collisionWeight.z}`;
-
-              if (url === "Aframe") {
-                const tag = `a-${e.name.toLowerCase()}`;
-                return (
-                  <Entity
-                    key={e.id}
-                    primitive={tag}
-                    position={`${pos.x} ${pos.y} ${pos.z}`}
-                    rotation={`${rot.x} ${rot.y} ${rot.z}`}
-                    scale={`${scl.x} ${scl.y} ${scl.z}`}
-                    material={`color: ${color}`}
-                    className={isObstacle ? "collidable" : ""}
-                    collision-weight={collisionWeightFormatted}
-                  />
-                );
-              }
-              return (
-                <Entity
-                  key={e.id}
-                  className={isObstacle ? "collidable" : ""}
-                  gltf-model={`models${url}${url}.glb`}
-                  position={`${pos.x} ${pos.y} ${pos.z}`}
-                  rotation={`${rot.x} ${rot.y} ${rot.z}`}
-                  scale={`${scl.x} ${scl.y} ${scl.z}`}
-                  collision-weight={collisionWeightFormatted}
-                />
-              );
-            })}
+            
             <Entity
               primitive="a-light"
               type="ambient"
@@ -757,14 +716,8 @@ function ResearcherView() {
               distance="15"
               position="0 4 2"
             />
-            {/*<Entity
-              primitive="a-plane"
-              position="0 2 -2"
-              rotation="0 0 0"
-              width="10"
-              height="5"
-              material={{ src: datasetTest, repeat: "1 1" }}
-            />*/}
+
+            {/* 2. Researcher Camera Rig (Unique to this view) */}
             <Entity
               ref={cameraRef}
               primitive="a-camera"
@@ -783,7 +736,7 @@ function ResearcherView() {
                 className="depth-ignore"
               />
             </Entity>
-          </Scene>
+          </WorldScene>
         </div>
 
         {showLoadDialog && (
