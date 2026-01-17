@@ -28,6 +28,10 @@ const DETECTABLE_MODELS = [
   "Garbage"
 ];
 
+// --- Performance Variables (Reusable to prevent lag) ---
+const _vA = new AFRAME.THREE.Vector3();
+const _vB = new AFRAME.THREE.Vector3();
+
 interface YoloDatasetGeneratorData {
   enabled: boolean;
   captureInterval: number;
@@ -75,13 +79,13 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       captureInterval: { type: "number", default: 60 }, // Capture every N frames (60 = ~1/sec at 60fps)
       autoDownload: { type: "boolean", default: true }, // Auto-download files
       logToConsole: { type: "boolean", default: false }, // Log to console
-      occlusionCheckLayers: { type: "string", default: "collidable" }, // Occlusion check classes
-      minVisiblePixels: { type: "number", default: 10 }, // Min bbox area
+      minVisiblePixels: { type: "number", default: 400 }, // Min bbox area - ignore tiny distant objects
+      paddingPixels: { type: "number", default: 5 }, // Safety buffer around objects
       outputFormat: { type: "string", default: "yolo" }, // 'yolo', 'json', or 'both'
     },
 
     init: function (this: YoloDatasetGenerator) {
-      console.log("🎯 YOLO Dataset Generator initialized");
+      console.log("🚀 Precision YOLO Generator Started (with Padding)");
 
       // Get scene and camera
       this.scene = this.el.sceneEl;
@@ -92,34 +96,21 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       this.frameCount = 0;
       this.captureCount = 0;
 
-      // Download queue to batch file downloads (reduces browser prompts)
-      this.captureQueue = [];
-      this.downloadInterval = null;
-
-      // Start batch download processor (downloads one file every 200ms)
-      this.downloadInterval = window.setInterval(() => {
-        if (this.captureQueue.length > 0) {
-          const item = this.captureQueue.shift()!;
-          this.downloadFile(item.blob, item.filename);
-        }
-      }, 200);
-
       // Raycaster for occlusion checking
       this.raycaster = new AFRAME.THREE.Raycaster();
 
       // Build class mappings from YOLO_CLASS_MAPPING
-      // classMap: "Car" -> 0, "Pole" -> 1, etc.
-      // reverseClassMap: 0 -> "Car", 1 -> "Pole", etc.
+      // Store in lowercase for easier matching
       this.classMap = {};
       this.reverseClassMap = {};
       
       Object.entries(YOLO_CLASS_MAPPING).forEach(([classId, className]) => {
         const id = parseInt(classId);
-        this.classMap[className] = id;
+        this.classMap[className.toLowerCase()] = id;
         this.reverseClassMap[id] = className;
         
         // Handle name variations (e.g., "Bus Stop" vs "BusStop")
-        const normalized = className.replace(/\s+/g, "");
+        const normalized = className.replace(/\s+/g, "").toLowerCase();
         this.classMap[normalized] = id;
       });
 
@@ -135,109 +126,80 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
 
       this.frameCount++;
 
-      // Capture every N frames
+      // Capture every N frames - use requestAnimationFrame for better performance
       if (this.frameCount % this.data.captureInterval === 0) {
-        this.captureFrame();
+        requestAnimationFrame(() => this.captureFrame());
       }
     },
 
     captureFrame: function (this: YoloDatasetGenerator) {
-      if (!this.camera || !this.renderer) {
-        console.warn("⚠️ Camera or renderer not ready");
-        return;
-      }
-      
-      // Query entities - try multiple selectors for compatibility
-      let allEntities = this.scene.querySelectorAll("[ecs-entity]");
-      
-      // Fallback: query for gltf-model entities if no ecs-entity found
-      if (allEntities.length === 0) {
-        allEntities = this.scene.querySelectorAll("[gltf-model]");
-        console.log("🔄 Using fallback selector [gltf-model], found:", allEntities.length);
-      }
-
-      if (allEntities.length === 0) {
-        console.warn("⚠️ No detectable entities found in scene");
-        return;
-      }
+      if (!this.camera) return;
 
       const yoloAnnotations: string[] = [];
       const jsonDetections: any[] = [];
-      let validDetections = 0;
+      const width = this.renderer.domElement.width;
+      const height = this.renderer.domElement.height;
+      const camPos = this.camera.position;
       let detectionId = 1;
-      
-      // Track processed object3D instances to prevent duplicates
-      const processedObjects = new Set();
 
-      allEntities.forEach((entity: any) => {
-        const object3D = entity.object3D;
-        if (!object3D || processedObjects.has(object3D)) return;
+      // 1. Gather all potential occluders (Everything that can block a view)
+      const occluders: any[] = [];
+      this.scene.object3D.traverse((node: any) => {
+        if (node.isMesh && node.visible) occluders.push(node);
+      });
+
+      // 2. Find detectable entity candidates
+      let candidates = Array.from(this.scene.querySelectorAll("[ecs-entity]"));
+      if (candidates.length === 0) {
+        candidates = Array.from(this.scene.querySelectorAll("[gltf-model]"));
+      }
+
+      const validCandidates = candidates.filter((el: any) => el.object3D && el.object3D.visible);
+
+      validCandidates.forEach((el: any) => {
+        // --- A. Identification ---
+        const rawName = el.getAttribute("data-entity-name") || 
+                        el.getAttribute("ecs-entity") || 
+                        el.id || 
+                        "Unknown";
+        const name = rawName.toLowerCase();
         
-        // Mark this object3D as processed
-        processedObjects.add(object3D);
+        // Skip depth-ignore or unknown entities
+        if (el.classList.contains("depth-ignore") || name === "unknown") return;
 
-        // Get entity name from multiple sources
-        const entityName = entity.getAttribute("data-entity-name") || 
-                          entity.getAttribute("ecs-entity") ||
-                          entity.getAttribute("class") ||
-                          entity.id ||
-                          "Unknown";
+        // Check if detectable
+        if (!DETECTABLE_MODELS.some(m => name.includes(m.toLowerCase()))) return;
         
-        // Skip camera hitbox and depth-ignore elements
-        if (entity.classList.contains("depth-ignore") || 
-            entityName === "Unknown" ||
-            !entityName) {
-          return;
-        }
-
-        // Check if this entity type is detectable
-        const isDetectable = DETECTABLE_MODELS.some(model => 
-          entityName.toLowerCase().includes(model.toLowerCase()) ||
-          model.toLowerCase().includes(entityName.toLowerCase())
-        );
-
-        if (!isDetectable) {
-          return; // Skip non-detectable entities (Light, Box, Sphere, etc.)
-        }
-
-        // Get class ID from mapping
-        const classId = this.classMap[entityName] || 
-                       this.classMap[entityName.replace(/\s+/g, "")];
-        
+        // Get class ID
+        const cleanName = name.replace(/\s+/g, "");
+        const classId = this.classMap[name] ?? this.classMap[cleanName];
         if (classId === undefined) {
-          console.warn(`⚠️ Entity "${entityName}" not in YOLO class mapping, skipping`);
+          if (this.data.logToConsole) {
+            console.warn(`⚠️ Entity "${rawName}" not in YOLO class mapping`);
+          }
           return;
         }
 
-        // Check if occluded
-        if (this.isOccluded(object3D, this.camera)) {
-          console.log(`🚫 Object "${entityName}" is occluded, skipping`);
+        const obj3D = el.object3D;
+
+        // --- B. Precise Vertex Sampling with Padding ---
+        const screenBox = this.getPreciseScreenBox(obj3D, width, height);
+
+        if (!screenBox) return; // Off-screen or invalid
+        if (screenBox.area < this.data.minVisiblePixels) return; // Too small
+
+        // --- C. Occlusion Check ---
+        // Raycast to the center of mass of the visible vertices
+        if (this.isOccluded(screenBox.worldCenter, obj3D, occluders, camPos)) {
+          if (this.data.logToConsole) {
+            console.log(`🚫 Object "${rawName}" is occluded`);
+          }
           return;
         }
 
-        // Get 2D bounding box in screen space
-        const bbox = this.getScreenBoundingBox(object3D, this.camera);
-        if (!bbox || !bbox.visible) {
-          return;
-        }
-        
-        // Check visibility ratio - ensure object is substantially on-screen (at least 30%)
-        if (bbox.visibilityRatio < 0.3) {
-          console.log(`🚫 Object "${entityName}" mostly off-screen (${(bbox.visibilityRatio * 100).toFixed(0)}% visible), skipping`);
-          return;
-        }
-
-        // Check minimum size
-        const area = (bbox.x_max - bbox.x_min) * (bbox.y_max - bbox.y_min);
-        if (area < this.data.minVisiblePixels) {
-          console.log(`🚫 Object "${entityName}" too small (${area.toFixed(0)} pixels), skipping`);
-          return;
-        }
-
-        // Convert to YOLO format
-        const canvas = this.renderer.domElement;
-        const yoloLine = this.convertToYolo(bbox, canvas.width, canvas.height, classId);
-        yoloAnnotations.push(yoloLine);
+        // --- D. Generate YOLO Data ---
+        const yoloStr = this.formatYolo(screenBox, width, height, classId);
+        yoloAnnotations.push(yoloStr);
 
         // Create JSON detection entry (compatible with existing format)
         const jsonDetection = {
@@ -245,35 +207,36 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
           class: this.reverseClassMap[classId],
           shape: null,
           bbox: [
-            Math.round(bbox.x_min),
-            Math.round(bbox.y_min),
-            Math.round(bbox.x_max - bbox.x_min),
-            Math.round(bbox.y_max - bbox.y_min)
+            Math.round(screenBox.minX),
+            Math.round(screenBox.minY),
+            Math.round(screenBox.maxX - screenBox.minX),
+            Math.round(screenBox.maxY - screenBox.minY)
           ],
-          distance_m: null,
+          distance_m: camPos.distanceTo(screenBox.worldCenter),
           mask_path: null,
           velocity: null,
           hazard: null
         };
         jsonDetections.push(jsonDetection);
 
-        validDetections++;
-
-        console.log(`✅ Detected "${entityName}" [class ${classId}]: ${yoloLine}`);
+        if (this.data.logToConsole) {
+          console.log(`✅ Detected "${rawName}" [class ${classId}]: ${yoloStr}`);
+        }
       });
 
-      if (validDetections === 0) {
-        console.log("📭 No valid detections in this frame");
+      // --- Save Data ---
+      if (yoloAnnotations.length === 0) {
+        if (this.data.logToConsole) {
+          console.log("📭 No valid detections in this frame");
+        }
         return;
       }
 
-      // Output results
       const frameId = this.captureCount.toString().padStart(4, "0");
-      const timestamp = Date.now();
+      console.log(`📸 Captured ${yoloAnnotations.length} objects in frame ${frameId}`);
 
       if (this.data.logToConsole) {
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        console.log(`📸 Frame ${frameId} (${validDetections} detections):`);
         yoloAnnotations.forEach(line => console.log(line));
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       }
@@ -281,13 +244,9 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       if (this.data.autoDownload) {
         const format = this.data.outputFormat;
 
-        // Always capture screenshot
-        this.captureScreenshot(`frame_${frameId}.jpg`);
-
         // Download YOLO format (.txt)
         if (format === "yolo" || format === "both") {
-          const annotationText = yoloAnnotations.join("\n");
-          this.downloadTextFile(annotationText, `frame_${frameId}.txt`);
+          this.saveData(yoloAnnotations.join("\n"), frameId, "txt");
         }
 
         // Download JSON format (compatible with existing backend)
@@ -295,133 +254,86 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
           const jsonOutput = {
             frame_id: `frame_${frameId}`,
             file_path: `frame_${frameId}.jpg`,
-            timestamp: timestamp,
-            camera_intrinsics: {
-              fx: null,
-              fy: null,
-              cx: null,
-              cy: null
-            },
+            timestamp: Date.now(),
+            camera_intrinsics: { fx: null, fy: null, cx: null, cy: null },
             obstacles: jsonDetections
           };
-          this.downloadTextFile(
-            JSON.stringify(jsonOutput, null, 2), 
-            `frame_${frameId}.json`
-          );
+          this.saveData(JSON.stringify(jsonOutput, null, 2), frameId, "json");
         }
+
+        // Always capture screenshot
+        this.captureScreenshot(frameId);
       }
 
       this.captureCount++;
     },
 
     /**
-     * Get 2D bounding box of a 3D object in screen space
-     * Uses actual mesh vertex sampling for tighter, more accurate boxes
+     * Scans mesh vertices to find tightest possible 2D box.
+     * Uses striding + padding for speed and accuracy.
      */
-    getScreenBoundingBox: function (
-      this: YoloDatasetGenerator,
-      object3D: any,
-      camera: any
-    ) {
-      // Collect all visible meshes
-      const meshes: any[] = [];
-      object3D.traverse((child: any) => {
-        if (child.isMesh && child.visible) {
-          meshes.push(child);
-        }
-      });
+    getPreciseScreenBox: function(this: YoloDatasetGenerator, rootObj: any, w: number, h: number) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let validPoints = 0;
+      
+      const worldCenterAccumulator = new AFRAME.THREE.Vector3(0, 0, 0);
 
-      if (meshes.length === 0) {
-        return null;
-      }
+      rootObj.traverse((child: any) => {
+        if (!child.isMesh || !child.geometry) return;
 
-      const canvas = this.renderer.domElement;
-      const width = canvas.width;
-      const height = canvas.height;
+        const posAttr = child.geometry.attributes.position;
+        if (!posAttr) return;
 
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      let totalVertices = 0;
-      let visibleVertices = 0;
+        const count = posAttr.count;
+        // Optimization: Sample every 64th vertex (High performance, Good accuracy)
+        const stride = Math.max(1, Math.floor(count / 64));
 
-      // Sample vertices from each mesh
-      meshes.forEach((mesh) => {
-        const geometry = mesh.geometry;
-        if (!geometry || !geometry.attributes || !geometry.attributes.position) {
-          return;
-        }
+        child.updateMatrixWorld();
 
-        const positions = geometry.attributes.position;
-        const vertexCount = positions.count;
-        
-        // Sample every Nth vertex for performance (sample ~100 vertices per mesh)
-        const step = Math.max(1, Math.floor(vertexCount / 100));
-
-        for (let i = 0; i < vertexCount; i += step) {
-          totalVertices++;
+        for (let i = 0; i < count; i += stride) {
+          _vA.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+          _vA.applyMatrix4(child.matrixWorld);
           
-          const vertex = new AFRAME.THREE.Vector3(
-            positions.getX(i),
-            positions.getY(i),
-            positions.getZ(i)
-          );
+          worldCenterAccumulator.add(_vA); // Track center
+          
+          _vA.project(this.camera);
 
-          // Transform vertex to world space
-          vertex.applyMatrix4(mesh.matrixWorld);
+          if (_vA.z > 1) continue; // Behind camera
 
-          // Project to screen space
-          const projected = vertex.clone().project(camera);
+          const x = (_vA.x * 0.5 + 0.5) * w;
+          const y = (-(_vA.y * 0.5) + 0.5) * h;
 
-          // Check if behind camera (z > 1 means behind in NDC space)
-          if (projected.z > 1 || projected.z < -1) {
-            continue;
-          }
-
-          // Convert from NDC (-1 to 1) to pixel coordinates
-          const x = ((projected.x + 1) / 2) * width;
-          const y = ((-projected.y + 1) / 2) * height;
-
-          // Track vertices that are within screen bounds (before clamping)
-          if (x >= 0 && x <= width && y >= 0 && y <= height) {
-            visibleVertices++;
-          }
-
-          // Update bounding box
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          validPoints++;
         }
       });
 
-      // If no vertices were processed or none are in front of camera
-      if (totalVertices === 0 || visibleVertices === 0) {
-        return null;
-      }
+      if (validPoints < 4) return null;
 
-      // Calculate visibility ratio (what % of sampled vertices are on-screen)
-      const visibilityRatio = visibleVertices / totalVertices;
+      // --- APPLY SAFETY PADDING ---
+      const pad = this.data.paddingPixels;
+      minX -= pad;
+      maxX += pad;
+      minY -= pad;
+      maxY += pad;
 
-      // Clamp to screen bounds
-      const clampedMinX = Math.max(0, Math.min(width, minX));
-      const clampedMinY = Math.max(0, Math.min(height, minY));
-      const clampedMaxX = Math.max(0, Math.min(width, maxX));
-      const clampedMaxY = Math.max(0, Math.min(height, maxY));
+      // --- CLAMP TO SCREEN ---
+      minX = Math.max(0, minX);
+      minY = Math.max(0, minY);
+      maxX = Math.min(w, maxX);
+      maxY = Math.min(h, maxY);
 
-      // Check if bounding box is valid after clamping
-      if (clampedMaxX <= clampedMinX || clampedMaxY <= clampedMinY) {
-        return null;
-      }
+      const area = (maxX - minX) * (maxY - minY);
+      if (area <= 0) return null;
 
-      return {
-        x_min: clampedMinX,
-        y_min: clampedMinY,
-        x_max: clampedMaxX,
-        y_max: clampedMaxY,
-        visible: true,
-        visibilityRatio: visibilityRatio, // Add visibility ratio for filtering
+      worldCenterAccumulator.divideScalar(validPoints);
+
+      return { 
+        minX, minY, maxX, maxY, area, 
+        worldCenter: worldCenterAccumulator 
       };
     },
 
@@ -429,123 +341,91 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
      * Convert pixel bounding box to YOLO format
      * YOLO format: class_id x_center y_center width height (all normalized 0-1)
      */
-    convertToYolo: function (
-      this: YoloDatasetGenerator,
-      bbox: { x_min: number; y_min: number; x_max: number; y_max: number },
-      width: number,
-      height: number,
-      classId: number
-    ) {
-      const x_center = (bbox.x_min + bbox.x_max) / 2 / width;
-      const y_center = (bbox.y_min + bbox.y_max) / 2 / height;
-      const box_width = (bbox.x_max - bbox.x_min) / width;
-      const box_height = (bbox.y_max - bbox.y_min) / height;
-
-      // Clamp values to [0, 1]
-      const clamp = (val: number) => Math.max(0, Math.min(1, val));
-
-      return `${classId} ${clamp(x_center).toFixed(6)} ${clamp(y_center).toFixed(6)} ${clamp(box_width).toFixed(6)} ${clamp(box_height).toFixed(6)}`;
+    formatYolo: function(this: YoloDatasetGenerator, box: any, w: number, h: number, classId: number) {
+      const cx = ((box.minX + box.maxX) / 2) / w;
+      const cy = ((box.minY + box.maxY) / 2) / h;
+      const bw = (box.maxX - box.minX) / w;
+      const bh = (box.maxY - box.minY) / h;
+      return `${classId} ${cx.toFixed(6)} ${cy.toFixed(6)} ${bw.toFixed(6)} ${bh.toFixed(6)}`;
     },
 
     /**
      * Check if object is occluded by raycasting from camera to object center
+     * Prevents self-occlusion by checking if blocker is part of the target object
      */
-    isOccluded: function (this: YoloDatasetGenerator, targetObject: any, camera: any) {
-      // Get object center in world space
-      const objectCenter = new AFRAME.THREE.Vector3();
-      const box = new AFRAME.THREE.Box3().setFromObject(targetObject);
-      box.getCenter(objectCenter);
+    isOccluded: function(this: YoloDatasetGenerator, targetPoint: any, targetObj: any, occluders: any[], camPos: any) {
+      _vB.subVectors(targetPoint, camPos).normalize();
+      const dist = camPos.distanceTo(targetPoint);
 
-      // Calculate direction from camera to object
-      const cameraPosition = camera.position.clone();
-      const direction = objectCenter.clone().sub(cameraPosition).normalize();
+      // Skip occlusion check for very close objects (< 2 meters)
+      if (dist < 2) return false;
 
-      // Calculate distance to object
-      const distanceToObject = cameraPosition.distanceTo(objectCenter);
+      this.raycaster.set(camPos, _vB);
+      this.raycaster.far = dist - 0.2;
 
-      // Setup raycaster
-      this.raycaster.set(cameraPosition, direction);
-      this.raycaster.far = distanceToObject - 0.1; // Stop just before the object
+      const hits = this.raycaster.intersectObjects(occluders, false);
 
-      // Find all occluding objects
-      const occludingElements = this.scene.querySelectorAll(`.${this.data.occlusionCheckLayers}`);
-      const occludingObjects: any[] = [];
+      if (hits.length === 0) return false;
 
-      occludingElements.forEach((el: any) => {
-        if (el.object3D && el.object3D !== targetObject) {
-          // Recursively add all meshes
-          el.object3D.traverse((child: any) => {
-            if (child.isMesh) {
-              occludingObjects.push(child);
-            }
-          });
+      // Check if blocker is part of the target object itself (prevent self-occlusion)
+      for (let i = 0; i < hits.length; i++) {
+        let blocker = hits[i].object;
+        let isSelf = false;
+        
+        // Walk up the parent chain to check if this hit is part of the target
+        while (blocker) {
+          if (blocker.uuid === targetObj.uuid) {
+            isSelf = true;
+            break;
+          }
+          blocker = blocker.parent;
         }
-      });
+        
+        if (!isSelf) return true; // Occluded by something else
+      }
 
-      // Perform raycast
-      const intersections = this.raycaster.intersectObjects(occludingObjects, true);
-
-      // If we hit something before reaching the object, it's occluded
-      return intersections.length > 0;
+      return false; // All hits were self-occlusion
     },
 
     /**
-     * Download text file
+     * Save data to file (text or JSON)
      */
-    downloadTextFile: function (this: YoloDatasetGenerator, content: string, filename: string) {
-      const blob = new Blob([content], { type: "text/plain" });
-      // Add to download queue instead of immediate download
-      this.captureQueue.push({ filename, blob, type: 'text' });
-    },
-
-    /**
-     * Download a file (used by queue processor)
-     */
-    downloadFile: function (this: YoloDatasetGenerator, blob: Blob, filename: string) {
+    saveData: function(this: YoloDatasetGenerator, text: string, id: string, extension: string) {
+      const blob = new Blob([text], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup after short delay
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }, 100);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `frame_${id}.${extension}`;
+      a.click();
+      URL.revokeObjectURL(url);
     },
 
     /**
      * Capture screenshot from WebGL renderer
      */
-    captureScreenshot: function (this: YoloDatasetGenerator, filename: string) {
+    captureScreenshot: function(this: YoloDatasetGenerator, frameId: string) {
       try {
         // Force a render to ensure canvas is up-to-date
         this.renderer.render(this.scene.object3D, this.camera);
         
-        const canvas = this.renderer.domElement;
-        
-        // Use toBlob with quality setting for JPEG
-        canvas.toBlob((blob: Blob | null) => {
-          if (!blob) {
+        this.renderer.domElement.toBlob((imgBlob: Blob | null) => {
+          if (!imgBlob) {
             console.error("❌ Failed to create screenshot blob");
             return;
           }
-
-          // Add to download queue instead of immediate download
-          this.captureQueue.push({ filename, blob, type: 'image' });
-        }, "image/jpeg", 0.95);
+          const imgUrl = URL.createObjectURL(imgBlob);
+          const b = document.createElement('a');
+          b.href = imgUrl;
+          b.download = `frame_${frameId}.jpg`;
+          b.click();
+          URL.revokeObjectURL(imgUrl);
+        }, 'image/jpeg', 0.95);
       } catch (error) {
         console.error("❌ Screenshot capture failed:", error);
       }
     },
 
     remove: function (this: YoloDatasetGenerator) {
-      if (this.downloadInterval) {
-        clearInterval(this.downloadInterval);
-      }
       console.log("🎯 YOLO Dataset Generator removed");
     },
   });
