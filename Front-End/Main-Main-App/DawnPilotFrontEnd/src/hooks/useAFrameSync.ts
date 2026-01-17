@@ -7,6 +7,7 @@ interface AFrameSyncOptions {
     componentName: string,
     componentData: unknown
   ) => void;
+  onEntityRemove?: (entityId: string) => void;
   debounceMs?: number;
   watchedComponents?: string[];
 }
@@ -49,12 +50,14 @@ export function useAFrameSync(
 ) {
   const {
     onComponentChange,
+    onEntityRemove,
     watchedComponents = ["position", "rotation", "scale", "color"],
   } = options;
 
   // Store latest entities in a Ref so event listeners always access fresh data
   const entitiesRef = useRef<Entity[]>(entities);
   const onComponentChangeRef = useRef(onComponentChange);
+  const onEntityRemoveRef = useRef(onEntityRemove);
   const initializedRef = useRef(false);
 
   // Update refs whenever props change
@@ -67,10 +70,16 @@ export function useAFrameSync(
   }, [onComponentChange]);
 
   useEffect(() => {
+    onEntityRemoveRef.current = onEntityRemove;
+  }, [onEntityRemove]);
+
+  useEffect(() => {
     const scene = document.querySelector("a-scene") as any;
     
     // Cleanup function references for removal later
     const cleanupMap = new Map<Element, (evt: any) => void>();
+    let mutationObserver: MutationObserver | null = null;
+    let deletionTimeout: NodeJS.Timeout | null = null;
 
     const setupListeners = () => {
       // If already initialized for this entity count, skip (optional safety)
@@ -150,6 +159,51 @@ export function useAFrameSync(
         // Store for cleanup
         cleanupMap.set(aframeEntity, handleComponentChange);
       });
+
+      // ========================================
+      // Setup MutationObserver for entity deletions
+      // ========================================
+      if (onEntityRemoveRef.current && scene) {
+        mutationObserver = new MutationObserver((mutations) => {
+          // Debounce deletion checks to avoid race conditions
+          if (deletionTimeout) clearTimeout(deletionTimeout);
+          
+          deletionTimeout = setTimeout(() => {
+            // Get current DOM entity elements
+            const currentEntityElements = Array.from(
+              document.querySelectorAll('[ecs-entity]')
+            );
+            
+            // Get entity IDs currently in DOM (using data-entity-id attribute)
+            const domEntityIds = new Set(
+              currentEntityElements
+                .map((el) => el.getAttribute('data-entity-id'))
+                .filter(Boolean)
+            );
+            
+            // Find entities that are in React state but not in DOM anymore
+            const deletedEntities = entitiesRef.current.filter(
+              (entity) => !domEntityIds.has(entity.id)
+            );
+            
+            // Process deletions (only if we actually found deleted entities)
+            if (deletedEntities.length > 0) {
+              deletedEntities.forEach((entity) => {
+                console.log(`🗑️ Entity removed from inspector: ${entity.id}`);
+                if (onEntityRemoveRef.current) {
+                  onEntityRemoveRef.current(entity.id);
+                }
+              });
+            }
+          }, 100); // 100ms debounce
+        });
+
+        // Observe the scene for child removals
+        mutationObserver.observe(scene, {
+          childList: true,
+          subtree: true
+        });
+      }
     };
 
     const runSetup = () => {
@@ -169,6 +223,17 @@ export function useAFrameSync(
         delete element._ecsSyncAttached;
       });
       cleanupMap.clear();
+      
+      // Clear deletion timeout
+      if (deletionTimeout) {
+        clearTimeout(deletionTimeout);
+      }
+      
+      // Disconnect mutation observer
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+      }
+      
       if (scene) {
         scene.removeEventListener("loaded", setupListeners);
       }

@@ -162,20 +162,31 @@ scenarioRouter.delete('/entities/:entityId', (req, res) => {
   try {
     const { entityId } = req.params;
     
+    console.log(`🗑️ DELETE request for entity: ${entityId}`);
+    
     const removed = removeEntity(entityId);
     
     if (!removed) {
+      console.log(`❌ Entity ${entityId} not found`);
       return res.status(404).json({ 
         error: 'Entity not found',
         entityId 
       });
     }
     
+    // Get updated world state after deletion
+    const updatedWorld = getScenarioWorld();
+    
+    console.log(`✅ Entity ${entityId} removed! Remaining entities: ${updatedWorld.entities.length}`);
+    
     res.json({ 
       message: `Entity ${entityId} removed!`,
-      entityId
+      entityId,
+      remainingEntities: updatedWorld.entities.length,
+      world: updatedWorld
     });
   } catch (error) {
+    console.error(`❌ Error removing entity:`, error);
     res.status(500).json({ 
       error: 'Failed to remove entity',
       details: error instanceof Error ? error.message : 'Unknown error'

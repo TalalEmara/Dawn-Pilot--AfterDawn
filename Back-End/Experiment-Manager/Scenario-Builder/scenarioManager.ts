@@ -244,11 +244,21 @@ export function updateComponentOnEntity(
  * Remove entity completely
  */
 export function removeEntity(entityId: string): boolean {
+  console.log(`🗑️ removeEntity called for: ${entityId}`);
+  console.log(`📊 objectMap size before deletion: ${objectMap.size}`);
+  
   const entity = objectMap.get(entityId);
-  if (entity === undefined) return false;
+  if (entity === undefined) {
+    console.log(`❌ Entity ${entityId} not found in objectMap`);
+    console.log(`Available entities:`, Array.from(objectMap.keys()));
+    return false;
+  }
 
   entityManager.removeEntity(entity);
   objectMap.delete(entityId);
+  metadataMap.delete(entityId);
+  
+  console.log(`📊 objectMap size after deletion: ${objectMap.size}`);
   
   // Auto-save to persist deletion
   saveScenarioWorld();
