@@ -165,10 +165,16 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       const jsonDetections: any[] = [];
       let validDetections = 0;
       let detectionId = 1;
+      
+      // Track processed object3D instances to prevent duplicates
+      const processedObjects = new Set();
 
       allEntities.forEach((entity: any) => {
         const object3D = entity.object3D;
-        if (!object3D) return;
+        if (!object3D || processedObjects.has(object3D)) return;
+        
+        // Mark this object3D as processed
+        processedObjects.add(object3D);
 
         // Get entity name from multiple sources
         const entityName = entity.getAttribute("data-entity-name") || 
@@ -212,6 +218,12 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
         // Get 2D bounding box in screen space
         const bbox = this.getScreenBoundingBox(object3D, this.camera);
         if (!bbox || !bbox.visible) {
+          return;
+        }
+        
+        // Check visibility ratio - ensure object is substantially on-screen (at least 30%)
+        if (bbox.visibilityRatio < 0.3) {
+          console.log(`🚫 Object "${entityName}" mostly off-screen (${(bbox.visibilityRatio * 100).toFixed(0)}% visible), skipping`);
           return;
         }
 
@@ -304,29 +316,24 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
 
     /**
      * Get 2D bounding box of a 3D object in screen space
+     * Uses actual mesh vertex sampling for tighter, more accurate boxes
      */
     getScreenBoundingBox: function (
       this: YoloDatasetGenerator,
       object3D: any,
       camera: any
     ) {
-      const box3 = new AFRAME.THREE.Box3().setFromObject(object3D);
+      // Collect all visible meshes
+      const meshes: any[] = [];
+      object3D.traverse((child: any) => {
+        if (child.isMesh && child.visible) {
+          meshes.push(child);
+        }
+      });
 
-      if (box3.isEmpty()) {
+      if (meshes.length === 0) {
         return null;
       }
-
-      // Get 8 corners of the bounding box
-      const corners = [
-        new AFRAME.THREE.Vector3(box3.min.x, box3.min.y, box3.min.z),
-        new AFRAME.THREE.Vector3(box3.min.x, box3.min.y, box3.max.z),
-        new AFRAME.THREE.Vector3(box3.min.x, box3.max.y, box3.min.z),
-        new AFRAME.THREE.Vector3(box3.min.x, box3.max.y, box3.max.z),
-        new AFRAME.THREE.Vector3(box3.max.x, box3.min.y, box3.min.z),
-        new AFRAME.THREE.Vector3(box3.max.x, box3.min.y, box3.max.z),
-        new AFRAME.THREE.Vector3(box3.max.x, box3.max.y, box3.min.z),
-        new AFRAME.THREE.Vector3(box3.max.x, box3.max.y, box3.max.z),
-      ];
 
       const canvas = this.renderer.domElement;
       const width = canvas.width;
@@ -336,51 +343,85 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       let minY = Infinity;
       let maxX = -Infinity;
       let maxY = -Infinity;
-      let anyInFront = false;
+      let totalVertices = 0;
+      let visibleVertices = 0;
 
-      corners.forEach((corner) => {
-        // Clone to avoid modifying original
-        const projected = corner.clone().project(camera);
-
-        // Check if behind camera (z > 1 means behind in NDC space)
-        if (projected.z > 1) {
-          return; // Skip this corner
+      // Sample vertices from each mesh
+      meshes.forEach((mesh) => {
+        const geometry = mesh.geometry;
+        if (!geometry || !geometry.attributes || !geometry.attributes.position) {
+          return;
         }
 
-        anyInFront = true;
+        const positions = geometry.attributes.position;
+        const vertexCount = positions.count;
+        
+        // Sample every Nth vertex for performance (sample ~100 vertices per mesh)
+        const step = Math.max(1, Math.floor(vertexCount / 100));
 
-        // Convert from NDC (-1 to 1) to pixel coordinates (0 to width/height)
-        const x = ((projected.x + 1) / 2) * width;
-        const y = ((-projected.y + 1) / 2) * height; // Y is inverted in screen space
+        for (let i = 0; i < vertexCount; i += step) {
+          totalVertices++;
+          
+          const vertex = new AFRAME.THREE.Vector3(
+            positions.getX(i),
+            positions.getY(i),
+            positions.getZ(i)
+          );
 
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
+          // Transform vertex to world space
+          vertex.applyMatrix4(mesh.matrixWorld);
+
+          // Project to screen space
+          const projected = vertex.clone().project(camera);
+
+          // Check if behind camera (z > 1 means behind in NDC space)
+          if (projected.z > 1 || projected.z < -1) {
+            continue;
+          }
+
+          // Convert from NDC (-1 to 1) to pixel coordinates
+          const x = ((projected.x + 1) / 2) * width;
+          const y = ((-projected.y + 1) / 2) * height;
+
+          // Track vertices that are within screen bounds (before clamping)
+          if (x >= 0 && x <= width && y >= 0 && y <= height) {
+            visibleVertices++;
+          }
+
+          // Update bounding box
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
       });
 
-      // If all corners are behind camera, object is not visible
-      if (!anyInFront) {
+      // If no vertices were processed or none are in front of camera
+      if (totalVertices === 0 || visibleVertices === 0) {
         return null;
       }
 
-      // Clamp to screen bounds
-      minX = Math.max(0, Math.min(width, minX));
-      minY = Math.max(0, Math.min(height, minY));
-      maxX = Math.max(0, Math.min(width, maxX));
-      maxY = Math.max(0, Math.min(height, maxY));
+      // Calculate visibility ratio (what % of sampled vertices are on-screen)
+      const visibilityRatio = visibleVertices / totalVertices;
 
-      // Check if bounding box is valid
-      if (maxX <= minX || maxY <= minY) {
+      // Clamp to screen bounds
+      const clampedMinX = Math.max(0, Math.min(width, minX));
+      const clampedMinY = Math.max(0, Math.min(height, minY));
+      const clampedMaxX = Math.max(0, Math.min(width, maxX));
+      const clampedMaxY = Math.max(0, Math.min(height, maxY));
+
+      // Check if bounding box is valid after clamping
+      if (clampedMaxX <= clampedMinX || clampedMaxY <= clampedMinY) {
         return null;
       }
 
       return {
-        x_min: minX,
-        y_min: minY,
-        x_max: maxX,
-        y_max: maxY,
+        x_min: clampedMinX,
+        y_min: clampedMinY,
+        x_max: clampedMaxX,
+        y_max: clampedMaxY,
         visible: true,
+        visibilityRatio: visibilityRatio, // Add visibility ratio for filtering
       };
     },
 
