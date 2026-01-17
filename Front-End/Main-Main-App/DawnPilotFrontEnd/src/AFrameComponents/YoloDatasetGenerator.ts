@@ -5,18 +5,18 @@ import "aframe";
 const YOLO_CLASS_MAPPING = {
     "0": "Person",
     "1": "Crossway",
-    "2": "Potted Plant",
+    "2": "Plotted Plant",
     "3": "Pole",
     "4": "Garbage",
     "5": "Bus station",
     "6": "Car",
-    "7": "Tree Trunk"
+    "7": "Tree"
 };
 
 // Detectable models from modelsDeclare.ts (exclude Light and environmental objects)
 const DETECTABLE_MODELS = [
   "Car",
-  "Tree Trunk", 
+  "Tree",
   "TreeTrunk",
   "Pole",
   "Plotted Plant",

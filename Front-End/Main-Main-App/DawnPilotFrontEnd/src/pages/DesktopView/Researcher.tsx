@@ -212,14 +212,14 @@ function ResearcherView() {
     );
   }, [loadWorld]);
 
-  // Set initial camera position ONCE (prevent re-render from resetting position)
-  useEffect(() => {
-    if (cameraRef.current?.el && !cameraInitialized.current) {
-      cameraRef.current.el.setAttribute("position", "0 1.6 0");
-      cameraInitialized.current = true;
-      console.log("[Camera] Initial position set to 0 1.6 0");
-    }
-  });
+  // Set initial camera position ONCE ONLY if not already set by scenario load
+  // useEffect(() => {
+  //   if (cameraRef.current?.el && !cameraInitialized.current) {
+  //     cameraRef.current.el.setAttribute("position", "0 1.6 0");
+  //     cameraInitialized.current = true;
+  //     console.log("[Camera] Initial position set to 0 1.6 0");
+  //   }
+  // });
 
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
