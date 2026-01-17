@@ -135,26 +135,20 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
     captureFrame: function (this: YoloDatasetGenerator) {
       if (!this.camera) return;
 
-      const yoloAnnotations: string[] = [];
-      const jsonDetections: any[] = [];
       const width = this.renderer.domElement.width;
       const height = this.renderer.domElement.height;
       const camPos = this.camera.position;
-      let detectionId = 1;
 
-      // 1. Gather all potential occluders (Everything that can block a view)
-      const occluders: any[] = [];
-      this.scene.object3D.traverse((node: any) => {
-        if (node.isMesh && node.visible) occluders.push(node);
-      });
-
-      // 2. Find detectable entity candidates
+      // 1. Find detectable entity candidates
       let candidates = Array.from(this.scene.querySelectorAll("[ecs-entity]"));
       if (candidates.length === 0) {
         candidates = Array.from(this.scene.querySelectorAll("[gltf-model]"));
       }
 
       const validCandidates = candidates.filter((el: any) => el.object3D && el.object3D.visible);
+
+      // 2. Collect all candidate boxes with metadata
+      const candidateBoxes: any[] = [];
 
       validCandidates.forEach((el: any) => {
         // --- A. Identification ---
@@ -188,31 +182,43 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
         if (!screenBox) return; // Off-screen or invalid
         if (screenBox.area < this.data.minVisiblePixels) return; // Too small
 
-        // --- C. Occlusion Check ---
-        // Raycast to the center of mass of the visible vertices
-        if (this.isOccluded(screenBox.worldCenter, obj3D, occluders, camPos)) {
-          if (this.data.logToConsole) {
-            console.log(`🚫 Object "${rawName}" is occluded`);
-          }
-          return;
-        }
+        // Store candidate with all metadata
+        candidateBoxes.push({
+          box: screenBox,
+          classId: classId,
+          className: this.reverseClassMap[classId],
+          rawName: rawName,
+          distance: screenBox.distance
+        });
+      });
 
-        // --- D. Generate YOLO Data ---
-        const yoloStr = this.formatYolo(screenBox, width, height, classId);
+      // 3. Filter occluded boxes using 2D overlap + depth sorting
+      const visibleBoxes = this.filterOccludedBoxes(candidateBoxes);
+
+      // 4. Generate YOLO annotations and JSON detections
+      const yoloAnnotations: string[] = [];
+      const jsonDetections: any[] = [];
+      let detectionId = 1;
+
+      visibleBoxes.forEach((candidate: any) => {
+        const { box, classId, className, rawName, distance } = candidate;
+
+        // Generate YOLO Data
+        const yoloStr = this.formatYolo(box, width, height, classId);
         yoloAnnotations.push(yoloStr);
 
         // Create JSON detection entry (compatible with existing format)
         const jsonDetection = {
           id: detectionId++,
-          class: this.reverseClassMap[classId],
+          class: className,
           shape: null,
           bbox: [
-            Math.round(screenBox.minX),
-            Math.round(screenBox.minY),
-            Math.round(screenBox.maxX - screenBox.minX),
-            Math.round(screenBox.maxY - screenBox.minY)
+            Math.round(box.minX),
+            Math.round(box.minY),
+            Math.round(box.maxX - box.minX),
+            Math.round(box.maxY - box.minY)
           ],
-          distance_m: camPos.distanceTo(screenBox.worldCenter),
+          distance_m: distance,
           mask_path: null,
           velocity: null,
           hazard: null
@@ -220,7 +226,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
         jsonDetections.push(jsonDetection);
 
         if (this.data.logToConsole) {
-          console.log(`✅ Detected "${rawName}" [class ${classId}]: ${yoloStr}`);
+          console.log(`✅ Detected "${rawName}" [class ${classId}] at ${distance.toFixed(1)}m: ${yoloStr}`);
         }
       });
 
@@ -271,6 +277,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
     /**
      * Scans mesh vertices to find tightest possible 2D box.
      * Uses striding + padding for speed and accuracy.
+     * Returns box coordinates, area, and distance from camera.
      */
     getPreciseScreenBox: function(this: YoloDatasetGenerator, rootObj: any, w: number, h: number) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -331,10 +338,63 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
 
       worldCenterAccumulator.divideScalar(validPoints);
 
+      // Calculate distance from camera to object center
+      const distance = this.camera.position.distanceTo(worldCenterAccumulator);
+
       return { 
         minX, minY, maxX, maxY, area, 
-        worldCenter: worldCenterAccumulator 
+        worldCenter: worldCenterAccumulator,
+        distance: distance
       };
+    },
+
+    /**
+     * Filter occluded boxes using 2D overlap + depth sorting.
+     * If Box_A overlaps Box_B by more than 70%, and Box_A is behind Box_B, discard Box_A.
+     */
+    filterOccludedBoxes: function(this: YoloDatasetGenerator, candidates: any[]) {
+      const visible: any[] = [];
+      const occlusionThreshold = 0.7; // 70% overlap
+
+      for (let i = 0; i < candidates.length; i++) {
+        const candidateA = candidates[i];
+        const boxA = candidateA.box;
+        let isOccluded = false;
+
+        for (let j = 0; j < candidates.length; j++) {
+          if (i === j) continue;
+
+          const candidateB = candidates[j];
+          const boxB = candidateB.box;
+
+          // Calculate intersection area
+          const intersectMinX = Math.max(boxA.minX, boxB.minX);
+          const intersectMinY = Math.max(boxA.minY, boxB.minY);
+          const intersectMaxX = Math.min(boxA.maxX, boxB.maxX);
+          const intersectMaxY = Math.min(boxA.maxY, boxB.maxY);
+
+          // Check if boxes overlap
+          if (intersectMinX < intersectMaxX && intersectMinY < intersectMaxY) {
+            const intersectionArea = (intersectMaxX - intersectMinX) * (intersectMaxY - intersectMinY);
+            const overlapRatio = intersectionArea / boxA.area;
+
+            // If A overlaps B by more than 70%, and A is behind B, discard A
+            if (overlapRatio > occlusionThreshold && candidateA.distance > candidateB.distance) {
+              if (this.data.logToConsole) {
+                console.log(`🚫 "${candidateA.rawName}" occluded by "${candidateB.rawName}" (${(overlapRatio * 100).toFixed(0)}% overlap, ${candidateA.distance.toFixed(1)}m vs ${candidateB.distance.toFixed(1)}m)`);
+              }
+              isOccluded = true;
+              break;
+            }
+          }
+        }
+
+        if (!isOccluded) {
+          visible.push(candidateA);
+        }
+      }
+
+      return visible;
     },
 
     /**
@@ -347,44 +407,6 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
       const bw = (box.maxX - box.minX) / w;
       const bh = (box.maxY - box.minY) / h;
       return `${classId} ${cx.toFixed(6)} ${cy.toFixed(6)} ${bw.toFixed(6)} ${bh.toFixed(6)}`;
-    },
-
-    /**
-     * Check if object is occluded by raycasting from camera to object center
-     * Prevents self-occlusion by checking if blocker is part of the target object
-     */
-    isOccluded: function(this: YoloDatasetGenerator, targetPoint: any, targetObj: any, occluders: any[], camPos: any) {
-      _vB.subVectors(targetPoint, camPos).normalize();
-      const dist = camPos.distanceTo(targetPoint);
-
-      // Skip occlusion check for very close objects (< 2 meters)
-      if (dist < 2) return false;
-
-      this.raycaster.set(camPos, _vB);
-      this.raycaster.far = dist - 0.2;
-
-      const hits = this.raycaster.intersectObjects(occluders, false);
-
-      if (hits.length === 0) return false;
-
-      // Check if blocker is part of the target object itself (prevent self-occlusion)
-      for (let i = 0; i < hits.length; i++) {
-        let blocker = hits[i].object;
-        let isSelf = false;
-        
-        // Walk up the parent chain to check if this hit is part of the target
-        while (blocker) {
-          if (blocker.uuid === targetObj.uuid) {
-            isSelf = true;
-            break;
-          }
-          blocker = blocker.parent;
-        }
-        
-        if (!isSelf) return true; // Occluded by something else
-      }
-
-      return false; // All hits were self-occlusion
     },
 
     /**
