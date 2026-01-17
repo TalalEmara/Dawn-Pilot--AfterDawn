@@ -130,6 +130,9 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["yolo-dataset-generator"
     tick: function (this: YoloDatasetGenerator) {
       if (!this.data.enabled) return;
 
+      // Wait for scene to fully load before capturing
+      if (!this.scene.hasLoaded) return;
+
       this.frameCount++;
 
       // Capture every N frames
