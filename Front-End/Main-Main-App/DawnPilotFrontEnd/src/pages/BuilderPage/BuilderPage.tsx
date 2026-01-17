@@ -142,9 +142,44 @@ const BuilderPage = () => {
     [updateComponentDebounced]
   );
 
+  // Stable callback for entity removal in inspector
+  const handleEntityRemove = useCallback(
+    async (entityId: string) => {
+      console.log(`🗑️ Inspector deleted entity ${entityId}, syncing to backend...`);
+      
+      try {
+        // Import API config
+        const { URLS } = await import('../../ApiConfig');
+        
+        // Call backend API directly (without optimistic update)
+        // The DOM element is ALREADY removed by inspector, so we don't want React to try removing it
+        const response = await fetch(`${URLS.SCENARIO_API}/entities/${entityId}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to delete entity: ${response.statusText}`);
+        }
+        
+        console.log(`✅ Entity ${entityId} deleted from backend`);
+        
+        // Instead of updating state directly (which causes React to try removing DOM),
+        // reload the entire world from backend. This is safer and avoids race conditions.
+        await loadWorld();
+        console.log(`✅ World reloaded after deletion`);
+      } catch (err) {
+        console.error(`❌ Failed to delete entity ${entityId}:`, err);
+        // On error, reload world to restore correct state
+        await loadWorld();
+      }
+    },
+    [loadWorld]
+  );
+
   // A-Frame synchronization: persist inspector edits for ECS entities
   useAFrameSync(world.entities, {
     onComponentChange: handleComponentChange,
+    onEntityRemove: handleEntityRemove,
     watchedComponents: ["position", "rotation", "scale", "color"],
   });
 
@@ -392,6 +427,9 @@ const BuilderPage = () => {
                 scale: `${scl.x} ${scl.y} ${scl.z}`
               };
 
+              // Add error boundary key to help React recover from DOM sync issues
+              const safeKey = `${e.id}-${world.entities.length}`;
+
               if (url === "Aframe") {
                 const primitiveName =
                   typeof e.name === "string" && e.name.length > 0
@@ -402,6 +440,7 @@ const BuilderPage = () => {
                   <AEntity
                     key={e.id}
                     ecs-entity
+                    data-entity-id={e.id}
                     primitive={primitiveName}
                     {...entityProps}
                     material={`color: ${color}`}
@@ -413,6 +452,7 @@ const BuilderPage = () => {
                 <AEntity
                   key={e.id}
                   ecs-entity
+                  data-entity-id={e.id}
                   gltf-model={`models${url}${url}.glb`}
                   {...entityProps}
                   material={`color: ${color}`}
