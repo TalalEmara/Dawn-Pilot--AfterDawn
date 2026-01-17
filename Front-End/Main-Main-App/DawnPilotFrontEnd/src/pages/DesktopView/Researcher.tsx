@@ -8,7 +8,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useScenarioWorld } from "../../hooks/useScenarioWorld";
 import { useCameraSync } from "../../hooks/useCameraSync";
 import { useFrameBuffer } from "../../hooks/useFrameBuffer";
-import { useCollisionDetection } from "../../hooks/useCollision";
 import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import { useExperimentVault } from "../../hooks/Recording/useExperimentVault";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
@@ -57,7 +56,6 @@ const getStageFromVisionMode = (mode: string): string => {
 
 function ResearcherView() {
   const cameraRef = useRef<any>(null);
-  const hitboxRef = useRef<any>(null);
   const cameraInitialized = useRef<boolean>(false);
 
   // --- Research / Experiment State ---
@@ -67,8 +65,6 @@ function ResearcherView() {
   const [mobileId, setMobileId] = useState<string>("");
 
   const [elapsedTime, setElapsedTime] = useState<number>(0);
-  const [collisionCount, setCollisionCount] = useState<number>(0);
-  const [collisionLog, setCollisionLog] = useState<string[]>([]);
 
   // AI Socket State
   const [aiWebSocket, setAiWebSocket] = useState<WebSocket | null>(null);
@@ -212,14 +208,14 @@ function ResearcherView() {
     );
   }, [loadWorld]);
 
-  // Set initial camera position ONCE (prevent re-render from resetting position)
-  useEffect(() => {
-    if (cameraRef.current?.el && !cameraInitialized.current) {
-      cameraRef.current.el.setAttribute("position", "0 1.6 0");
-      cameraInitialized.current = true;
-      console.log("[Camera] Initial position set to 0 1.6 0");
-    }
-  });
+  // Set initial camera position ONCE ONLY if not already set by scenario load
+  // useEffect(() => {
+  //   if (cameraRef.current?.el && !cameraInitialized.current) {
+  //     cameraRef.current.el.setAttribute("position", "0 1.6 0");
+  //     cameraInitialized.current = true;
+  //     console.log("[Camera] Initial position set to 0 1.6 0");
+  //   }
+  // });
 
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
@@ -264,20 +260,6 @@ function ResearcherView() {
     });
   }, [setOnCameraUpdate]);
 
-  const handleCollision = useCallback(
-    (detail: { obstacleId: string; timestamp: number }) => {
-      const timestamp = new Date().toLocaleTimeString();
-      const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
-      console.warn(`💥 ${logMsg}`);
-      setCollisionCount((prev) => prev + 1);
-      setCollisionLog((prev) => [logMsg, ...prev].slice(0, 10));
-      vault.logCollision(detail.obstacleId);
-    },
-    [vault]
-  );
-
-  useCollisionDetection(hitboxRef, handleCollision);
-
   // Handlers
   const handleStartExperiment = async () => {
     if (!socket?.id || !mobileId) {
@@ -291,10 +273,6 @@ function ResearcherView() {
       scenarioId: currentScenarioId,
       visionMode: visionMode,
     });
-    if (success) {
-      setCollisionCount(0);
-      setCollisionLog([]);
-    }
   };
 
   const handleStopExperiment = async () => {
@@ -566,64 +544,6 @@ function ResearcherView() {
             >
               Metrics
             </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>Collisions:</span>
-              <span
-                style={{
-                  fontSize: "20px",
-                  fontWeight: "bold",
-                  color: collisionCount > 0 ? "#ff6b6b" : "#fff",
-                }}
-              >
-                {collisionCount}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <div
-              style={{
-                fontSize: "12px",
-                textTransform: "uppercase",
-                color: "#888",
-                marginBottom: "8px",
-              }}
-            >
-              Recent Events
-            </div>
-            <ul
-              style={{
-                listStyle: "none",
-                padding: 0,
-                margin: 0,
-                fontSize: "12px",
-                color: "#ccc",
-              }}
-            >
-              {collisionLog.length === 0 && (
-                <li style={{ fontStyle: "italic", color: "#555" }}>
-                  No events logged.
-                </li>
-              )}
-              {collisionLog.map((log, idx) => (
-                <li
-                  key={idx}
-                  style={{
-                    marginBottom: "6px",
-                    borderBottom: "1px solid #333",
-                    paddingBottom: "4px",
-                  }}
-                >
-                  {log}
-                </li>
-              ))}
-            </ul>
           </div>
 
           <div style={{ marginTop: "24px" }}>
@@ -719,7 +639,6 @@ function ResearcherView() {
               const scl = e.Scale || { x: 1, y: 1, z: 1 };
               const color = e.Color?.value || "#fff";
               const url = e.Model?.url;
-              const isObstacle = e.name !== "Light";
 
               if (url === "Aframe") {
                 const tag = `a-${e.name.toLowerCase()}`;
@@ -733,7 +652,6 @@ function ResearcherView() {
                     rotation={`${rot.x} ${rot.y} ${rot.z}`}
                     scale={`${scl.x} ${scl.y} ${scl.z}`}
                     material={`color: ${color}`}
-                    className={isObstacle ? "collidable" : ""}
                   />
                 );
               }
@@ -742,7 +660,6 @@ function ResearcherView() {
                   key={e.id}
                   ecs-entity
                   data-entity-name={e.name}
-                  className={isObstacle ? "collidable" : ""}
                   gltf-model={`models${url}${url}.glb`}
                   position={`${pos.x} ${pos.y} ${pos.z}`}
                   rotation={`${rot.x} ${rot.y} ${rot.z}`}
@@ -769,21 +686,11 @@ function ResearcherView() {
             <Entity
               ref={cameraRef}
               primitive="a-camera"
+              // position="0 1.6 0"
               look-controls="enabled: false"
-              wasd-controls="enabled: true; acceleration: 15"
-              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
-            >
-              <Entity
-                ref={hitboxRef}
-                collision-detector="targetSelector: .collidable; cooldown: 1000"
-                primitive="a-box"
-                position="0 -0.8 0"
-                scale=".6 1.6 .6"
-                material="opacity: 0.5; color: red; wireframe: true"
-                visible={true}
-                className="depth-ignore"
-              />
-            </Entity>
+              wasd-controls="enabled: true; acceleration: 10"
+              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 10; heightUpButton: 7; heightDownButton: 6"
+            />
           </Scene>
         </div>
 
