@@ -1,22 +1,23 @@
 {
-  "name": "BusStation&obstacles",
-  "createdAt": "2026-01-17T18:51:23.854Z",
-  "entityCount": 16,
+  "name": "BusStation",
+  "description": "modified bus stations scenario",
+  "createdAt": "2026-01-17T19:06:39.393Z",
+  "entityCount": 17,
   "camera": {
     "position": {
-      "x": 4.891260331038052,
+      "x": 3.641495448760364,
       "y": 2,
-      "z": 12.268469627921732
+      "z": 11.740788708938123
     },
     "rotation": {
-      "x": -2.521014298575624,
-      "y": -360.50504469631386,
+      "x": 0,
+      "y": 0,
       "z": 0
     }
   },
   "entities": [
     {
-      "id": "entity-1768672210406-c48n515jm",
+      "id": "entity-1768676063765-poc7yzm7l",
       "Position": {
         "x": -2.19067,
         "y": 0,
@@ -38,7 +39,7 @@
       "name": "Car"
     },
     {
-      "id": "entity-1768672210406-xk0zqn6gy",
+      "id": "entity-1768676063777-l3v4qb6z9",
       "Position": {
         "x": 3.84624,
         "y": 0,
@@ -60,7 +61,7 @@
       "name": "BusStop"
     },
     {
-      "id": "entity-1768672210407-x4iuerxc9",
+      "id": "entity-1768676063781-6afdl1jrl",
       "Position": {
         "x": 4.01555,
         "y": 0.18542,
@@ -82,7 +83,7 @@
       "name": "Garbage"
     },
     {
-      "id": "entity-1768672210407-0szed6nc3",
+      "id": "entity-1768676063795-brw1slr18",
       "Position": {
         "x": -4.54754,
         "y": 0,
@@ -104,7 +105,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-lv7fz2gk5",
+      "id": "entity-1768676064162-6u5fv9bf8",
       "Position": {
         "x": -5.1846,
         "y": 0,
@@ -126,7 +127,7 @@
       "name": "Pole"
     },
     {
-      "id": "entity-1768672210407-ru16yz3xq",
+      "id": "entity-1768676064214-ugqq33drf",
       "Position": {
         "x": -4.54754,
         "y": 0,
@@ -148,7 +149,7 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1768672210407-5o2secpjk",
+      "id": "entity-1768676064258-vxenxhg5c",
       "Position": {
         "x": 1.7194,
         "y": -0.12206,
@@ -170,7 +171,7 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1768672210407-n2gwdm9os",
+      "id": "entity-1768676064266-47x5ao0g8",
       "Position": {
         "x": 0.97986,
         "y": 0,
@@ -192,7 +193,7 @@
       "name": "TreeTrunk"
     },
     {
-      "id": "entity-1768672210407-edl3yc943",
+      "id": "entity-1768676064282-uqv0rfrjr",
       "Position": {
         "x": 9.01678,
         "y": 0,
@@ -214,7 +215,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-idymnqfyi",
+      "id": "entity-1768676064298-c5kq4qhg8",
       "Position": {
         "x": 8.31344,
         "y": 0,
@@ -236,7 +237,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-zkwok5bi0",
+      "id": "entity-1768676064327-cisgi0e34",
       "Position": {
         "x": -2.96614,
         "y": 0,
@@ -258,7 +259,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-t95ayao9o",
+      "id": "entity-1768676064348-d1uwgy1l0",
       "Position": {
         "x": 7.126,
         "y": 0,
@@ -280,7 +281,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-9t5eow92p",
+      "id": "entity-1768676064366-c10qf5iue",
       "Position": {
         "x": -3.2706,
         "y": 0,
@@ -302,7 +303,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768672210407-0wdm1k6k0",
+      "id": "entity-1768676064382-yphdsya7e",
       "Position": {
         "x": 2.93356,
         "y": 0,
@@ -324,7 +325,7 @@
       "name": "Car"
     },
     {
-      "id": "entity-1768672210407-u3yerkqkn",
+      "id": "entity-1768676064432-dlz963kx3",
       "Position": {
         "x": -1.54385,
         "y": 0,
@@ -346,15 +347,15 @@
       "name": "TreeTrunk"
     },
     {
-      "id": "entity-1768672322348-8bhzkk164",
+      "id": "entity-1768676064492-tcymn9y84",
       "Position": {
-        "x": 0,
+        "x": -4.05812,
         "y": 0,
-        "z": 0
+        "z": 5.41691
       },
       "Rotation": {
         "x": 0,
-        "y": 0,
+        "y": 180,
         "z": 0
       },
       "Scale": {
@@ -366,6 +367,28 @@
         "url": "/car"
       },
       "name": "Car"
+    },
+    {
+      "id": "entity-1768676563136-7lgr1bkmx",
+      "Position": {
+        "x": -1.72081,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
     }
   ]
 }
