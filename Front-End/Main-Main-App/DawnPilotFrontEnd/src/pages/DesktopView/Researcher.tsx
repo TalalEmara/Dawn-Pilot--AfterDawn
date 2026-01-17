@@ -625,9 +625,9 @@ function ResearcherView() {
               primitive="a-plane"
               position="0 0 0"
               rotation="-90 0 0"
-              width="20"
-              height="20"
-              material={{ src: groundTexture, repeat: "20 20" }}
+              width="100"
+              height="100"
+              material={{ src: groundTexture, repeat: "70 70" }}
               segments-width="50"
               segments-height="50"
             />
