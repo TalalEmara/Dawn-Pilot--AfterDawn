@@ -1,0 +1,189 @@
+{
+  "name": "Fatma1.2",
+  "createdAt": "2026-01-17T13:52:46.144Z",
+  "entityCount": 24,
+  "camera": {
+    "position": { "x": 0.8107100825529996, "y": 2, "z": 12.157515220537384 },
+    "rotation": { "x": -8.479775367936206, "y": 15.928226704636874, "z": 0 }
+  },
+  "entities": [
+
+    { "id": "entity-1768646875019-bnbkod84g",
+      "Position": { "x": -4, "y": 0, "z": -2 },
+      "Rotation": { "x": 0, "y": 90, "z": 0 },
+      "Scale": { "x": 0.005, "y": 0.005, "z": 0.005 },
+      "Model": { "url": "/car" },
+      "name": "Car"
+    },
+
+    { "id": "entity-1768646875020-30b0thcoo",
+      "Position": { "x": -4.5, "y": 0, "z": 2 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    { "id": "entity-1768646875021-8lc0nomm0",
+      "Position": { "x": -4.5, "y": 0, "z": 5 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    { "id": "entity-1768646875023-03givyw0d",
+      "Position": { "x": 4.5, "y": 0, "z": 0 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    { "id": "entity-1768646875024-498t13080",
+      "Position": { "x": 4.5, "y": 0, "z": 3 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    { "id": "entity-1768646875025-ufntij9g2",
+      "Position": { "x": 0, "y": 0, "z": -2 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    { "id": "entity-1768646875033-ynpydflyv",
+      "Position": { "x": 8.10174, "y": -0.01945, "z": 8.53557 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.005, "y": 0.005, "z": 0.005 },
+      "Model": { "url": "/tree" },
+      "name": "Tree"
+    },
+
+    { "id": "entity-1768656891047-fssnvhrvp",
+      "Position": { "x": 5, "y": 0, "z": 5 },
+      "Rotation": { "x": 0, "y": 0, "z": 0 },
+      "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+      "Model": { "url": "/pole" },
+      "name": "Pole"
+    },
+    {
+      "id": "entity-car-new",
+      "Position": { "x": 6.2, "y": 0, "z": -3.5 },
+      "Rotation": { "x": 0, "y": -35, "z": 0 },
+      "Scale": { "x": 0.005, "y": 0.005, "z": 0.005 },
+      "Model": { "url": "/car" },
+      "name": "Car"
+    },
+
+    {
+      "id": "entity-tree-new-1",
+      "Position": { "x": -6, "y": 0, "z": 7 },
+      "Rotation": { "x": 0, "y": 25, "z": 0 },
+      "Scale": { "x": 0.0045, "y": 0.0045, "z": 0.0045 },
+      "Model": { "url": "/tree" },
+      "name": "Tree"
+    },
+
+    {
+      "id": "entity-tree-new-2",
+      "Position": { "x": 2.5, "y": 0, "z": 6 },
+      "Rotation": { "x": 0, "y": -20, "z": 0 },
+      "Scale": { "x": 0.006, "y": 0.006, "z": 0.006 },
+      "Model": { "url": "/tree" },
+      "name": "Tree"
+    },
+
+    {
+      "id": "entity-pole-new",
+      "Position": { "x": -5.2, "y": 0, "z": 3.8 },
+      "Rotation": { "x": 0, "y": 15, "z": 0 },
+      "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+      "Model": { "url": "/pole" },
+      "name": "Pole"
+    },
+
+    {
+      "id": "entity-garbage-new-1",
+      "Position": { "x": -3.5, "y": 0.302, "z": 6.2 },
+      "Rotation": { "x": 0, "y": 30, "z": 0 },
+      "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+      "Model": { "url": "/garbage" },
+      "name": "Garbage"
+    },
+
+    {
+      "id": "entity-garbage-new-2",
+      "Position": { "x": 1.8, "y": 0.302, "z": -4.1 },
+      "Rotation": { "x": 0, "y": -25, "z": 0 },
+      "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+      "Model": { "url": "/garbage" },
+      "name": "Garbage"
+    },
+
+    {
+      "id": "entity-plotted-new",
+      "Position": { "x": 2, "y": 0, "z": 1.5 },
+      "Rotation": { "x": 0, "y": 18, "z": 0 },
+      "Scale": { "x": 0.45, "y": 0.45, "z": 0.45 },
+      "Model": { "url": "/plottedPlant" },
+      "name": "PlottedPlant"
+    },
+
+    {
+  "id": "entity-car-new-2",
+  "Position": { "x": -1.5, "y": 0, "z": -6.5 },
+  "Rotation": { "x": 0, "y": 140, "z": 0 },
+  "Scale": { "x": 0.005, "y": 0.005, "z": 0.005 },
+  "Model": { "url": "/car" },
+  "name": "Car"
+},
+{
+  "id": "entity-car-new-3",
+  "Position": { "x": 1.5, "y": 0, "z": 7.8 },
+  "Rotation": { "x": 0, "y": -110, "z": 0 },
+  "Scale": { "x": 0.005, "y": 0.005, "z": 0.005 },
+  "Model": { "url": "/car" },
+  "name": "Car"
+},
+
+{
+  "id": "entity-tree-small-1",
+  "Position": { "x": -3.8, "y": 0, "z": -5.5 },
+  "Rotation": { "x": 0, "y": 20, "z": 0 },
+  "Scale": { "x": 0.0035, "y": 0.0035, "z": 0.0035 },
+  "Model": { "url": "/tree" },
+  "name": "Tree"
+},
+{
+  "id": "entity-tree-small-2",
+  "Position": { "x": 2.2, "y": 0, "z": -6.2 },
+  "Rotation": { "x": 0, "y": -35, "z": 0 },
+  "Scale": { "x": 0.003, "y": 0.003, "z": 0.003 },
+  "Model": { "url": "/tree" },
+  "name": "Tree"
+},
+
+{
+  "id": "entity-garbage-new-3",
+  "Position": { "x": -5.8, "y": 0.302, "z": -2.8 },
+  "Rotation": { "x": 0, "y": 45, "z": 0 },
+  "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+  "Model": { "url": "/garbage" },
+  "name": "Garbage"
+},
+{
+  "id": "entity-garbage-new-4",
+  "Position": { "x": 3.5, "y": 0.302, "z": -1.2 },
+  "Rotation": { "x": 0, "y": -40, "z": 0 },
+  "Scale": { "x": 0.001, "y": 0.001, "z": 0.001 },
+  "Model": { "url": "/garbage" },
+  "name": "Garbage"
+}
+
+  ]
+}
