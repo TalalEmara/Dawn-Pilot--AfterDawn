@@ -8,7 +8,7 @@ const YOLO_CLASS_MAPPING = {
     "2": "Plotted Plant",
     "3": "Pole",
     "4": "Garbage",
-    "5": "Bus station",
+    "5": "Bus Stop",
     "6": "Car",
     "7": "Tree"
 };
