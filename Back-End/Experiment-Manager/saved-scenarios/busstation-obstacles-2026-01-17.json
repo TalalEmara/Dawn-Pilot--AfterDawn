@@ -1,0 +1,350 @@
+{
+  "name": "BusStation&obstacles",
+  "description": "cars, trees, bus station and random staff",
+  "createdAt": "2026-01-17T17:47:03.429Z",
+  "entityCount": 15,
+  "camera": {
+    "position": {
+      "x": 1.90517131087079,
+      "y": 2,
+      "z": -6.311576598646483
+    },
+    "rotation": {
+      "x": -17.990874767107844,
+      "y": 363.0260589948894,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1768671809602-kinzy651c",
+      "Position": {
+        "x": -2.19067,
+        "y": 0,
+        "z": -4.50468
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768671809614-sj6alytej",
+      "Position": {
+        "x": 3.84624,
+        "y": 0,
+        "z": 1.2966
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.05,
+        "y": 0.05,
+        "z": 0.05
+      },
+      "Model": {
+        "url": "/busStop"
+      },
+      "name": "BusStop"
+    },
+    {
+      "id": "entity-1768671809618-xgg1bc999",
+      "Position": {
+        "x": 4.01555,
+        "y": 0.18542,
+        "z": 4.04157
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/garbage"
+      },
+      "name": "Garbage"
+    },
+    {
+      "id": "entity-1768671809619-3qkey5glf",
+      "Position": {
+        "x": -4.54754,
+        "y": 0,
+        "z": 3.96998
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671809621-0angrf9s3",
+      "Position": {
+        "x": -5.1846,
+        "y": 0,
+        "z": 1.79517
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/pole"
+      },
+      "name": "Pole"
+    },
+    {
+      "id": "entity-1768671809649-8wxp5hpv0",
+      "Position": {
+        "x": -4.54754,
+        "y": 0,
+        "z": -5.04789
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1768671809788-huykvvt5y",
+      "Position": {
+        "x": 1.7194,
+        "y": -0.12206,
+        "z": -9.33207
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.3,
+        "y": 0.3,
+        "z": 0.3
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1768671809856-9iufjsi9i",
+      "Position": {
+        "x": 0.97986,
+        "y": 0,
+        "z": 4.88281
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
+    },
+    {
+      "id": "entity-1768671809873-ji3gez0wy",
+      "Position": {
+        "x": 9.01678,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671809907-jdv8cd3oc",
+      "Position": {
+        "x": 8.31344,
+        "y": 0,
+        "z": 4.8781
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671809923-z9700ggdq",
+      "Position": {
+        "x": -2.96614,
+        "y": 0,
+        "z": -3.83695
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671809973-uqqqhmyml",
+      "Position": {
+        "x": 7.126,
+        "y": 0,
+        "z": -5.74273
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671809989-a2jd0gnal",
+      "Position": {
+        "x": -3.2706,
+        "y": 0,
+        "z": 0.43247
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768671810006-86s9fciuy",
+      "Position": {
+        "x": 2.93356,
+        "y": 0,
+        "z": -1.68122
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768671821150-u916lqbu6",
+      "Position": {
+        "x": -1.54385,
+        "y": 0,
+        "z": -9.27002
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
+    }
+  ]
+}

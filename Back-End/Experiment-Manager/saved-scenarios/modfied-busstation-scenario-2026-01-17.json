@@ -1,0 +1,371 @@
+{
+  "name": "Modfied busstation scenario",
+  "createdAt": "2026-01-17T17:54:00.743Z",
+  "entityCount": 16,
+  "camera": {
+    "position": {
+      "x": -0.6837229676171523,
+      "y": 2,
+      "z": 3.209618549121298
+    },
+    "rotation": {
+      "x": -9.167324722093168,
+      "y": 0.9167324722093745,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1768672210406-c48n515jm",
+      "Position": {
+        "x": -2.19067,
+        "y": 0,
+        "z": -4.50468
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768672210406-xk0zqn6gy",
+      "Position": {
+        "x": 3.84624,
+        "y": 0,
+        "z": 1.2966
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.05,
+        "y": 0.05,
+        "z": 0.05
+      },
+      "Model": {
+        "url": "/busStop"
+      },
+      "name": "BusStop"
+    },
+    {
+      "id": "entity-1768672210407-x4iuerxc9",
+      "Position": {
+        "x": 4.01555,
+        "y": 0.18542,
+        "z": 4.04157
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/garbage"
+      },
+      "name": "Garbage"
+    },
+    {
+      "id": "entity-1768672210407-0szed6nc3",
+      "Position": {
+        "x": -4.54754,
+        "y": 0,
+        "z": 3.96998
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-lv7fz2gk5",
+      "Position": {
+        "x": -5.1846,
+        "y": 0,
+        "z": 1.79517
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/pole"
+      },
+      "name": "Pole"
+    },
+    {
+      "id": "entity-1768672210407-ru16yz3xq",
+      "Position": {
+        "x": -4.54754,
+        "y": 0,
+        "z": -5.04789
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1768672210407-5o2secpjk",
+      "Position": {
+        "x": 1.7194,
+        "y": -0.12206,
+        "z": -9.33207
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.3,
+        "y": 0.3,
+        "z": 0.3
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1768672210407-n2gwdm9os",
+      "Position": {
+        "x": 0.97986,
+        "y": 0,
+        "z": 4.88281
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
+    },
+    {
+      "id": "entity-1768672210407-edl3yc943",
+      "Position": {
+        "x": 9.01678,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-idymnqfyi",
+      "Position": {
+        "x": 8.31344,
+        "y": 0,
+        "z": 4.8781
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-zkwok5bi0",
+      "Position": {
+        "x": -2.96614,
+        "y": 0,
+        "z": -3.83695
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-t95ayao9o",
+      "Position": {
+        "x": 7.126,
+        "y": 0,
+        "z": -5.74273
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-9t5eow92p",
+      "Position": {
+        "x": -3.2706,
+        "y": 0,
+        "z": 0.43247
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1768672210407-0wdm1k6k0",
+      "Position": {
+        "x": 2.93356,
+        "y": 0,
+        "z": -1.68122
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1768672210407-u3yerkqkn",
+      "Position": {
+        "x": -1.54385,
+        "y": 0,
+        "z": -9.27002
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
+    },
+    {
+      "id": "entity-1768672322348-8bhzkk164",
+      "Position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    }
+  ]
+}
