@@ -1,23 +1,23 @@
 {
   "name": "BusStation&obstacles",
-  "description": "Trees, Bus station, cars and random staff",
-  "createdAt": "2026-01-17T17:21:49.069Z",
-  "entityCount": 14,
+  "description": "cars, trees, bus station and random staff",
+  "createdAt": "2026-01-17T17:47:03.429Z",
+  "entityCount": 15,
   "camera": {
     "position": {
-      "x": 0.7335785657359597,
+      "x": 1.90517131087079,
       "y": 2,
-      "z": 8.233428367060528
+      "z": -6.311576598646483
     },
     "rotation": {
-      "x": -3.4377467707849494,
-      "y": -360.9634109324186,
+      "x": -17.990874767107844,
+      "y": 363.0260589948894,
       "z": 0
     }
   },
   "entities": [
     {
-      "id": "entity-1768667614882-mesh2fo67",
+      "id": "entity-1768671809602-kinzy651c",
       "Position": {
         "x": -2.19067,
         "y": 0,
@@ -39,7 +39,7 @@
       "name": "Car"
     },
     {
-      "id": "entity-1768667795831-c84lo2sag",
+      "id": "entity-1768671809614-sj6alytej",
       "Position": {
         "x": 3.84624,
         "y": 0,
@@ -61,7 +61,7 @@
       "name": "BusStop"
     },
     {
-      "id": "entity-1768667893046-45hu35dgv",
+      "id": "entity-1768671809618-xgg1bc999",
       "Position": {
         "x": 4.01555,
         "y": 0.18542,
@@ -83,7 +83,7 @@
       "name": "Garbage"
     },
     {
-      "id": "entity-1768668172171-lcqyvhsjp",
+      "id": "entity-1768671809619-3qkey5glf",
       "Position": {
         "x": -4.54754,
         "y": 0,
@@ -105,7 +105,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768668257398-kxqndyali",
+      "id": "entity-1768671809621-0angrf9s3",
       "Position": {
         "x": -5.1846,
         "y": 0,
@@ -127,7 +127,7 @@
       "name": "Pole"
     },
     {
-      "id": "entity-1768668576790-g42nlkfkz",
+      "id": "entity-1768671809649-8wxp5hpv0",
       "Position": {
         "x": -4.54754,
         "y": 0,
@@ -149,11 +149,11 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1768669013719-4ga42ysac",
+      "id": "entity-1768671809788-huykvvt5y",
       "Position": {
-        "x": 2.92998,
+        "x": 1.7194,
         "y": -0.12206,
-        "z": -7.16043
+        "z": -9.33207
       },
       "Rotation": {
         "x": 0,
@@ -171,7 +171,7 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1768669226126-ztog9y5s8",
+      "id": "entity-1768671809856-9iufjsi9i",
       "Position": {
         "x": 0.97986,
         "y": 0,
@@ -193,7 +193,7 @@
       "name": "TreeTrunk"
     },
     {
-      "id": "entity-1768669284201-ik07pxirq",
+      "id": "entity-1768671809873-ji3gez0wy",
       "Position": {
         "x": 9.01678,
         "y": 0,
@@ -215,7 +215,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768669298936-8hqskdouy",
+      "id": "entity-1768671809907-jdv8cd3oc",
       "Position": {
         "x": 8.31344,
         "y": 0,
@@ -237,7 +237,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768669302802-7gv241uxv",
+      "id": "entity-1768671809923-z9700ggdq",
       "Position": {
         "x": -2.96614,
         "y": 0,
@@ -259,7 +259,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768669305129-n24f5avy9",
+      "id": "entity-1768671809973-uqqqhmyml",
       "Position": {
         "x": 7.126,
         "y": 0,
@@ -281,7 +281,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768669306919-98rtlawae",
+      "id": "entity-1768671809989-a2jd0gnal",
       "Position": {
         "x": -3.2706,
         "y": 0,
@@ -303,7 +303,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1768669831747-rio0pnxdw",
+      "id": "entity-1768671810006-86s9fciuy",
       "Position": {
         "x": 2.93356,
         "y": 0,
@@ -323,6 +323,28 @@
         "url": "/car"
       },
       "name": "Car"
+    },
+    {
+      "id": "entity-1768671821150-u916lqbu6",
+      "Position": {
+        "x": -1.54385,
+        "y": 0,
+        "z": -9.27002
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "Model": {
+        "url": "/treeTrunk"
+      },
+      "name": "TreeTrunk"
     }
   ]
 }
