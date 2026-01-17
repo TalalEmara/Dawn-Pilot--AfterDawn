@@ -615,9 +615,7 @@ function ResearcherView() {
           >
             <Entity
               primitive="a-sky"
-              material={{ color: "#fff" }}
-              segments-width="50"
-              segments-height="50"
+              color="#87CEEB"
             />
             <Entity
               light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
