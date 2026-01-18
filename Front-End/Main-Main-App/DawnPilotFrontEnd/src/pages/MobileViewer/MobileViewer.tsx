@@ -10,6 +10,8 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
+const groundTexture = "https://cdn.aframe.io/a-painter/images/floor.jpg";
+
 // --- DEBUGGED CANVAS UPDATER ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
