@@ -118,7 +118,8 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Model: { url: "/tree" },
     },
     normalizeFactors: {
-      Scale: { x: 0.005, y: 0.005, z: 0.005 },
+      Position: { x: 0, y: 1, z: 0 },
+      Scale: { x: 0.01, y: 0.01, z: 0.01 },
     }
   },
   Pole: {
