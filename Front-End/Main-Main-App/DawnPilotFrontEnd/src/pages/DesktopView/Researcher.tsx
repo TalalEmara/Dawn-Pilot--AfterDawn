@@ -57,6 +57,8 @@ const getStageFromVisionMode = (mode: string): string => {
 };
 
 function ResearcherView() {
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCollidingRef = useRef(false);
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
   const cameraInitialized = useRef<boolean>(false);
@@ -227,14 +229,38 @@ const {
 
   const handleCollision = useCallback(
     (detail: { obstacleId: string; timestamp: number }) => {
+      // 1. If this is a new collision sequence, send DANGER
+      if (!isCollidingRef.current && socket) {
+        isCollidingRef.current = true;
+        socket.emit('alert:status', { status: 'DANGER' });
+        console.log("💥 Sending DANGER");
+      }
+
+      // 2. Reset the "Return to Safe" timer every time we get a hit
+      if (safetyTimerRef.current) {
+        clearTimeout(safetyTimerRef.current);
+      }
+
+      // 3. If no new hits happen for 500ms, assume we are SAFE
+      safetyTimerRef.current = setTimeout(() => {
+        if (socket) {
+          console.log("✅ Sending SAFE");
+          socket.emit('alert:status', { status: 'SAFE' });
+        }
+        isCollidingRef.current = false;
+        safetyTimerRef.current = null;
+      }, 500); // 500ms cooldown
+      
       const timestamp = new Date().toLocaleTimeString();
       const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
       console.warn(`💥 ${logMsg}`);
       setCollisionCount((prev) => prev + 1);
       setCollisionLog((prev) => [logMsg, ...prev].slice(0, 10));
       vault.logCollision(detail.obstacleId);
+
+      vault.logCollision(detail.obstacleId);
     },
-    [vault]
+    [socket, vault]
   );
 
   useCollisionDetection(hitboxRef, handleCollision);

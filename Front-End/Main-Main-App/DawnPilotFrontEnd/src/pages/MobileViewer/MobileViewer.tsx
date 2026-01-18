@@ -6,12 +6,9 @@ import { Entity } from "aframe-react";
 import { useEffect, useRef, useState } from "react";
 import { useScenarioWorld } from "../../hooks/useScenarioWorld";
 import { useComponentManager } from "../../hooks/useComponentManager";
-import { getFolderHandle } from "../../hooks/useFrameBuffer";
 import { useCameraSync } from "../../hooks/useCameraSync";
-import carImg from "../../assets/frame_159_234589.png.png";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
-import { SERVER_IP } from "../../ApiConfig";
 
 // --- DEBUGGED CANVAS UPDATER ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
@@ -19,53 +16,23 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
     schema: { src: { type: "selector" } },
 
     init: function () {
-      console.log("🛠️ [Updater] Init called");
-      
       const canvas = this.data.src;
-      if (!canvas) {
-        console.error("❌ [Updater] Canvas element not found!");
-        return;
-      }
-      console.log("✅ [Updater] Found canvas:", canvas.id, canvas.width, canvas.height);
+      if (!canvas) return;
 
-      // Create Texture
-      try {
-        this.texture = new AFRAME.THREE.CanvasTexture(canvas);
-        console.log("✅ [Updater] Texture created:", this.texture);
-      } catch (e) {
-        console.error("❌ [Updater] Failed to create texture:", e);
-      }
-
-      // Check Mesh
+      this.texture = new AFRAME.THREE.CanvasTexture(canvas);
       const mesh = this.el.getObject3D("mesh");
-      if (!mesh) {
-        console.warn("⚠️ [Updater] No mesh found on entity yet. Waiting for load...");
-        this.el.addEventListener("model-loaded", () => {
-          console.log("🛠️ [Updater] Model loaded, retrying init...");
-          this.init();
-        });
-        return;
-      }
+      if (!mesh) return;
 
-      console.log("✅ [Updater] Mesh found, applying material...");
-      
-      // Apply Material
-      try {
-        mesh.material = new AFRAME.THREE.MeshBasicMaterial({
-          map: this.texture,
-          transparent: true,
-          side: AFRAME.THREE.DoubleSide,
-        });
-        mesh.material.map.needsUpdate = true;
-        console.log("✅ [Updater] Material applied successfully.");
-      } catch (e) {
-        console.error("❌ [Updater] Failed to apply material:", e);
-      }
+      mesh.material = new AFRAME.THREE.MeshBasicMaterial({
+        map: this.texture,
+        transparent: true,
+        side: AFRAME.THREE.DoubleSide,
+      });
+      mesh.material.map.needsUpdate = true;
     },
 
     tick: function () {
       const canvas = this.data.src;
-      // useBinarySystem writes to this attribute when it draws
       if (this.texture && canvas.getAttribute('data-updated') !== this.lastUpdated) {
         this.texture.needsUpdate = true;
         this.lastUpdated = canvas.getAttribute('data-updated');
@@ -78,6 +45,14 @@ function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
   
+  // UI State
+  const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
+
+  // --- LOGIC REFS (For Socket Listener) ---
+  const alertStartTime = useRef<number>(0);       // When did the alert first appear?
+  const isAlertVisible = useRef<boolean>(false);  // Track visibility without waiting for React state update
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null); // Reference to the "Safe" timer
+
   // Position Sync State
   const hasReceivedPosition = useRef(false);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
@@ -86,7 +61,7 @@ function MobileView() {
   const { clearAllTimers } = useComponentManager();
 
   // 1. SYNC CONNECTION
-  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera } = useCameraSync({
+  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera, socket } = useCameraSync({
     clientType: "mobile",
     throttleMs: 16,
   });
@@ -98,25 +73,79 @@ function MobileView() {
     isConnected: isAiConnected 
   } = useAiStream();
 
-  // Debug Hook status
-  useEffect(() => {
-    console.log("📊 [MobileView] AI Stream Status:", {
-      connected: isAiConnected,
-      socketReady: aiWebSocket?.readyState,
-      canvasRef: hudCanvasRef.current ? "Attached" : "Missing"
-    });
-  }, [isAiConnected, aiWebSocket, hudCanvasRef]);
+  // 3. FOV & BLINDER CALCULATIONS
+  const depth = 0.1; 
+  const fovWidth = 17; 
+  const fovHeight = 17; 
+  const degToRad = (deg: number) => (deg * Math.PI) / 180;
+  const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
+  const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
 
-  // 3. SEND ROTATION
+  // --- SOCKET LISTENER WITH MINIMUM DURATION LOGIC ---
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAlert = (data: { status: 'DANGER' | 'SAFE' }) => {
+      // DANGER SIGNAL RECEIVED
+      if (data.status === 'DANGER') {
+        
+        // If we were previously SAFE, mark the start time
+        if (!isAlertVisible.current) {
+           isAlertVisible.current = true;
+           alertStartTime.current = Date.now();
+           setAlertStatus('DANGER');
+        }
+
+        // If a "Hide Timer" was pending (e.g. we momentarily went SAFE),
+        // cancel it immediately because we are back in danger.
+        if (hideTimerRef.current) {
+          clearTimeout(hideTimerRef.current);
+          hideTimerRef.current = null;
+        }
+      } 
+      
+      // SAFE SIGNAL RECEIVED
+      else { 
+        // Only hide if we are currently showing an alert
+        if (isAlertVisible.current) {
+           const MIN_DURATION = 2000; // 2 Seconds
+           const elapsed = Date.now() - alertStartTime.current;
+
+           if (elapsed < MIN_DURATION) {
+             // If 2 seconds haven't passed yet, wait for the remaining time
+             if (!hideTimerRef.current) {
+                const remaining = MIN_DURATION - elapsed;
+                hideTimerRef.current = setTimeout(() => {
+                  setAlertStatus('SAFE');
+                  isAlertVisible.current = false;
+                  hideTimerRef.current = null;
+                }, remaining);
+             }
+           } else {
+             // If 2 seconds have passed, hide immediately
+             setAlertStatus('SAFE');
+             isAlertVisible.current = false;
+           }
+        }
+      }
+    };
+
+    socket.on('alert:status', handleAlert);
+
+    return () => {
+      socket.off('alert:status', handleAlert);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [socket]);
+
+  // Broadcast Loop
   useEffect(() => {
     const broadcastLoop = () => {
       if (cameraRef.current && isSyncConnected) {
         const camEl = cameraRef.current.el;
         const rigEl = rigRef.current?.el;
-
         const rot = camEl.getAttribute("rotation");
         const pos = rigEl ? rigEl.getAttribute("position") : { x: 0, y: 0, z: 0 };
-
         if (rot) {
           updateCamera({
             position: { x: pos.x, y: pos.y, z: pos.z },
@@ -135,7 +164,6 @@ function MobileView() {
     loadWorld()
       .then(() => console.log("🌍 [MobileView] World loaded"))
       .catch((err) => console.error("❌ [MobileView] Failed to load world:", err));
-
     return () => clearAllTimers();
   }, [loadWorld, clearAllTimers]);
 
@@ -165,18 +193,16 @@ function MobileView() {
       setCameraPosition(newPos);
     });
   }, [setOnCameraUpdate]);
-// Add this inside MobileView function
-useEffect(() => {
-  if (!aiWebSocket || aiWebSocket.readyState !== WebSocket.OPEN) return;
 
-  // Send a ping every second to keep the connection "Active" on the server
-  const timer = setInterval(() => {
-    console.log("💓 Sending heartbeat...");
-    aiWebSocket.send(JSON.stringify({ type: "ping" })); 
-  }, 1000);
+  // Keep-alive Heartbeat
+  useEffect(() => {
+    if (!aiWebSocket || aiWebSocket.readyState !== WebSocket.OPEN) return;
+    const timer = setInterval(() => {
+      aiWebSocket.send(JSON.stringify({ type: "ping" })); 
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [aiWebSocket]);
 
-  return () => clearInterval(timer);
-}, [aiWebSocket]);
   return (
     <div style={{ background: "black", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <style>{`
@@ -190,13 +216,12 @@ useEffect(() => {
         background: "rgba(0,0,0,0.5)", color: "white", padding: "8px 16px",
         borderRadius: "4px", fontSize: "12px", fontFamily: "monospace", textAlign: "right"
       }}>
-        {/* HIDDEN CANVAS - CRITICAL FOR TEXTURE */}
         <canvas
           ref={hudCanvasRef}
           id="hud-buffer"
           width="640"
           height="360"
-          style={{ display: "none" }} // Must exist in DOM even if hidden
+          style={{ display: "none" }}
         />
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
         <div>AI (Recv): {isAiConnected ? "🟢" : "🔴"}</div>
@@ -210,24 +235,9 @@ useEffect(() => {
         📱 Mobile Viewer
       </div>
 
-      <button
-        style={{
-          position: "absolute", bottom: 10, right: 10, zIndex: 1000,
-          padding: "8px 16px", borderRadius: 4, border: "none", cursor: "pointer",
-          background: "#FF9800", color: "#fff", fontSize: "12px", fontFamily: "monospace",
-        }}
-        onClick={async () => {
-          try { await getFolderHandle(); } 
-          catch (err) { console.error("Failed to select folder", err); }
-        }}
-      >
-        Select Folder
-      </button>
-
-      {/* --- INTEGRATED WORLD RENDERER --- */}
       <WorldScene entities={world.entities} isMobile={true}>
         
-        {/* 1. Environment Overrides (Sky, Lights, Ground) */}
+        {/* Environment Overrides */}
         <Entity primitive="a-sky" color="#87CEEB" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
         <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
@@ -237,10 +247,9 @@ useEffect(() => {
           rotation="-90 0 0"
           width="1000"
           height="1000"
-          color="#000000"
+          material={{ src: groundTexture, repeat: "20 20" }}
         />
 
-        {/* 2. Mobile Player Rig */}
         <Entity
           ref={rigRef}
           animation__follow={{
@@ -256,14 +265,67 @@ useEffect(() => {
             primitive="a-camera"
             look-controls="enabled: true; touchEnabled: true;"
           >
-            {/* 3. HUD Plane - The component logic ensures manual material creation */}
+            {/* 1. THE BLINDER */}
+           
+{/* <Entity
+              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
+              position={`0 ${(5 + hudHeight) / 4} -${depth + 0.01}`}
+              material="color: black; shader: flat; transparent: false;"
+            />
+            <Entity
+              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
+              position={`0 -${(5 + hudHeight) / 4} -${depth + 0.01}`}
+              material="color: black; shader: flat; transparent: false;"
+            />
+            <Entity
+              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
+              position={`-${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
+              material="color: black; shader: flat; transparent: false;"
+            />
+            <Entity
+              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
+              position={`${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
+              material="color: black; shader: flat; transparent: false;"
+            /> */}
+            
+             {/* <Entity
+              geometry="primitive: plane; width: 5; height: 5"
+              position={`0 0 -${depth + 0.01}`} 
+              material="color: black; shader: flat; transparent: false;"
+            />
             <Entity
               className="hud-ignore"
-              geometry="primitive: plane; width: 2; height: 1"
-              position="0 0 -1.5"
+              geometry={{
+                primitive: "plane",
+                width: hudWidth,
+                height: hudHeight
+              }}
+              position={`0 0 -${depth}`}
               canvas-updater="src: #hud-buffer"
-              // IMPORTANT: No 'material' prop here to avoid A-Frame overriding our custom material
-            />
+            /> */}
+
+            {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
+            {alertStatus === 'DANGER' && (
+                <Entity position="0 0 -0.09">
+                   {/* Red Background */}
+                   <Entity 
+                     geometry={{ primitive: "plane", width: 0.15, height: 0.06 }}
+                     material={{ color: "#770000", opacity: 0.9, transparent: true }}
+                   />
+                   
+                   {/* Warning Text */}
+                   <Entity 
+                     text={{ 
+                       value: "⚠️ TURN BACK ⚠️\nUNSAFE AREA", 
+                       align: "center", 
+                       color: "#FFF", 
+                       width: 0.14,
+                       wrapCount: 15
+                     }}
+                     position="0 0 0.001"
+                   />
+                </Entity>
+             )}
           </Entity>
         </Entity>
 
