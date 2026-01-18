@@ -120,7 +120,8 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
  
     },
     normalizeFactors: {
-      Scale: { x: 0.005, y: 0.005, z: 0.005 },
+      Position: { x: 0, y: 1, z: 0 },
+      Scale: { x: 0.01, y: 0.01, z: 0.01 },
     }
   },
   Pole: {
@@ -185,7 +186,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
     },
     normalizeFactors: {
       Position: { x: 0, y: .302, z: 0 },
-      Scale: { x: 0.001, y: 0.001, z: 0.001 },
+      Scale: { x: 0.006, y: 0.006, z: 0.006 },
     }
   },
   BusStop: {
