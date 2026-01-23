@@ -170,7 +170,7 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1768691001206-r1b9y4ux6",
+      "id": "entity-1768676064282-uqv0rfrjr",
       "Position": {
         "x": 9.01678,
         "y": 0,
@@ -302,7 +302,7 @@
       "name": "Car"
     },
     {
-      "id": "entity-1768691001375-ozhaq58ot",
+      "id": "entity-1768676064492-tcymn9y84",
       "Position": {
         "x": -4.05812,
         "y": 0,
@@ -322,72 +322,6 @@
         "url": "/car"
       },
       "name": "Car"
-    },
-    {
-      "id": "entity-1768691082633-nzz9oehi9",
-      "Position": {
-        "x": -1.38893,
-        "y": 0,
-        "z": -7.84135
-      },
-      "Rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "Scale": {
-        "x": 0.3,
-        "y": 0.3,
-        "z": 0.3
-      },
-      "Model": {
-        "url": "/plottedPlant"
-      },
-      "name": "PlottedPlant"
-    },
-    {
-      "id": "entity-1768691424196-bium220f3",
-      "Position": {
-        "x": 1.0012,
-        "y": 0,
-        "z": 6.23013
-      },
-      "Rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "Scale": {
-        "x": 0.3,
-        "y": 0.3,
-        "z": 0.3
-      },
-      "Model": {
-        "url": "/plottedPlant"
-      },
-      "name": "PlottedPlant"
-    },
-    {
-      "id": "entity-1768691503500-nakffjzj1",
-      "Position": {
-        "x": -0.79195,
-        "y": 0,
-        "z": 1.79774
-      },
-      "Rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "Scale": {
-        "x": 0.3,
-        "y": 0.3,
-        "z": 0.3
-      },
-      "Model": {
-        "url": "/plottedPlant"
-      },
-      "name": "PlottedPlant"
     }
   ]
 }

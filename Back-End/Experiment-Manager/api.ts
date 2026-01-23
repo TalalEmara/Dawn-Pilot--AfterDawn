@@ -56,7 +56,11 @@ io.on('connection', (socket) => {
     connectedClients.set(socket.id, { id: socket.id, type: data.type });
     socket.emit('clients:list', Array.from(connectedClients.values()));
   });
-
+  socket.on('alert:status', (data: { status: 'DANGER' | 'SAFE' }) => {
+    // Broadcast to everyone EXCEPT the sender (Researcher)
+    socket.broadcast.emit('alert:status', data);
+    console.log(`🚨 Alert Status Broadcast: ${data.status}`);
+  });
   socket.on('camera:update', (data: {
     position: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number };
