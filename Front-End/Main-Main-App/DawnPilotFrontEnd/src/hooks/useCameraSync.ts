@@ -31,13 +31,10 @@ export function useCameraSync(options: UseCameraSyncOptions) {
   const lastUpdateRef = useRef<number>(0);
 
   useEffect(() => {
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
+    const socket = io(URLS.SYNC_SOCKET, {
+      path: '/socket.io/', // Vite detects this path and proxies it
+      transports: ['websocket'], // Force WebSocket to avoid polling issues
       reconnectionAttempts: 10,
-      timeout: 10000,
-      autoConnect: true
     });
 
     socketRef.current = socket;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useBinaryStream } from './useBinarySystem';
-import { SERVER_IP } from '../ApiConfig';
+import { SERVER_IP, URLS } from '../ApiConfig';
 
 interface UseAiStreamOptions {
   /** * Optional dependency to force reconnection when changed.
@@ -22,7 +22,8 @@ export const useAiStream = ({
 
   useEffect(() => {
     // 1. Establish Connection
-    const ws = new WebSocket(`ws://${SERVER_IP}:8000/ws/${endpoint}`);
+    const wsUrl = `${URLS.AI_STREAM}/ws/navigation-phosphene`;
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log(`🟢 [AI Stream] Connected to ${endpoint}`);

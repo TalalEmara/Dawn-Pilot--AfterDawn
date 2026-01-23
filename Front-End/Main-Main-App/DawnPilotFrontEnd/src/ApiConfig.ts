@@ -1,15 +1,31 @@
+// src/ApiConfig.ts
 
-// Dynamically get the IP from the browser's address bar
-// This works for localhost AND for mobile devices on the network
-const ip = window.location.hostname;
+// 1. Get current URL details
+const protocol = window.location.protocol; // e.g. 'https:'
+const hostname = window.location.hostname; // e.g. '192.168.1.5'
+const port = window.location.port ? `:${window.location.port}` : "";
 
-export const SERVER_IP = ip;
+// 2. Determine WebSocket protocol (wss if https, ws if http)
+const isSecure = protocol === 'https:';
+const wsProtocol = isSecure ? 'wss:' : 'ws:';
+
+export const SERVER_IP = hostname;
+export const IS_LOCALHOST = hostname === "localhost" || hostname === "127.0.0.1";
+
+// 3. Helper for generic URLs
+export const getClientUrl = (path: string) => {
+  return `${protocol}//${hostname}${port}${path}`;
+};
 
 export const URLS = {
-  // Backend 1: Camera Sync & World Data (Flask/Node)
-  SYNC_SOCKET: `http://${SERVER_IP}:5000`,
-  SCENARIO_API: `http://${SERVER_IP}:5000/scenario`,
+  // Sync Socket: Connect to the SAME address as the website (Port 5173)
+  // Vite will see the request and proxy it to Port 5000
+  SYNC_SOCKET: `${protocol}//${hostname}${port}`, 
+
+  // Scenario API: Relative path, handled by Vite Proxy
+  SCENARIO_API: `/scenario`,
   
-  // Backend 2: Phosphene AI Stream (FastAPI)
-  AI_STREAM: `http://${SERVER_IP}:8000`
+  // AI Stream: Connect to the SAME address as the website (Port 5173)
+  // Vite will proxy "/ws" to Port 8000
+  AI_STREAM: `${wsProtocol}//${hostname}${port}`
 };

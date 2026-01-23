@@ -1,11 +1,34 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    basicSsl()
+  ],
   server: {
-    host: '0.0.0.0',
+    host: true,
     port: 5173,
+    // ⬇️ THE MAGIC BRIDGE (PROXY) ⬇️
+    proxy: {
+      // 1. Forward Socket.io traffic to Flask (Port 5000)
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
+        changeOrigin: true
+      },
+      // 2. Forward Scenario API requests to Flask (Port 5000)
+      '/scenario': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      },
+      // 3. Forward AI Stream traffic to FastAPI (Port 8000)
+      '/ws': {
+        target: 'http://localhost:8000',
+        ws: true,
+        changeOrigin: true
+      }
+    }
   }
 })
