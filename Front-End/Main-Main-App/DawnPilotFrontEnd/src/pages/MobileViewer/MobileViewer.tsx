@@ -10,8 +10,6 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
-const groundTexture = "https://cdn.aframe.io/a-painter/images/floor.jpg";
-
 // --- DEBUGGED CANVAS UPDATER ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
@@ -46,7 +44,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
-  
+  const [reloadTrigger, setReloadTrigger] = useState(0);  
   // UI State
   const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
 
@@ -163,11 +161,23 @@ function MobileView() {
 
   // Load world logic
   useEffect(() => {
+    if (!socket) return;
+    
+    const handleReload = () => {
+      console.log("🔄 Command received! Reloading world...");
+      // "Poke" the trigger
+      setReloadTrigger(prev => prev + 1);
+    };
+
+    socket.on("scenario-loaded", handleReload);
+    return () => socket.off("scenario-loaded", handleReload);
+  }, [socket]);
+  useEffect(() => {
     loadWorld()
       .then(() => console.log("🌍 [MobileView] World loaded"))
       .catch((err) => console.error("❌ [MobileView] Failed to load world:", err));
     return () => clearAllTimers();
-  }, [loadWorld, clearAllTimers]);
+  }, [loadWorld, clearAllTimers, reloadTrigger]);
 
   // Sync Rig Position logic
   useEffect(() => {
@@ -249,7 +259,7 @@ function MobileView() {
           rotation="-90 0 0"
           width="1000"
           height="1000"
-          material={{ src: groundTexture, repeat: "20 20" }}
+          color="#484848"
         />
 
         <Entity
@@ -269,7 +279,7 @@ function MobileView() {
           >
             {/* 1. THE BLINDER */}
            
-{/* <Entity
+<Entity
               geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
               position={`0 ${(5 + hudHeight) / 4} -${depth + 0.01}`}
               material="color: black; shader: flat; transparent: false;"
@@ -288,7 +298,7 @@ function MobileView() {
               geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
               position={`${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
               material="color: black; shader: flat; transparent: false;"
-            /> */}
+            />
             
              {/* <Entity
               geometry="primitive: plane; width: 5; height: 5"

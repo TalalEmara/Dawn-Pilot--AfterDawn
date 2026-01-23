@@ -98,6 +98,13 @@ io.on('connection', (socket) => {
       experimentVault.logEvent('COLLISION', data);
     }
   });
+
+
+  socket.on('scenario-loaded', (data: { filename: string }) => {
+    console.log(`🔄 Relay: Scenario Loaded -> ${data.filename}`);
+    // Broadcast to everyone else (Mobile)
+    socket.broadcast.emit('scenario-loaded', data); 
+  });
 });
 
 // ========== REST endpoints ==========
