@@ -1,8 +1,9 @@
 
+// Dynamically get the IP from the browser's address bar
+// This works for localhost AND for mobile devices on the network
+const ip = window.location.hostname;
 
-// 1. Run 'ipconfig' (Windows) or 'ifconfig' (Mac/Linux) to find your PC's IP.
-// 2. Paste it here.
-export const SERVER_IP = "192.168.56.1"; //192.168.100.8 
+export const SERVER_IP = ip;
 
 export const URLS = {
   // Backend 1: Camera Sync & World Data (Flask/Node)
