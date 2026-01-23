@@ -5,6 +5,7 @@ import BuilderPage from './pages/BuilderPage/BuilderPage'
 import DesktopViewer from './pages/DesktopView/DesktopView'
 import MobileViewer from './pages/MobileViewer/MobileViewer'
 import ResearcherView from './pages/DesktopView/Researcher'
+import ConnectPage from './pages/ConnectPage/ConnectPage'
 
 function App() {
   return (
@@ -14,6 +15,8 @@ function App() {
       <Route path="/mobile" element={<MobileViewer />} />
       <Route path="/builder" element={<BuilderPage />} />
       <Route path="/" element={<MobileViewer />} />
+
+      <Route path="/connect" element={<ConnectPage />} />
     </Routes>
   )
 }
