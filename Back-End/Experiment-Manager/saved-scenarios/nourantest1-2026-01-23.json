@@ -1,0 +1,239 @@
+{
+  "name": "NouranTest1",
+  "createdAt": "2026-01-23T21:18:00.898Z",
+  "entityCount": 10,
+  "camera": {
+    "position": {
+      "x": -0.769062694140434,
+      "y": 2,
+      "z": 11.018452731975376
+    },
+    "rotation": {
+      "x": -4.58366236104658,
+      "y": 356.60893168942425,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1769202614370-xl253hlao",
+      "Position": {
+        "x": 2.30611,
+        "y": 0,
+        "z": -1.19054
+      },
+      "Rotation": {
+        "x": 0.01,
+        "y": 270,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.05,
+        "y": 0.05,
+        "z": 0.05
+      },
+      "Model": {
+        "url": "/busStop"
+      },
+      "name": "BusStop"
+    },
+    {
+      "id": "entity-1769202710205-3hfex3j8p",
+      "Position": {
+        "x": -4.00456,
+        "y": 0,
+        "z": 2.26898
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 180,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769202766961-twlipxzzx",
+      "Position": {
+        "x": -7.6834,
+        "y": 1,
+        "z": -8.98037
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769202768579-g36955i6m",
+      "Position": {
+        "x": 1.56385,
+        "y": 1,
+        "z": -6.27925
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769202770978-llftusc9j",
+      "Position": {
+        "x": 6.38657,
+        "y": 1,
+        "z": -9.44571
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769202773015-y84yvby1y",
+      "Position": {
+        "x": -3.07111,
+        "y": 1,
+        "z": -10.82843
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769202847084-y45dqn4a4",
+      "Position": {
+        "x": 9.93796,
+        "y": 0,
+        "z": -3.96085
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769202855096-l6hv2wi80",
+      "Position": {
+        "x": -5.07507,
+        "y": 0,
+        "z": -1.94665
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769202857425-efv53qahs",
+      "Position": {
+        "x": 4.95237,
+        "y": 0,
+        "z": 2.26357
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769202859023-ca243mf0h",
+      "Position": {
+        "x": -8.30001,
+        "y": 0,
+        "z": 4.12509
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    }
+  ]
+}
