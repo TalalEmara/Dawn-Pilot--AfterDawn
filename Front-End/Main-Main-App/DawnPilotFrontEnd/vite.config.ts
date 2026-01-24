@@ -28,6 +28,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         ws: true,
         changeOrigin: true
+      },
+      '/api/configure_new': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
       }
     }
   }

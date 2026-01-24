@@ -2,7 +2,7 @@ import "aframe";
 import "../../AFrameComponents/VRMovementControls";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
-import { Entity, Scene } from "aframe-react";
+import { Entity } from "aframe-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useScenarioWorld } from "../../hooks/useScenarioWorld";
 import { useCameraSync } from "../../hooks/useCameraSync";
@@ -12,12 +12,12 @@ import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import { useExperimentVault } from "../../hooks/Recording/useExperimentVault";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
 import Minimap from "../../components/level-0/MiniMap/MiniMap";
-import { useBinaryStream } from "../../hooks/useBinarySystem";
 import { SERVER_IP } from "../../ApiConfig";
 import groundTexture from "../../assets/ground/ground.jpg";
 import datasetTest from "../../assets/testing/dataset.png";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 import { useAiStream } from "../../hooks/useAiStream";
+import { useKMax } from "../../hooks/useKmax";
 
 // Helper to format milliseconds into MM:SS
 const formatTime = (ms: number) => {
@@ -83,7 +83,7 @@ const {
 } = useAiStream({ 
   reconnectDependency: visionMode 
 });
-
+const { configureKMax, loading: kMaxLoading } = useKMax();
   // 1. Get socket from CameraSync
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
     useCameraSync({
@@ -111,7 +111,7 @@ const {
   // --- Frame Capture & Sending ---
   useFrameBuffer({
     downsamplePercentage: 50,
-    enabled: true && aiWebSocket?.readyState === WebSocket.OPEN,
+    enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
     logInterval: 2000,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
@@ -250,7 +250,7 @@ const {
         isCollidingRef.current = false;
         safetyTimerRef.current = null;
       }, 500); // 500ms cooldown
-      
+
       const timestamp = new Date().toLocaleTimeString();
       const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
       console.warn(`💥 ${logMsg}`);
@@ -338,24 +338,13 @@ const {
   };
 
   // Handle k_max configuration
-  const handleConfigureKMax = async (k: number) => {
-    try {
-      const response = await fetch(`http://${SERVER_IP}:8000/api/configure_new`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ k_max: k }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to configure k_max: ${response.statusText}`);
+  const handleConfigureKMax = (k: number) => {
+    configureKMax(k, {
+      onSuccess: () => {
+        setKMaxValue(k);
+        console.log(`✅ k_max configured to ${k}`);
       }
-      
-      setKMaxValue(k);
-      console.log(`✅ k_max configured to ${k}`);
-    } catch (error) {
-      console.error("❌ Error configuring k_max:", error);
-      alert(`Error configuring k_max: ${error}`);
-    }
+    });
   };
 
   return (
@@ -762,11 +751,11 @@ const {
               primitive="a-plane"
               position="0 0 0"
               rotation="-90 0 0"
-              width="20"
-              height="20"
+              width="50"
+              height="100"
               material={{ src: groundTexture, repeat: "20 20" }}
               segments-width="50"
-              segments-height="50"
+              segments-height="100"
             />
             
             <Entity
