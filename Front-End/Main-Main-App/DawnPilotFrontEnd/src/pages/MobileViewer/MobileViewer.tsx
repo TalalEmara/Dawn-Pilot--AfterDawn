@@ -267,17 +267,7 @@ function MobileView() {
       <WorldScene entities={world.entities} isMobile={true}>
         
         {/* Environment Overrides */}
-        <Entity primitive="a-sky" color="#87CEEB" />
-        <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
-        <Entity
-          primitive="a-plane"
-          position="0 -1 -4"
-          rotation="-90 0 0"
-          width="1000"
-          height="1000"
-          color="#484848"
-        />
+      
 
         <Entity
           ref={rigRef}

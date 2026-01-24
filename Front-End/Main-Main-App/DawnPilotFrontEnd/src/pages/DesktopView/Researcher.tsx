@@ -12,7 +12,7 @@ import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import { useExperimentVault } from "../../hooks/Recording/useExperimentVault";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
 import { SERVER_IP } from "../../ApiConfig";
-import groundTexture from "../../assets/ground/ground.jpg";
+
 import datasetTest from "../../assets/testing/dataset.png";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 import { useAiStream } from "../../hooks/useAiStream";
@@ -396,34 +396,7 @@ useEffect(() => {
 
          <WorldScene entities={world.entities} isMobile={false}>
             {/* 1. Environment */}
-            <Entity
-              primitive="a-sky"
-              material={{ color: "#fff" }}
-              segments-width="50"
-              segments-height="50"
-            />
-            <Entity
-              light={{ type: "ambient", color: "#ffffff", intensity: 0.9 }}
-            />
-            <Entity
-              primitive="a-plane"
-              position="0 0 0"
-              rotation="-90 0 0"
-              width="50"
-              height="100"
-              material={{ src: groundTexture, repeat: "20 20" }}
-              segments-width="50"
-              segments-height="100"
-            />
-            
-            <Entity
-              primitive="a-light"
-              type="ambient"
-              color="#ffffff"
-              intensity="0"
-              distance="15"
-              position="0 4 2"
-            />
+           
 
             {/* 2. Researcher Camera Rig (Unique to this view) */}
             <Entity
