@@ -50,8 +50,8 @@ const getStageFromVisionMode = (mode: string): string => {
 function ResearcherView() {
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isCollidingRef = useRef(false);
-  const cameraRef = useRef<Element>(null);
-  const hitboxRef = useRef<Element>(null);
+  const cameraRef = useRef<any>(null);
+  const hitboxRef = useRef<any>(null);
   const cameraInitialized = useRef<boolean>(false);
 
   // --- Research / Experiment State ---
@@ -175,23 +175,31 @@ const {
 
 
 
-  // Master of Position
+ // Master of Position
   useEffect(() => {
+    let animationId: number;
+
     const broadcastCamera = () => {
       const el = cameraRef.current?.el;
-      if (el) {
-        const position = el.getAttribute("position");
-        const rotation = el.getAttribute("rotation");
-        if (position && rotation) {
-          updateCamera({
-            position: { x: position.x, y: position.y, z: position.z },
-            rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
-          });
-        }
+      
+      // Optimization: Access Three.js Object3D directly to avoid slow DOM getAttribute calls
+      if (el && el.object3D) {
+        const { x, y, z } = el.object3D.position;
+        const { x: rx, y: ry, z: rz } = el.object3D.rotation; // These are in radians
+
+        // Convert radians to degrees
+        const toDeg = (rad: number) => (rad * 180) / Math.PI;
+
+        updateCamera({
+          position: { x, y, z },
+          rotation: { x: toDeg(rx), y: toDeg(ry), z: toDeg(rz) },
+        });
       }
-      requestAnimationFrame(broadcastCamera);
+      
+      animationId = requestAnimationFrame(broadcastCamera);
     };
-    const animationId = requestAnimationFrame(broadcastCamera);
+    
+    animationId = requestAnimationFrame(broadcastCamera);
     return () => cancelAnimationFrame(animationId);
   }, [updateCamera]);
 
