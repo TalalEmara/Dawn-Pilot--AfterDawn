@@ -55,7 +55,10 @@ function ResearcherView() {
   const cameraInitialized = useRef<boolean>(false);
 
   // --- Research / Experiment State ---
-  const [visionMode, setVisionMode] = useState("prosthetic");
+ const [visionMode, setVisionMode] = useState(() => {
+    const saved = localStorage.getItem("researcher_visionMode");
+    return saved || "prosthetic";
+  });
   const [currentScenarioId, setCurrentScenarioId] = useState("default_world");
   const [mobileId, setMobileId] = useState<string>("");
 
@@ -318,7 +321,9 @@ const workerRef = useRef<Worker | null>(null);
     setSavedScenarios(scenarios);
     setShowLoadDialog(true);
   };
-
+useEffect(() => {
+    localStorage.setItem("researcher_visionMode", visionMode);
+  }, [visionMode]);
 
   return (
     <div

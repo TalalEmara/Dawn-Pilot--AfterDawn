@@ -62,7 +62,10 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
 }) => {
   
   // --- Local UI State ---
-  const [subjectId, setSubjectId] = useState("test_subject_01");
+  const [subjectId, setSubjectId] = useState(() => {
+    const saved = localStorage.getItem("researcher_subjectId");
+    return saved || "test_subject_01";
+  });
   const [kMaxValue, setKMaxValue] = useState<number>(2);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   
@@ -104,7 +107,9 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
   };
 
   // --- Effects ---
-
+useEffect(() => {
+    localStorage.setItem("researcher_subjectId", subjectId);
+  }, [subjectId]);
   // Timer logic moved here
   useEffect(() => {
     if (!vault.isRecording || !vault.startTime) {
