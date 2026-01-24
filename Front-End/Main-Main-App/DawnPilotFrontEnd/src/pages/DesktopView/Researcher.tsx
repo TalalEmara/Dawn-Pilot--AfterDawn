@@ -88,7 +88,7 @@ const { configureKMax, loading: kMaxLoading } = useKMax();
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
     useCameraSync({
       clientType: "desktop",
-      throttleMs: 16,
+      throttleMs: 20,
     });
 
   // 2. Initialize Experiment Vault

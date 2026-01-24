@@ -77,6 +77,7 @@ function MobileView() {
   const depth = 0.1; 
   const fovWidth = 17; 
   const fovHeight = 17; 
+  const holeDistance = 0.08;
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
   const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
   const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
@@ -279,24 +280,46 @@ function MobileView() {
           >
             {/* 1. THE BLINDER */}
            
-<Entity
-              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-              position={`0 ${(5 + hudHeight) / 4} -${depth + 0.01}`}
-              material="color: black; shader: flat; transparent: false;"
-            />
+         {/* ========================================================= */}
+            {/* 🕶️ DUAL HOLE BLINDERS (Stereoscopic Mask)                  */}
+            {/* ========================================================= */}
+            
+            {/* 1. TOP BAR (Full Width) */}
             <Entity
               geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-              position={`0 -${(5 + hudHeight) / 4} -${depth + 0.01}`}
+              position={`0 ${(5 + hudHeight) / 4} -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
+
+            {/* 2. BOTTOM BAR (Full Width) */}
             <Entity
-              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
-              position={`-${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
+              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
+              position={`0 -${(5 + hudHeight) / 4} -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
+
+            {/* 3. CENTER BAR (The Variable Gap) */}
             <Entity
-              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
-              position={`${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
+              geometry={{ primitive: "plane", width: holeDistance, height: hudHeight }}
+              position={`0 0 -${depth + 0.001}`}
+              material="color: black; shader: flat; transparent: false;"
+            />
+
+            {/* 4. FAR LEFT BAR (Left of Left Hole) */}
+            {/* Positioned so its right edge touches the left hole */}
+            <Entity
+              geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
+              // X = -(Gap/2 + HoleWidth + HalfPlaneWidth)
+              position={`-${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
+              material="color: black; shader: flat; transparent: false;"
+            />
+
+            {/* 5. FAR RIGHT BAR (Right of Right Hole) */}
+            {/* Positioned so its left edge touches the right hole */}
+            <Entity
+              geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
+              // X = +(Gap/2 + HoleWidth + HalfPlaneWidth)
+              position={`${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
             
@@ -318,10 +341,10 @@ function MobileView() {
 
             {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
             {alertStatus === 'DANGER' && (
-                <Entity position="0 0 -0.09">
+                <Entity position={`${holeDistance/2 +.012} 0 -0.09`}>
                    {/* Red Background */}
                    <Entity 
-                     geometry={{ primitive: "plane", width: 0.15, height: 0.06 }}
+                     geometry={{ primitive: "plane", width: 0.025, height: 0.01 }}
                      material={{ color: "#770000", opacity: 0.9, transparent: true }}
                    />
                    
@@ -331,7 +354,7 @@ function MobileView() {
                        value: "⚠️ TURN BACK ⚠️\nUNSAFE AREA", 
                        align: "center", 
                        color: "#FFF", 
-                       width: 0.14,
+                       width: 0.015,
                        wrapCount: 15
                      }}
                      position="0 0 0.001"
