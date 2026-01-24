@@ -284,29 +284,24 @@ function MobileView() {
             {/* 🕶️ DUAL HOLE BLINDERS (Stereoscopic Mask)                  */}
             {/* ========================================================= */}
             
-            {/* 1. TOP BAR (Full Width) */}
-            <Entity
+            {/* <Entity
               geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
               position={`0 ${(5 + hudHeight) / 4} -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
 
-            {/* 2. BOTTOM BAR (Full Width) */}
             <Entity
               geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
               position={`0 -${(5 + hudHeight) / 4} -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
 
-            {/* 3. CENTER BAR (The Variable Gap) */}
             <Entity
               geometry={{ primitive: "plane", width: holeDistance, height: hudHeight }}
               position={`0 0 -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
             />
 
-            {/* 4. FAR LEFT BAR (Left of Left Hole) */}
-            {/* Positioned so its right edge touches the left hole */}
             <Entity
               geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
               // X = -(Gap/2 + HoleWidth + HalfPlaneWidth)
@@ -314,16 +309,14 @@ function MobileView() {
               material="color: black; shader: flat; transparent: false;"
             />
 
-            {/* 5. FAR RIGHT BAR (Right of Right Hole) */}
-            {/* Positioned so its left edge touches the right hole */}
             <Entity
               geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
               // X = +(Gap/2 + HoleWidth + HalfPlaneWidth)
               position={`${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
               material="color: black; shader: flat; transparent: false;"
-            />
+            /> */}
             
-             {/* <Entity
+             <Entity
               geometry="primitive: plane; width: 5; height: 5"
               position={`0 0 -${depth + 0.01}`} 
               material="color: black; shader: flat; transparent: false;"
@@ -337,7 +330,7 @@ function MobileView() {
               }}
               position={`0 0 -${depth}`}
               canvas-updater="src: #hud-buffer"
-            /> */}
+            />
 
             {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
             {alertStatus === 'DANGER' && (

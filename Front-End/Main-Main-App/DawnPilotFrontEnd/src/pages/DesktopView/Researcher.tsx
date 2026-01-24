@@ -19,7 +19,7 @@ import { useAiStream } from "../../hooks/useAiStream";
 import ResearcherSidePanel from "../../components/level-1/ResearcherSidePanel/ResearcherSidePanel";
 
 
-
+import FrameEncoderWorker from "../../workers/frameEncoder.worker?worker";
 // Helper to convert Blob to base64
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -72,7 +72,25 @@ const {
 } = useAiStream({ 
   reconnectDependency: visionMode 
 });
+const workerRef = useRef<Worker | null>(null);
 
+  useEffect(() => {
+    // 1. Initialize the worker
+    workerRef.current = new FrameEncoderWorker();
+
+    // 2. Handle messages coming BACK from the worker
+    workerRef.current.onmessage = (e) => {
+      // If the worker successfully created the string, send it to the socket
+      if (e.data.success && aiWebSocket?.readyState === WebSocket.OPEN) {
+        aiWebSocket.send(e.data.payload);
+      }
+    };
+
+    // 3. Cleanup when component unmounts
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, [aiWebSocket]);
   // 1. Get socket from CameraSync
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
     useCameraSync({
