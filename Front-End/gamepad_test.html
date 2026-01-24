@@ -394,6 +394,12 @@
             gamepadIndex = null;
         });
         
+        // Add click listener to force API activation
+        document.body.addEventListener('click', () => {
+            console.log('Click detected - checking for gamepads:', navigator.getGamepads());
+            checkGamepads();
+        }, { once: true });
+        
         // Start the update loop
         log('System ready. Connect your controller and press any button.');
         update();
