@@ -12,25 +12,28 @@ export default defineConfig({
     port: 5173,
     // ⬇️ THE MAGIC BRIDGE (PROXY) ⬇️
     proxy: {
-      // 1. Forward Socket.io traffic to Flask (Port 5000)
       '/socket.io': {
         target: 'http://localhost:5000',
         ws: true,
         changeOrigin: true
       },
-      // 2. Forward Scenario API requests to Flask (Port 5000)
       '/scenario': {
         target: 'http://localhost:5000',
         changeOrigin: true
       },
-      // 3. Forward AI Stream traffic to FastAPI (Port 8000)
       '/ws': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8000', // AI Stream
         ws: true,
         changeOrigin: true
       },
+      // 👇 THIS IS THE CRITICAL PART FOR YOUR ERROR 👇
       '/api/configure_new': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8000', // Config API
+        changeOrigin: true
+      },
+      // 👆 -------------------------------------- 👆
+      '/api': {
+        target: 'http://localhost:5000', // General API fallback
         changeOrigin: true
       }
     }

@@ -1,11 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import { SERVER_IP } from '../ApiConfig';
+
 
 export function useKMax() {
   const { mutate, isPending, error } = useMutation({
     mutationFn: async (k: number) => {
       // Construct URL dynamically matching your structure
-      const response = await fetch(`http://${SERVER_IP}:8000/api/configure_new`, {
+      const response = await fetch(`/api/configure_new`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ k_max: k }),
