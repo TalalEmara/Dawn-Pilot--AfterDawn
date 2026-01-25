@@ -1,0 +1,449 @@
+{
+  "name": "ActualExperiment_Scenario#2",
+  "createdAt": "2026-01-25T12:35:35.797Z",
+  "entityCount": 19,
+  "camera": {
+    "position": {
+      "x": 5.613616206343179,
+      "y": 2,
+      "z": 9.635517756967765
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  "entities": [
+    {
+      "id": "entity-1769338871633-ke03ra7xw",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": 3
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 2,
+        "y": 10,
+        "z": 10
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1769338871635-cb1hlyyov",
+      "Position": {
+        "x": 11,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 50
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1769338871637-hfkpahwh3",
+      "Position": {
+        "x": 3.6646,
+        "y": 0,
+        "z": -14
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769338871638-e0prf3ly8",
+      "Position": {
+        "x": -1.39724,
+        "y": 5.50839,
+        "z": -14
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769338871639-by7xq45kp",
+      "Position": {
+        "x": 7.20096,
+        "y": 5.48133,
+        "z": -14.25641
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769338871641-s893hh1tu",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -8.82863
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769338871643-e6k7hv4ed",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -11.46276
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769338871644-e1zayv6w1",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -14.17703
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769338871646-5zaxjubil",
+      "Position": {
+        "x": -9,
+        "y": 0,
+        "z": -16.79686
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769338871647-8qv0c24z5",
+      "Position": {
+        "x": -6.88911,
+        "y": 4.62861,
+        "z": -4.14574
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769338871649-cn4lxmfho",
+      "Position": {
+        "x": -1.95755,
+        "y": 4.51092,
+        "z": -4.45074
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769338871651-i4irzn076",
+      "Position": {
+        "x": 2.14236,
+        "y": 4.61105,
+        "z": -4.72769
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769338871652-vgnnfx04p",
+      "Position": {
+        "x": 3.74812,
+        "y": 0,
+        "z": -17.69636
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769338871654-uspjxp3nl",
+      "Position": {
+        "x": 3.15949,
+        "y": 0,
+        "z": -21.04451
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769338871655-9khp04mjp",
+      "Position": {
+        "x": 0.0453,
+        "y": 0,
+        "z": -22.06584
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769338871656-eui9aovf2",
+      "Position": {
+        "x": 6.21025,
+        "y": 0.46327,
+        "z": 3.16857
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.006,
+        "y": 0.006,
+        "z": 0.006
+      },
+      "Model": {
+        "url": "/garbage"
+      },
+      "name": "Garbage"
+    },
+    {
+      "id": "entity-1769338871659-sl8u9a4m0",
+      "Position": {
+        "x": -3.84293,
+        "y": 0.08385,
+        "z": -22.14312
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769338871660-oenfk6zfw",
+      "Position": {
+        "x": -7.56402,
+        "y": 0,
+        "z": -21.86203
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/pole"
+      },
+      "name": "Pole"
+    },
+    {
+      "id": "entity-1769338871662-8fqjnk45u",
+      "Position": {
+        "x": -11.33419,
+        "y": 5.50839,
+        "z": -20.08115
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    }
+  ]
+}
