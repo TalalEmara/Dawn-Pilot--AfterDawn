@@ -10,8 +10,6 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
-const groundTexture = "https://cdn.aframe.io/a-painter/images/floor.jpg";
-
 // --- DEBUGGED CANVAS UPDATER ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
@@ -46,14 +44,26 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);  
   
+  // 1. ADD VISION MODE STATE
+// ✅ 1. CHANGED: Load from storage
+  const [visionMode, setVisionMode] = useState(() => {
+    const saved = localStorage.getItem("mobile_visionMode");
+    return saved || 'prosthetic';
+  });
+
+  // ✅ 2. ADDED: Save to storage
+  useEffect(() => {
+    localStorage.setItem("mobile_visionMode", visionMode);
+  }, [visionMode]);
   // UI State
   const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
 
   // --- LOGIC REFS (For Socket Listener) ---
-  const alertStartTime = useRef<number>(0);       // When did the alert first appear?
-  const isAlertVisible = useRef<boolean>(false);  // Track visibility without waiting for React state update
-  const hideTimerRef = useRef<NodeJS.Timeout | null>(null); // Reference to the "Safe" timer
+  const alertStartTime = useRef<number>(0);       
+  const isAlertVisible = useRef<boolean>(false);  
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null); 
 
   // Position Sync State
   const hasReceivedPosition = useRef(false);
@@ -79,42 +89,49 @@ function MobileView() {
   const depth = 0.1; 
   const fovWidth = 17; 
   const fovHeight = 17; 
+  const holeDistance = 0.08;
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
   const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
   const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
 
+  // --- LISTEN FOR VISION MODE UPDATES ---
+// --- LISTEN FOR VISION MODE UPDATES ---
+  useEffect(() => {
+    if (!socket) return;
+    const handleModeUpdate = (data: { mode: string }) => {
+      console.log("👀 Vision Mode Updated:", data.mode);
+      setVisionMode(data.mode);
+    };
+    
+    // ✅ FIX: Listen for 'changed', not 'update'
+    socket.on('vision-mode:changed', handleModeUpdate);
+    
+    return () => {
+      socket.off('vision-mode:changed', handleModeUpdate);
+    };
+  }, [socket]);
   // --- SOCKET LISTENER WITH MINIMUM DURATION LOGIC ---
   useEffect(() => {
     if (!socket) return;
 
     const handleAlert = (data: { status: 'DANGER' | 'SAFE' }) => {
-      // DANGER SIGNAL RECEIVED
       if (data.status === 'DANGER') {
-        
-        // If we were previously SAFE, mark the start time
         if (!isAlertVisible.current) {
            isAlertVisible.current = true;
            alertStartTime.current = Date.now();
            setAlertStatus('DANGER');
         }
-
-        // If a "Hide Timer" was pending (e.g. we momentarily went SAFE),
-        // cancel it immediately because we are back in danger.
         if (hideTimerRef.current) {
           clearTimeout(hideTimerRef.current);
           hideTimerRef.current = null;
         }
       } 
-      
-      // SAFE SIGNAL RECEIVED
       else { 
-        // Only hide if we are currently showing an alert
         if (isAlertVisible.current) {
-           const MIN_DURATION = 2000; // 2 Seconds
+           const MIN_DURATION = 2000;
            const elapsed = Date.now() - alertStartTime.current;
 
            if (elapsed < MIN_DURATION) {
-             // If 2 seconds haven't passed yet, wait for the remaining time
              if (!hideTimerRef.current) {
                 const remaining = MIN_DURATION - elapsed;
                 hideTimerRef.current = setTimeout(() => {
@@ -124,7 +141,6 @@ function MobileView() {
                 }, remaining);
              }
            } else {
-             // If 2 seconds have passed, hide immediately
              setAlertStatus('SAFE');
              isAlertVisible.current = false;
            }
@@ -163,11 +179,21 @@ function MobileView() {
 
   // Load world logic
   useEffect(() => {
+    if (!socket) return;
+    const handleReload = () => {
+      console.log("🔄 Command received! Reloading world...");
+      setReloadTrigger(prev => prev + 1);
+    };
+    socket.on("scenario-loaded", handleReload);
+    return () => socket.off("scenario-loaded", handleReload);
+  }, [socket]);
+
+  useEffect(() => {
     loadWorld()
       .then(() => console.log("🌍 [MobileView] World loaded"))
       .catch((err) => console.error("❌ [MobileView] Failed to load world:", err));
     return () => clearAllTimers();
-  }, [loadWorld, clearAllTimers]);
+  }, [loadWorld, clearAllTimers, reloadTrigger]);
 
   // Sync Rig Position logic
   useEffect(() => {
@@ -225,6 +251,7 @@ function MobileView() {
           height="360"
           style={{ display: "none" }}
         />
+        <div>Mode: {visionMode}</div>
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
         <div>AI (Recv): {isAiConnected ? "🟢" : "🔴"}</div>
       </div>
@@ -240,17 +267,7 @@ function MobileView() {
       <WorldScene entities={world.entities} isMobile={true}>
         
         {/* Environment Overrides */}
-        <Entity primitive="a-sky" color="#87CEEB" />
-        <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
-        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
-        <Entity
-          primitive="a-plane"
-          position="0 -1 -4"
-          rotation="-90 0 0"
-          width="1000"
-          height="1000"
-          material={{ src: groundTexture, repeat: "20 20" }}
-        />
+      
 
         <Entity
           ref={rigRef}
@@ -267,51 +284,76 @@ function MobileView() {
             primitive="a-camera"
             look-controls="enabled: true; touchEnabled: true;"
           >
-            {/* 1. THE BLINDER */}
-           
-{/* <Entity
-              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-              position={`0 ${(5 + hudHeight) / 4} -${depth + 0.01}`}
-              material="color: black; shader: flat; transparent: false;"
-            />
-            <Entity
-              geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-              position={`0 -${(5 + hudHeight) / 4} -${depth + 0.01}`}
-              material="color: black; shader: flat; transparent: false;"
-            />
-            <Entity
-              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
-              position={`-${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
-              material="color: black; shader: flat; transparent: false;"
-            />
-            <Entity
-              geometry={{ primitive: "plane", width: (5 - hudWidth) / 2, height: hudHeight }}
-              position={`${(5 + hudWidth) / 4} 0 -${depth + 0.01}`}
-              material="color: black; shader: flat; transparent: false;"
-            /> */}
-            
-             {/* <Entity
-              geometry="primitive: plane; width: 5; height: 5"
-              position={`0 0 -${depth + 0.01}`} 
-              material="color: black; shader: flat; transparent: false;"
-            />
-            <Entity
-              className="hud-ignore"
-              geometry={{
-                primitive: "plane",
-                width: hudWidth,
-                height: hudHeight
-              }}
-              position={`0 0 -${depth}`}
-              canvas-updater="src: #hud-buffer"
-            /> */}
+            {/* ========================================================= */}
+            {/* 🕶️ MODE 1: NORMAL VISION (Stereoscopic Mask)               */}
+            {/* ========================================================= */}
+            {visionMode === 'normal' && (
+              <>
+                {/* Top Bar */}
+                <Entity
+                  geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
+                  position={`0 ${(5 + hudHeight) / 4} -${depth + 0.001}`}
+                  material="color: black; shader: flat; transparent: false;"
+                />
+                {/* Bottom Bar */}
+                <Entity
+                  geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
+                  position={`0 -${(5 + hudHeight) / 4} -${depth + 0.001}`}
+                  material="color: black; shader: flat; transparent: false;"
+                />
+                {/* Center Divider */}
+                <Entity
+                  geometry={{ primitive: "plane", width: holeDistance, height: hudHeight }}
+                  position={`0 0 -${depth + 0.001}`}
+                  material="color: black; shader: flat; transparent: false;"
+                />
+                {/* Left Blinder */}
+                <Entity
+                  geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
+                  position={`-${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
+                  material="color: black; shader: flat; transparent: false;"
+                />
+                {/* Right Blinder */}
+                <Entity
+                  geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
+                  position={`${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
+                  material="color: black; shader: flat; transparent: false;"
+                />
+              </>
+            )}
+
+            {/* ========================================================= */}
+            {/* 🤖 MODE 2: PROSTHETIC / LOW RES (HUD + Full Blinder)      */}
+            {/* ========================================================= */}
+            {visionMode !== 'normal' && (
+              <>
+                {/* Full Blackout Blinder (Behind HUD) */}
+                <Entity
+                  geometry="primitive: plane; width: 5; height: 5"
+                  position={`0 0 -${depth + 0.01}`} 
+                  material="color: black; shader: flat; transparent: false;"
+                />
+                
+                {/* The HUD Screen (AI Stream) */}
+                <Entity
+                  className="hud-ignore"
+                  geometry={{
+                    primitive: "plane",
+                    width: hudWidth,
+                    height: hudHeight
+                  }}
+                  position={`0 0 -${depth}`}
+                  canvas-updater="src: #hud-buffer"
+                />
+              </>
+            )}
 
             {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
             {alertStatus === 'DANGER' && (
-                <Entity position="0 0 -0.09">
+                <Entity position={`${holeDistance/2 +.012} 0 -0.09`}>
                    {/* Red Background */}
                    <Entity 
-                     geometry={{ primitive: "plane", width: 0.15, height: 0.06 }}
+                     geometry={{ primitive: "plane", width: 0.025, height: 0.01 }}
                      material={{ color: "#770000", opacity: 0.9, transparent: true }}
                    />
                    
@@ -321,7 +363,7 @@ function MobileView() {
                        value: "⚠️ TURN BACK ⚠️\nUNSAFE AREA", 
                        align: "center", 
                        color: "#FFF", 
-                       width: 0.14,
+                       width: 0.015,
                        wrapCount: 15
                      }}
                      position="0 0 0.001"

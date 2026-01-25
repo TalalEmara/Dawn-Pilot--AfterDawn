@@ -3,6 +3,7 @@ import 'aframe';
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
 import React from 'react';
+import groundTexture from "../../../assets/ground/ground.jpg";
 
 interface WorldSceneProps {
   entities: any[];
@@ -27,6 +28,22 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
       style={{ width: '100%', height: '100%' }}
       {...(showStats ? { stats: true } : {})}
     >
+
+       <Entity primitive="a-sky" color="#87CEEB" />
+        <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
+        <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
+        
+            <Entity
+              primitive="a-plane"
+              position="0 0 0"
+              rotation="-90 0 0"
+              width="50"
+              height="100"
+              material={{ src: groundTexture, repeat: "20 20" }}
+              segments-width="50"
+              segments-height="100"
+            />
+            
       {/* Shared Entity Rendering Logic */}
       {entities.map((e) => {
         const pos = e.Position || { x: 0, y: 0, z: 0 };
