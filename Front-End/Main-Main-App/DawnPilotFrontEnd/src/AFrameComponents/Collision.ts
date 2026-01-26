@@ -22,7 +22,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-weight"]) {
 }
 
 const applyCollisionWeight = (obstacle: any, box: any) => {
-    let weight = { x: 1, y: 0.5, z: 0.5 }; // Default weight
+    let weight = { x: 1, y: 1, z: 1 }; // Default weight
     
     // Check for collision-weight component first
     if (obstacle.el && obstacle.el.getAttribute) {
