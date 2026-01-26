@@ -104,6 +104,23 @@ const workerRef = useRef<Worker | null>(null);
   // 2. Initialize Experiment Vault
   const vault = useExperimentVault(socket);
 
+  // Stop recording on mount (cleanup orphaned sessions), unmount, or page refresh
+  useEffect(() => {
+    // Always try to stop on mount (handles crash/refresh scenarios)
+    vault.stopExperiment().catch(() => {}); // Ignore errors if no recording
+
+    const handleBeforeUnload = () => {
+      vault.stopExperiment().catch(() => {});
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      vault.stopExperiment().catch(() => {}); // Ignore errors
+    };
+  }, []); // Empty deps - run once on mount
+
   const { world, loadWorld, setWorld } = useScenarioWorld();
 
   const {
