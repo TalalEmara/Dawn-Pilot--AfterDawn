@@ -139,7 +139,7 @@ const workerRef = useRef<Worker | null>(null);
   useFrameBuffer({
     downsamplePercentage: 50,
     enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 1000/0.5,
+    logInterval: 1000/10,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
