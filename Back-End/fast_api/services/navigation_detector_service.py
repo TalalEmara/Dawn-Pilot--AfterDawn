@@ -1212,7 +1212,7 @@ class NavigationDetectorService:
             
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
-            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
+            simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=debug_mode, target_canvas_size=(w, h), draw_freepath=True)
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
