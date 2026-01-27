@@ -101,7 +101,6 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
     configureKMax(k, {
       onSuccess: () => {
         setKMaxValue(k);
-        console.log(`✅ k_max configured to ${k}`);
       }
     });
   };
@@ -134,6 +133,13 @@ useEffect(() => {
           Laptop: {isConnected ? "🟢" : "🔴"} | Mobile:{" "}
           {mobileId ? "🟢" : "🔴"} | AI:{" "}
           {aiConnected ? "🟢" : "🔴"}
+        </div>
+          {/* DURATION */}
+        <div style={{ marginBottom: "24px" }}>
+          <div className={styles.sectionLabel}>Session Duration</div>
+          <div className={styles.timeDisplay}>
+            {formatTime(elapsedTime)}
+          </div>
         </div>
       </div>
 
@@ -230,13 +236,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* DURATION */}
-        <div style={{ marginBottom: "24px" }}>
-          <div className={styles.sectionLabel}>Session Duration</div>
-          <div className={styles.timeDisplay}>
-            {formatTime(elapsedTime)}
-          </div>
-        </div>
+      
 
         {/* METRICS */}
         <div className={styles.sectionBox}>

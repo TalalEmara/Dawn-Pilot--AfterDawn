@@ -139,7 +139,7 @@ const workerRef = useRef<Worker | null>(null);
   useFrameBuffer({
     downsamplePercentage: 50,
     enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 2000,
+    logInterval: 1000/0.5,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
@@ -188,7 +188,6 @@ const workerRef = useRef<Worker | null>(null);
   useEffect(() => {
     if (socket && socket.connected) {
       socket.emit('vision-mode:update', { mode: visionMode });
-      console.log(`📡 Synced vision mode: ${visionMode}`);
     }
   }, [visionMode, socket]);
 
@@ -207,7 +206,6 @@ const workerRef = useRef<Worker | null>(null);
     if (cameraRef.current?.el && !cameraInitialized.current) {
       cameraRef.current.el.setAttribute("position", "0 1.6 0");
       cameraInitialized.current = true;
-      console.log("[Camera] Initial position set to 0 1.6 0");
     }
   },[]);
 
@@ -258,7 +256,7 @@ const workerRef = useRef<Worker | null>(null);
       if (!isCollidingRef.current && socket) {
         isCollidingRef.current = true;
         socket.emit('alert:status', { status: 'DANGER' });
-        console.log("💥 Sending DANGER");
+      
       }
 
       // 2. Reset the "Return to Safe" timer every time we get a hit
@@ -269,7 +267,6 @@ const workerRef = useRef<Worker | null>(null);
       // 3. If no new hits happen for 500ms, assume we are SAFE
       safetyTimerRef.current = setTimeout(() => {
         if (socket) {
-          console.log("✅ Sending SAFE");
           socket.emit('alert:status', { status: 'SAFE' });
         }
         isCollidingRef.current = false;
@@ -278,7 +275,7 @@ const workerRef = useRef<Worker | null>(null);
 
       const timestamp = new Date().toLocaleTimeString();
       const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
-      console.warn(`💥 ${logMsg}`);
+
       setCollisionCount((prev) => prev + 1);
       setCollisionLog((prev) => [logMsg, ...prev].slice(0, 10));
       vault.logCollision(detail.obstacleId);

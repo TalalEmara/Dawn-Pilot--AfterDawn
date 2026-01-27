@@ -89,7 +89,10 @@ function MobileView() {
   const depth = 0.1; 
   const fovWidth = 17; 
   const fovHeight = 17; 
+  // CHHHHHANGEEE HEEEEEEEEEEEEEREEEEEEE
   const holeDistance = 0.08;
+
+
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
   const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
   const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
@@ -99,7 +102,6 @@ function MobileView() {
   useEffect(() => {
     if (!socket) return;
     const handleModeUpdate = (data: { mode: string }) => {
-      console.log("👀 Vision Mode Updated:", data.mode);
       setVisionMode(data.mode);
     };
     
@@ -181,7 +183,6 @@ function MobileView() {
   useEffect(() => {
     if (!socket) return;
     const handleReload = () => {
-      console.log("🔄 Command received! Reloading world...");
       setReloadTrigger(prev => prev + 1);
     };
     socket.on("scenario-loaded", handleReload);
@@ -342,7 +343,7 @@ function MobileView() {
                     width: hudWidth,
                     height: hudHeight
                   }}
-                  position={`0 0 -${depth}`}
+                  position={`${holeDistance/2 +.012} 0 -${depth}`}
                   canvas-updater="src: #hud-buffer"
                 />
               </>

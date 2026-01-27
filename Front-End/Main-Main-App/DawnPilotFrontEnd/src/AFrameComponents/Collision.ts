@@ -1,7 +1,7 @@
 import "aframe";
 
 // ============== DEBUG CONTROL ==============
-const DEBUG_COLLISION = true; // <-- SET TO false TO DISABLE ALL LOGS
+const DEBUG_COLLISION = false; // <-- SET TO false TO DISABLE ALL LOGS
 // ===========================================
 
 const log = (...args: any[]) => DEBUG_COLLISION && console.log('[Collision]', ...args);

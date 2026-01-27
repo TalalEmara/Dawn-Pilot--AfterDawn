@@ -16,7 +16,6 @@ export async function getFolderHandle() {
   if (folderHandle) return folderHandle;
   try {
     folderHandle = await (window as any).showDirectoryPicker();
-    console.log("✅ Folder selected:", folderHandle.name);
   } catch (err) {
     console.warn("⚠️ Folder not selected or access denied", err);
     folderHandle = null;
@@ -63,7 +62,6 @@ export const useFrameBuffer = (options?: {
         if (!gl) return;
 
         isInitializedRef.current = true;
-        console.log("[A-Frame Debug] ✓ Buffer monitoring started");
 
         let lastLog = 0;
 
@@ -286,9 +284,6 @@ function readDepthBuffer(
     const cameraWorldDir = new THREE.Vector3();
     camera.getWorldDirection(cameraWorldDir);
     
-    console.log(`📷 Camera near: ${near}, original far: ${originalFar}, visualization far: ${visualizationFar}`);
-    console.log(`📷 Camera world position:`, cameraWorldPos);
-    console.log(`📷 Camera world direction:`, cameraWorldDir);
 
     // Create depth shader with better normalization
     const depthMaterial = new THREE.ShaderMaterial({
@@ -350,22 +345,14 @@ function readDepthBuffer(
         if (distance < minDist) minDist = distance;
         if (distance > maxDist) maxDist = distance;
         
-        console.log(`  - Mesh: ${obj.name || 'unnamed'}, geometry: ${obj.geometry?.type}`);
-        console.log(`    world position:`, worldPos);
-        console.log(`    distance: ${distance.toFixed(2)}, in front: ${dotProduct > 0}`);
-        
+
         obj.material = depthMaterial;
         obj.material.needsUpdate = true;
         meshCount++;
       }
     });
     
-    console.log(`🎯 Processing ${meshCount} meshes for depth`);
-    console.log(`📏 Distance range: ${minDist.toFixed(2)} - ${maxDist.toFixed(2)}`);
-    
-    if (maxDist > visualizationFar) {
-      console.warn(`⚠️  Objects are farther (${maxDist.toFixed(2)}) than visualization far (${visualizationFar}). Consider increasing visualizationFar.`);
-    }
+
 
     // Create render target
     const depthTarget = new THREE.WebGLRenderTarget(width, height, {
@@ -417,22 +404,6 @@ function readDepthBuffer(
       }
     }
     
-    console.log(`📊 Depth stats - min: ${minVal}, max: ${maxVal}, non-zero: ${nonZeroCount}/${width * height} (${(nonZeroCount/(width*height)*100).toFixed(2)}%)`);
-    
-    if (sampleValues.length > 0) {
-      console.log(`📊 Sample depth values (0-255):`, sampleValues);
-    } else {
-      console.warn(`⚠️ WARNING: No depth data captured!`);
-      const centerX = Math.floor(width / 2);
-      const centerY = Math.floor(height / 2);
-      const centerIdx = (centerY * width + centerX) * 4;
-      console.log(`📊 Center pixel RGBA:`, [
-        depthPixels[centerIdx],
-        depthPixels[centerIdx + 1],
-        depthPixels[centerIdx + 2],
-        depthPixels[centerIdx + 3]
-      ]);
-    }
 
     // Clean up
     depthTarget.dispose();
@@ -451,8 +422,6 @@ function readDepthBuffer(
         grayscaleDepth[writeIdx++] = depthPixels[idx];
       }
     }
-
-    console.log(`🔍 Depth buffer captured: ${newWidth}x${newHeight}`);
     
     return {
       data: grayscaleDepth,
@@ -470,7 +439,6 @@ function saveFrameDataJSON(rgbData: any, depthData: any, frameIndex: number) {
   frameCounter++;
   if (frameCounter % 10 !== 0) return;
   const savedCount = Math.floor(frameCounter / 10);
-  console.log(`✅ [Saving] Frame #${savedCount}`);
   saveRGBImage(rgbData, frameIndex, savedCount);
   if (depthData) saveDepthImage(depthData, frameIndex, savedCount);
 }
