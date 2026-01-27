@@ -19,5 +19,5 @@ export class Color extends Component {
 }
 
 export class Collision extends Component {
-  constructor(public weight = { x: 1, y: 0.5, z: 0.5 }) { super(); }
+  constructor(public weight = { x: 1, y: 1, z: 1 }) { super(); }
 }
