@@ -93,14 +93,14 @@ class NavigationDetectorService:
         import json
         
         # Default values (fallback)
-        self.model_type = "faster_rcnn"
-        self.model_path = os.path.join(self.base_dir, "object_path_detection", "models", "best_yolo.pt")
+        self.model_type = "yolo"
+        self.model_path = os.path.join(self.base_dir, "object_path_detection", "models", "yolo_our_data_50.pt")
         self.class_map_path = os.path.join(self.base_dir, "object_path_detection", "yolo_class_mapping.json")
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
-        self.debug_mode = True
+        self.debug_mode = False
         
         # Configurable parameters (can be updated via API)
-        self.conf_threshold = 0.2  # YOLO detection confidence threshold
+        self.conf_threshold = 0.5  # YOLO detection confidence threshold
         self.t_min = 0.3  # Translator minimum score threshold
         self.k_min = 1    # Translator minimum objects to select
         self.k_max = 5    # Translator maximum objects to select
