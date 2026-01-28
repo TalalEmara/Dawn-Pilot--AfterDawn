@@ -54,7 +54,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
        {/* GROUND PLANE (Centered at 0, 0, -30) */}
         <Entity
             primitive="a-plane"
-            position={`0 0 ${GROUND_Z}`}
+            position={`0 ${isMobile? .6 :0} ${GROUND_Z}`}
             rotation="-90 0 0"
             width={WORLD_WIDTH}
             height={WORLD_DEPTH} 
@@ -119,6 +119,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
             
       {/* Shared Entity Rendering Logic */}{entities.map((e) => {
         const pos = e.Position || { x: 0, y: 0, z: 0 };
+        const adjustedPos = { ...pos, y: pos.y + (isMobile ? 0.6 : 0) };
         const rot = e.Rotation || { x: 0, y: 0, z: 0 };
         const scl = e.Scale || { x: 1, y: 1, z: 1 };
         const color = e.Color?.value || '#fff';
@@ -139,7 +140,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
             {url === 'Aframe' ? (
               <Entity
                 primitive={`a-${e.name.toLowerCase()}`}
-                position={`${pos.x} ${pos.y} ${pos.z}`}
+                position={`${adjustedPos.x} ${adjustedPos.y} ${adjustedPos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
                 material={`color: ${color}`}
@@ -150,7 +151,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
               <Entity
                 className={isObstacle ? "collidable" : ""}
                 gltf-model={`models${url}${url}.glb`}
-                position={`${pos.x} ${pos.y} ${pos.z}`}
+                position={`${adjustedPos.x} ${adjustedPos.y} ${adjustedPos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
                 material={`color: ${color}`}
@@ -163,13 +164,13 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
                <Entity
                  primitive="a-cone"
                  // Hover 4 meters above the object
-                 position={`${pos.x} ${pos.y + 4} ${pos.z}`}
+                 position={`${adjustedPos.x} ${adjustedPos.y + 4} ${adjustedPos.z}`}
                  rotation="180 0 0" // Pointing Down
                  scale="0.1 0.5 0.1"
                  // bright yellow, ignore depth (see through walls), flat shading
                  material="color: #FFFF00; shader: flat; depthTest: false; transparent: true; opacity: 0.9"
                  // Bobbing animation
-                 animation={`property: position; to: ${pos.x} ${pos.y + 3} ${pos.z}; dir: alternate; dur: 800; loop: true; easing: easeInOutSine`}
+                 animation={`property: position; to: ${adjustedPos.x} ${adjustedPos.y + 3} ${adjustedPos.z}; dir: alternate; dur: 800; loop: true; easing: easeInOutSine`}
                />
             )}
 

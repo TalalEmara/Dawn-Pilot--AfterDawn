@@ -139,7 +139,7 @@ const workerRef = useRef<Worker | null>(null);
 useFrameBuffer({
   downsamplePercentage: 50,
   enabled: aiWebSocket?.readyState === WebSocket.OPEN,
-  logInterval: 1000 / 3, // ~300ms
+  logInterval: 1000 / 10, // ~300ms
   // UPDATE CALLBACK
   onFrame: async (pixelBuffer, width, height, depthBlob) => {
     if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
@@ -208,11 +208,9 @@ useFrameBuffer({
  // Master of Position
   useEffect(() => {
     let animationId: number;
-    let lastBroadcast = 0; 
     const broadcastCamera = () => {
-      const now = performance.now();
-      if (!(now - lastBroadcast > 1000/30)){return}
-      lastBroadcast = now;
+    
+      
       const el = cameraRef.current?.el;
       
       // Optimization: Access Three.js Object3D directly to avoid slow DOM getAttribute calls
