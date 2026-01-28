@@ -139,32 +139,23 @@ const workerRef = useRef<Worker | null>(null);
   useFrameBuffer({
     downsamplePercentage: 50,
     enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 1000/10,
+    logInterval: 1000/3,
     onFrame: async (rgbBlob, depthBlob) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
       try {
-        const rgbBase64 = await blobToBase64(rgbBlob);
-        
         // Only encode depth for prosthetic mode (phosphene pipeline needs it)
         const needsDepth = visionMode === "prosthetic";
-        const depthBase64 = (needsDepth && depthBlob) ? await blobToBase64(depthBlob) : null;
 
         frameIdRef.current++;
 
-        const message: any = {
-          type: "frame",
-          frame_id: String(frameIdRef.current).padStart(3, "0"),
-          rgb: rgbBase64,
+        // Use worker for non-blocking encoding (offloads main thread!)
+        workerRef.current?.postMessage({
+          rgbBlob: rgbBlob,
+          depthBlob: needsDepth ? depthBlob : null,
+          frameId: frameIdRef.current,
           stage: getStageFromVisionMode(visionMode),
-        };
-        
-        // Only include depth if available and needed
-        if (depthBase64) {
-          message.depth = depthBase64;
-        }
-
-        aiWebSocket.send(JSON.stringify(message));
+        });
       } catch (error) {
         console.error("❌ Error sending frame:", error);
       }
