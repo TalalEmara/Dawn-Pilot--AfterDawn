@@ -116,7 +116,7 @@ export const ModelDefinitions: Record<string, ModelDefinition> = {
       Rotation: { x: 0, y: 0, z: 0 },
       Scale: { x: 1, y: 1, z: 1 },
       Model: { url: "/tree" },
-      Collision: { weight: { x: 1, y: 0.5, z: 0.5 } }, 
+      Collision: { weight: { x: 0.2, y: 1, z: 0.02 } }, 
  
     },
     normalizeFactors: {

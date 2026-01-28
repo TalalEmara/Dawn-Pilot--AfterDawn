@@ -440,6 +440,21 @@ export function loadScenario(filename: string): SavedScenario {
     if (entityData.Scale) components.Scale = entityData.Scale;
     if (entityData.Color) components.Color = entityData.Color;
     if (entityData.Model) components.Model = entityData.Model;
+    
+    // Add Collision component - use saved data, lookup from model, or apply default
+    if (entityData.Collision) {
+      components.Collision = entityData.Collision;
+    } else if (entityData.name) {
+      // Try to get collision weights from model definition
+      const modelDef = getModelDefinition(entityData.name);
+      if (modelDef && modelDef.components.Collision) {
+        components.Collision = modelDef.components.Collision;
+      } else {
+        components.Collision = { weight: { x: 1, y: 1, z: 1 } };
+      }
+    } else {
+      components.Collision = { weight: { x: 1, y: 1, z: 1 } };
+    }
 
     const newEntity = createEntity(components);
     

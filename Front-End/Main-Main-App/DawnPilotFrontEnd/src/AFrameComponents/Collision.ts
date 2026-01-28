@@ -15,8 +15,8 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-weight"]) {
     AFRAME.registerComponent("collision-weight", {
         schema: {
             x: { type: 'number', default: 1 },
-            y: { type: 'number', default: 0.5 },
-            z: { type: 'number', default: 0.5 }
+            y: { type: 'number', default: 1 },
+            z: { type: 'number', default: 1 }
         }
     });
 }
