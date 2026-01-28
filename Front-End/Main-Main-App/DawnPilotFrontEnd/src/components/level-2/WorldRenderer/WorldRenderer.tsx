@@ -117,8 +117,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         
         {/* ================================================== */}
             
-      {/* Shared Entity Rendering Logic */}
-      {entities.map((e) => {
+      {/* Shared Entity Rendering Logic */}{entities.map((e) => {
         const pos = e.Position || { x: 0, y: 0, z: 0 };
         const rot = e.Rotation || { x: 0, y: 0, z: 0 };
         const scl = e.Scale || { x: 1, y: 1, z: 1 };
@@ -126,42 +125,55 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         const url = e.Model?.url;
         const isObstacle = e.name !== "Light";
 
-        // Collision weight logic (from Researcher view)
-        const collisionWeight = e.Collision?.weight || { x: 1, y: 0.5, z: 0.5 };
+        // 🎯 TARGET CHECK: Is this object named "Target"?
+        const isTarget = e.name === "Target";
+
+        // Collision weight logic
+        const collisionWeight = e.Collision?.weight || { x: 1, y: 1, z: 1 };
         const collisionWeightFormatted = `x: ${collisionWeight.x}; y: ${collisionWeight.y}; z: ${collisionWeight.z}`;
 
-        // 1. Primitive Entities (A-Frame)
-        if (url === 'Aframe') {
-          const tag = `a-${e.name.toLowerCase()}`;
-          return (
-            <Entity
-              key={e.id}
-              primitive={tag}
-              position={`${pos.x} ${pos.y} ${pos.z}`}
-              rotation={`${rot.x} ${rot.y} ${rot.z}`}
-              scale={`${scl.x} ${scl.y} ${scl.z}`}
-              material={`color: ${color}`}
-              className={isObstacle ? "collidable" : ""}
-              collision-weight={collisionWeightFormatted}
-            />
-          );
-        }
-
-        // 2. GLTF Models
-        // Standardized path construction used in Builder/Researcher
-        const modelPath = `models${url}${url}.glb`;
-
         return (
-          <Entity
-            key={e.id}
-            className={isObstacle ? "collidable" : ""}
-            gltf-model={modelPath}
-            position={`${pos.x} ${pos.y} ${pos.z}`}
-            rotation={`${rot.x} ${rot.y} ${rot.z}`}
-            scale={`${scl.x} ${scl.y} ${scl.z}`}
-            material={`color: ${color}`}
-            collision-weight={collisionWeightFormatted}
-          />
+          <React.Fragment key={e.id}>
+            
+            {/* 1. The Object Itself */}
+            {url === 'Aframe' ? (
+              <Entity
+                primitive={`a-${e.name.toLowerCase()}`}
+                position={`${pos.x} ${pos.y} ${pos.z}`}
+                rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                scale={`${scl.x} ${scl.y} ${scl.z}`}
+                material={`color: ${color}`}
+                className={isObstacle ? "collidable" : ""}
+                collision-weight={collisionWeightFormatted}
+              />
+            ) : (
+              <Entity
+                className={isObstacle ? "collidable" : ""}
+                gltf-model={`models${url}${url}.glb`}
+                position={`${pos.x} ${pos.y} ${pos.z}`}
+                rotation={`${rot.x} ${rot.y} ${rot.z}`}
+                scale={`${scl.x} ${scl.y} ${scl.z}`}
+                material={`color: ${color}`}
+                collision-weight={collisionWeightFormatted}
+              />
+            )}
+
+            {/* 2. THE GUIDE ARROW (Only if name is "Target") */}
+            {isTarget && (
+               <Entity
+                 primitive="a-cone"
+                 // Hover 4 meters above the object
+                 position={`${pos.x} ${pos.y + 4} ${pos.z}`}
+                 rotation="180 0 0" // Pointing Down
+                 scale="0.1 0.5 0.1"
+                 // bright yellow, ignore depth (see through walls), flat shading
+                 material="color: #FFFF00; shader: flat; depthTest: false; transparent: true; opacity: 0.9"
+                 // Bobbing animation
+                 animation={`property: position; to: ${pos.x} ${pos.y + 3} ${pos.z}; dir: alternate; dur: 800; loop: true; easing: easeInOutSine`}
+               />
+            )}
+
+          </React.Fragment>
         );
       })}
 
