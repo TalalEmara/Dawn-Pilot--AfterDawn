@@ -197,32 +197,39 @@ function MobileView() {
   }, [loadWorld, clearAllTimers, reloadTrigger]);
 
   // Sync Rig Position logic
-  useEffect(() => {
-    setOnCameraUpdate((camera) => {
-      const newPos = camera.position;
-      if (!hasReceivedPosition.current) {
-        hasReceivedPosition.current = true;
-        if (rigRef.current?.el?.object3D) {
-          rigRef.current.el.object3D.position.set(newPos.x, newPos.y, newPos.z);
-        }
-      } else {
-        const rigEl = rigRef.current?.el;
-        if (rigEl) {
-          rigEl.setAttribute("animation__follow", {
-            property: "position",
-            to: `${newPos.x} ${newPos.y} ${newPos.z}`,
-            dur: 200,
-            easing: "easeOutQuad",
-            startEvents: "follow-target",
-            autoplay: false,
-          });
-          rigEl.emit("follow-target", null, false);
-        }
-      }
-      setCameraPosition(newPos);
-    });
-  }, [setOnCameraUpdate]);
+// Inside MobileViewer.tsx (Sync Rig Position logic)
+useEffect(() => {
+  setOnCameraUpdate((camera) => {
+    const newPos = camera.position;
+    
+    // Define your desired height offset
+    const HEIGHT_OFFSET = -1; 
 
+    // Apply it to the Y coordinate
+    const targetY = newPos.y + HEIGHT_OFFSET; 
+
+    if (!hasReceivedPosition.current) {
+      hasReceivedPosition.current = true;
+      // Use targetY here
+      rigRef.current.el.object3D.position.set(newPos.x, targetY, newPos.z);
+    } else {
+      const rigEl = rigRef.current?.el;
+      if (rigEl) {
+        rigEl.setAttribute("animation__follow", {
+          property: "position",
+          // Use targetY here
+          to: `${newPos.x} ${targetY} ${newPos.z}`, 
+          dur: 200,
+          easing: "easeOutQuad",
+          startEvents: "follow-target",
+          autoplay: false,
+        });
+        rigEl.emit("follow-target", null, false);
+      }
+    }
+    setCameraPosition(newPos);
+  });
+}, [setOnCameraUpdate]);
   // Keep-alive Heartbeat
   useEffect(() => {
     if (!aiWebSocket || aiWebSocket.readyState !== WebSocket.OPEN) return;
@@ -282,8 +289,10 @@ function MobileView() {
         >
           <Entity
             ref={cameraRef}
-            primitive="a-camera"
-            look-controls="enabled: true; touchEnabled: true;"
+            primitive="a-entity" 
+            camera="active: true"
+            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false;"
+            position="0 0 0" 
           >
             {/* ========================================================= */}
             {/* 🕶️ MODE 1: NORMAL VISION (Stereoscopic Mask)               */}

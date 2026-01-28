@@ -15,7 +15,7 @@ class FreepathDetector:
     def __init__(self, model_path=None, output_dir="api_output"):
         self.model_path = model_path
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"FreepathDetector using device: {self.device}")
+        # print(f"FreepathDetector using device: {self.device}")  # Reduced logging
         self.output_dir = output_dir
         self.mask_output_dir = os.path.join(output_dir, "freepath_masks")
         self.coord_output_dir = os.path.join(output_dir, "freepath_coordinates")
@@ -39,11 +39,11 @@ class FreepathDetector:
         model.load_state_dict(state_dict, strict=True)
         model.to(self.device)
         model.eval()
-        print("Deeplab Model loaded successfully.")
+        # print("Deeplab Model loaded successfully.")  # Reduced logging
         return model
 
     def infer_per_frame(self, rgb_img_path, frame_id, save_debug=False):
-        print("Inferring per frame.")
+        # print("Inferring per frame.")  # Reduced logging
         rgb_img = Image.open(rgb_img_path).convert("RGB")
         original_size = rgb_img.size
         infer_tf = transforms.Compose([
@@ -91,7 +91,7 @@ class FreepathDetector:
             x_center = int(xs.mean())
             centerline.append((x_center, y))
                                         
-        print("Centerline length:", len(centerline))
+        # print("Centerline length:", len(centerline))  # Reduced logging
         centerline = self._center_freepath(centerline)
         
         # Only save visualization if debug mode is enabled
@@ -104,8 +104,8 @@ class FreepathDetector:
 
 
     def compute_freepath_coordinates(self, freepath_mask_path):
-        print("Computing Coordinates")
-        print(freepath_mask_path)
+        # print("Computing Coordinates")  # Reduced logging
+        # print(freepath_mask_path)  # Reduced logging
         # Load mask 
         mask = cv2.imread(freepath_mask_path, cv2.IMREAD_GRAYSCALE)
         if mask is None:
@@ -147,8 +147,8 @@ class FreepathDetector:
                 if nbr not in visited:
                     stack.append(nbr)
 
-        print("Centerline length:", len(path))
-        print(path[:20])
+        # print("Centerline length:", len(path))  # Reduced logging
+        # print(path[:20])  # Reduced logging
         
         path = self._center_freepath(path)
 
@@ -200,7 +200,7 @@ class FreepathDetector:
         return skeleton
 
     def _center_freepath(self, centerline):
-        print("Centering Freepath")
+        # print("Centering Freepath")  # Reduced logging
         if len(centerline) < 2:
             print("Not enough points for line fit")
             return []
@@ -218,7 +218,7 @@ class FreepathDetector:
         return centerline_straight
     
     def _center_freepath_polynomial(self, centerline):
-        print("Centering Freepath (Polynomial)")
+        # print("Centering Freepath (Polynomial)")  # Reduced logging
         if len(centerline) < 2:
             print("Not enough points for line fit")
             return []
@@ -238,7 +238,7 @@ class FreepathDetector:
 
 
     def _visualize_centerline(self, mask_path, centerline, save_path, color=(0,255,0), thickness=2):
-        print("Visualizing Freepath Coordinates")
+        # print("Visualizing Freepath Coordinates")  # Reduced logging
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         img = cv2.imread(mask_path)
         if len(img.shape) == 2 or img.shape[2] == 1:

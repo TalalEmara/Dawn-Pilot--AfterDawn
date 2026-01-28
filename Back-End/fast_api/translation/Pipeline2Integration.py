@@ -14,7 +14,7 @@ class Pipeline2Integration:
     def __init__(self):
         # Use CUDA if available for faster processing
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Pipeline2 using device: {self.device}")
+        # print(f"Pipeline2 using device: {self.device}")  # Reduced logging
         
         # Get the directory where this file is located
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +25,7 @@ class Pipeline2Integration:
         phosphene_checkpoint = torch.load(phosphene_checkpoint_path, map_location=self.device, weights_only=True)
         self.encoder_phosphene.load_state_dict(phosphene_checkpoint)
         self.encoder_phosphene.eval()  # Set to evaluation mode
-        print("✓ Phosphene encoder loaded successfully")
+        # print("✓ Phosphene encoder loaded successfully")  # Reduced logging
         
         # Load EDGE encoder (new, for low-res edge detection mode)
         edge_checkpoint_path = os.path.join(current_dir, 'utils', 'SavedCheckPoints', 'CNNencoder_model_nonSmart.pth')
@@ -33,7 +33,7 @@ class Pipeline2Integration:
         edge_checkpoint = torch.load(edge_checkpoint_path, map_location=self.device, weights_only=True)
         self.encoder_edge.load_state_dict(edge_checkpoint)
         self.encoder_edge.eval()  # Set to evaluation mode
-        print("✓ Edge encoder loaded successfully")
+        # print("✓ Edge encoder loaded successfully")  # Reduced logging
 
         self.edge_transform = T.Compose([
             T.Resize((128, 128)),
@@ -47,7 +47,7 @@ class Pipeline2Integration:
         
         # Shared simulator (used by both encoders)
         self.simulator = P2PDifferentiableSimulatorScoreboard().to(self.device)
-        print("✓ Simulator loaded successfully")
+        # print("✓ Simulator loaded successfully")  # Reduced logging
 
     
     def input2phosphenes(self, input_image, use_edge_encoder=False):

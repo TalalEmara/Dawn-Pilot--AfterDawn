@@ -277,9 +277,9 @@ class Translator:
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
         
-        print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")
-        for obj in objs[:5]:  # Show first 5
-            print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")
+        # print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")  # Reduced logging
+        # for obj in objs[:5]:  # Show first 5
+        #     print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")  # Reduced logging
 
         selected = [o for o in objs if o["score"] > Tmin]
         if len(selected) > Kmax:
@@ -701,30 +701,30 @@ class Translator:
         selected = self.select_objects()
         select_time = (time.time() - select_start) * 1000
         
-        print(f"[Translator] Selected {len(selected)} objects to render")
-        for obj in selected:
-            print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")
+        # print(f"[Translator] Selected {len(selected)} objects to render")  # Reduced logging
+        # for obj in selected:  # Reduced logging
+        #     print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")  # Reduced logging
 
         # Step 3: Render each selected object with retinotopic coordinate mapping
         render_start = time.time()
         for i, obj in enumerate(selected):
             object_class = obj.get("class", "unknown")
             centroid_original = obj.get("centroid_px", [self.input_width//2, self.input_height//2])
-            print(f"[Translator] Drawing object {i}: class={object_class}, centroid_original={centroid_original}")
+            # print(f"[Translator] Drawing object {i}: class={object_class}, centroid_original={centroid_original}")  # Reduced logging
             # Apply retinotopic mapping: coordinates normalized and scaled to target canvas
             self.draw_shape(canvas, obj, target_canvas_size=target_canvas_size, original_image_size=original_image_size)
         render_time = (time.time() - render_start) * 1000
-        print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")
-        print(f"[Translator] Output canvas size: {target_width}x{target_height} (retinotopic mapping from {self.input_width}x{self.input_height})")
+        # print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")  # Reduced logging
+        # print(f"[Translator] Output canvas size: {target_width}x{target_height} (retinotopic mapping from {self.input_width}x{self.input_height})")  # Reduced logging
         
         # Step 5: Optionally save final simplified navigation image
         out_path = ""
         if save_to_disk:
             out_path = os.path.join(self.output_dir, out_name)
             cv2.imwrite(out_path, canvas)
-            print(f"Saved simplified image at {out_path}")
-        else:
-            print(f"[Translator] Skipping disk save (WebSocket mode)")
+            print(f"Saved simplified image at {out_path}")  # Reduced logging
+        # else:
+        #     print(f"[Translator] Skipping disk save (WebSocket mode)")  # Reduced logging
         
         return canvas, out_path
 
