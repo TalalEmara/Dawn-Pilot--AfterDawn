@@ -136,31 +136,34 @@ const workerRef = useRef<Worker | null>(null);
 
 
   // --- Frame Capture & Sending ---
-  useFrameBuffer({
-    downsamplePercentage: 50,
-    enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 1000/3,
-    onFrame: async (rgbBlob, depthBlob) => {
-      if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
+useFrameBuffer({
+  downsamplePercentage: 50,
+  enabled: aiWebSocket?.readyState === WebSocket.OPEN,
+  logInterval: 1000 / 3, // ~300ms
+  // UPDATE CALLBACK
+  onFrame: async (pixelBuffer, width, height, depthBlob) => {
+    if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
-      try {
-        // Only encode depth for prosthetic mode (phosphene pipeline needs it)
-        const needsDepth = visionMode === "prosthetic";
+    try {
+      const needsDepth = visionMode === "prosthetic";
+      frameIdRef.current++;
 
-        frameIdRef.current++;
-
-        // Use worker for non-blocking encoding (offloads main thread!)
-        workerRef.current?.postMessage({
-          rgbBlob: rgbBlob,
+      workerRef.current?.postMessage(
+        {
+          pixelBuffer: pixelBuffer.buffer, // Send the internal buffer
           depthBlob: needsDepth ? depthBlob : null,
           frameId: frameIdRef.current,
           stage: getStageFromVisionMode(visionMode),
-        });
-      } catch (error) {
-        console.error("❌ Error sending frame:", error);
-      }
-    },
-  });
+          width: width,
+          height: height,
+        },
+        [pixelBuffer.buffer] // <--- CRITICAL: Transfer Ownership (Zero Copy)
+      );
+    } catch (error) {
+      console.error("❌ Error sending frame:", error);
+    }
+  },
+});
 
   // Events & Logic
   useEffect(() => {
@@ -205,8 +208,11 @@ const workerRef = useRef<Worker | null>(null);
  // Master of Position
   useEffect(() => {
     let animationId: number;
-
+    let lastBroadcast = 0; 
     const broadcastCamera = () => {
+      const now = performance.now();
+      if (!(now - lastBroadcast > 1000/30)){return}
+      lastBroadcast = now;
       const el = cameraRef.current?.el;
       
       // Optimization: Access Three.js Object3D directly to avoid slow DOM getAttribute calls
@@ -409,7 +415,7 @@ useEffect(() => {
               primitive="a-camera"
               look-controls="enabled: false"
               wasd-controls="enabled: true; acceleration: 15"
-              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
+              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 0; heightUpButton: 7; heightDownButton: 6"
             >
               <Entity
                 ref={hitboxRef}
