@@ -413,7 +413,7 @@ useEffect(() => {
               primitive="a-camera"
               look-controls="enabled: false"
               wasd-controls="enabled: true; acceleration: 15"
-              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 0; heightUpButton: 7; heightDownButton: 6"
+              vr-movement-controls="speed: 1.5; verticalSpeed: 1; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
             >
               <Entity
                 ref={hitboxRef}
