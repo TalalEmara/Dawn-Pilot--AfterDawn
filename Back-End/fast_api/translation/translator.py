@@ -142,7 +142,7 @@ class Translator:
     # OBJECT SCORING AND SELECTION METHODS
     # =====================================================================================
     
-    def score_object(self, obj):
+    def score_object_dynamic(self, obj):
         """
         Calculate importance score for an object based on multiple factors.
         
@@ -189,6 +189,33 @@ class Translator:
                       weights.get("vel", 0.0) * score_velocity +
                       weights.get("conf", 0.0) * score_confidence +
                       weights.get("hazard", 0.0) * score_hazard)
+        
+        return total_score
+    
+    def score_object(self, obj):
+        """
+        Calculate importance score for an object based on multiple factors.
+        
+        Scoring considers:
+        - Distance: Closer objects are more important for navigation
+        
+        Args:
+            obj (dict): Object data with keys like distance_m, class, velocity, etc.
+            
+        Returns:
+            float: Normalized importance score (0.0 to 1.0+)
+        """
+        weights = self.params.get("weights", {})
+        
+        # Distance scoring: closer objects are more important
+        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
+        #for far objects of depth > specific threshold get a score distance of 0
+        depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
+        if dist < depth_gate:
+            return 0.0  
+        
+        score_distance = 0.01*(dist) #near objects get higher score
+        total_score = (weights.get("dist", 1) * score_distance)
         
         return total_score
 

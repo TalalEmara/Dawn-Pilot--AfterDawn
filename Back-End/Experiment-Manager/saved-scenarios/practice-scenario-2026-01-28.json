@@ -1,7 +1,22 @@
 {
+  "name": "Practice Scenario",
+  "createdAt": "2026-01-28T08:16:23.836Z",
+  "entityCount": 10,
+  "camera": {
+    "position": {
+      "x": -1.8730128088403253,
+      "y": 2,
+      "z": 7.514139810149141
+    },
+    "rotation": {
+      "x": -17.303325412950862,
+      "y": 6.0733526283867185,
+      "z": 0
+    }
+  },
   "entities": [
     {
-      "id": "entity-1769588197763-quyhbrp03",
+      "id": "entity-1769588135432-it7e1c31k",
       "Position": {
         "x": -11,
         "y": 0,
@@ -26,7 +41,7 @@
       "name": "Box"
     },
     {
-      "id": "entity-1769588197766-h2lo0ier7",
+      "id": "entity-1769588135546-ltc8meuyo",
       "Position": {
         "x": 11,
         "y": 0,
@@ -51,7 +66,7 @@
       "name": "Box"
     },
     {
-      "id": "entity-1769588197768-r6d9bbc23",
+      "id": "entity-1769588135549-xa8golx74",
       "Position": {
         "x": 0.99346,
         "y": 0,
@@ -73,7 +88,7 @@
       "name": "Car"
     },
     {
-      "id": "entity-1769588197770-jho0aaq0g",
+      "id": "entity-1769588135550-w0jvu18kj",
       "Position": {
         "x": 2,
         "y": 0,
@@ -98,7 +113,7 @@
       "name": "Crossway"
     },
     {
-      "id": "entity-1769588197772-zeap0i7vr",
+      "id": "entity-1769588135553-m63giikp4",
       "Position": {
         "x": 6,
         "y": 0,
@@ -123,7 +138,7 @@
       "name": "Crossway"
     },
     {
-      "id": "entity-1769588197774-4ud5c8axy",
+      "id": "entity-1769588135555-8qrkyara3",
       "Position": {
         "x": 3.4457,
         "y": 0.47079,
@@ -145,7 +160,7 @@
       "name": "Garbage"
     },
     {
-      "id": "entity-1769588197776-j0bv6ex6t",
+      "id": "entity-1769588135557-zocpezqmk",
       "Position": {
         "x": 7.1917,
         "y": 0,
@@ -167,7 +182,7 @@
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769588197778-zo7f12syp",
+      "id": "entity-1769588135563-0ulwd94c8",
       "Position": {
         "x": -5.94954,
         "y": 0,
@@ -189,7 +204,7 @@
       "name": "Pole"
     },
     {
-      "id": "entity-1769588197782-p5o7sy17d",
+      "id": "entity-1769588135566-6otfdij50",
       "Position": {
         "x": -6.42454,
         "y": 5.22582,
@@ -211,7 +226,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1769588197784-cajypom05",
+      "id": "entity-1769588135568-xb9nrbhmw",
       "Position": {
         "x": 0.10565,
         "y": 0,
@@ -229,7 +244,8 @@
       },
       "Model": {
         "url": "/plottedPlant"
-      }
+      },
+      "name": "PlottedPlant"
     }
   ]
 }
