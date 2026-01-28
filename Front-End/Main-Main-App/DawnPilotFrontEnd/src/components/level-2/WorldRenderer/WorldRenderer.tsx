@@ -2,7 +2,7 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import groundTexture from "../../../assets/ground/ground.jpg";
 
 interface WorldSceneProps {
@@ -20,6 +20,25 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
   showStats = false,
   children
 }) => {
+// ==================================================
+  // ==================================================
+  // HARDCODED WORLD SETTINGS
+  // ==================================================
+  const WORLD_WIDTH = 40; 
+  const WORLD_DEPTH = 30;
+
+  // 1. Define the Ground's Center Z
+  // You want the ground to start at 0 and go to -60, so center is -30.
+  const GROUND_Z =  -WORLD_DEPTH / 2 +2; 
+
+  // 2. Define Wall Offsets relative to that center
+  const wallOffsetX = WORLD_WIDTH / 2; // 20
+  const wallOffsetZ = WORLD_DEPTH / 2; // 30
+
+  // Texture Repeat
+  const texRepeatX = WORLD_WIDTH / 2.5;
+  const texRepeatZ = WORLD_DEPTH / 2.5;
+
   return (
     <Scene
       embedded
@@ -32,17 +51,71 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
        <Entity primitive="a-sky" color="#87CEEB" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
         <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
+       {/* GROUND PLANE (Centered at 0, 0, -30) */}
+        <Entity
+            primitive="a-plane"
+            position={`0 0 ${GROUND_Z}`}
+            rotation="-90 0 0"
+            width={WORLD_WIDTH}
+            height={WORLD_DEPTH} 
+            material={{ src: groundTexture, repeat: `${texRepeatX} ${texRepeatZ}` }}
+            segments-width="50"
+            segments-height="100"
+        />
+            
+        {/* ================================================== */}
+        {/* BOUNDARY WALLS (Aligned to Ground Z)               */}
+        {/* ================================================== */}
         
-            <Entity
-              primitive="a-plane"
-              position="0 0 0"
-              rotation="-90 0 0"
-              width="50"
-              height="100"
-              material={{ src: groundTexture, repeat: "20 20" }}
-              segments-width="50"
-              segments-height="100"
-            />
+        {/* Left Wall (West) */}
+        <Entity
+          primitive="a-box"
+          className="collidable"
+          // Center X: -20, Center Z: -30 (Same as ground)
+          position={`${-wallOffsetX} 5 ${GROUND_Z}`}
+          width="1"
+          height="10"
+          depth={WORLD_DEPTH}
+          material="opacity: 0; transparent: true"
+        />
+
+        {/* Right Wall (East) */}
+        <Entity
+          primitive="a-box"
+          className="collidable"
+          // Center X: 20, Center Z: -30 (Same as ground)
+          position={`${wallOffsetX} 5 ${GROUND_Z}`}
+          width="1"
+          height="10"
+          depth={WORLD_DEPTH}
+          material="opacity: 0; transparent: true"
+        />
+
+        {/* Front Wall (North / Far Negative Z) */}
+        <Entity
+          primitive="a-box"
+          className="collidable"
+          // Center Z: -30 - 30 = -60 (The far edge)
+          position={`0 5 ${GROUND_Z - wallOffsetZ}`}
+          width={WORLD_WIDTH}
+          height="10"
+          depth="1"
+          material="opacity: 0; transparent: true"
+        />
+
+        {/* Back Wall (South / Origin Z) */}
+        <Entity
+          primitive="a-box"
+          className="collidable"
+          // Center Z: -30 + 30 = 0 (The start edge)
+          position={`0 5 ${GROUND_Z + wallOffsetZ}`}
+          width={WORLD_WIDTH}
+          height="10"
+          depth="1"
+          material="opacity: 0; transparent: true"
+        />
+        
+        {/* ================================================== */}
             
       {/* Shared Entity Rendering Logic */}
       {entities.map((e) => {
