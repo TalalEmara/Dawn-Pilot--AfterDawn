@@ -1,9 +1,41 @@
 {
   "entities": [
     {
-      "id": "entity-1769588197763-quyhbrp03",
+      "id": "entity-1769665850541-emx3atw7b",
       "Position": {
-        "x": -11,
+        "x": -9,
+        "y": 0,
+        "z": -14
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 2,
+        "y": 12.28,
+        "z": 50
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1769665850544-pzwpwcbm1",
+      "Position": {
+        "x": 10,
         "y": 0,
         "z": 0
       },
@@ -23,39 +55,79 @@
       "Model": {
         "url": "Aframe"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Box"
     },
     {
-      "id": "entity-1769588197766-h2lo0ier7",
+      "id": "entity-1769665850545-eb2pfwk8s",
       "Position": {
-        "x": 11,
+        "x": -5.4349,
         "y": 0,
-        "z": 0
+        "z": -19.54502
       },
       "Rotation": {
         "x": 0,
         "y": 0,
         "z": 0
       },
-      "Color": {
-        "value": "#000000"
-      },
       "Scale": {
-        "x": 1,
-        "y": 10,
-        "z": 50
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
       },
       "Model": {
-        "url": "Aframe"
+        "url": "/car"
       },
-      "name": "Box"
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Car"
     },
     {
-      "id": "entity-1769588197768-r6d9bbc23",
+      "id": "entity-1769665850545-6tbad7n1w",
       "Position": {
-        "x": 0.99346,
+        "x": -0.7563,
         "y": 0,
-        "z": 1
+        "z": -19.42043
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": -0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769665850546-h8fabup7g",
+      "Position": {
+        "x": -3.33046,
+        "y": 0,
+        "z": 2.53694
       },
       "Rotation": {
         "x": 0,
@@ -70,90 +142,25 @@
       "Model": {
         "url": "/car"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Car"
     },
     {
-      "id": "entity-1769588197770-jho0aaq0g",
+      "id": "entity-1769665850546-ij0yroyy5",
       "Position": {
-        "x": 2,
+        "x": 0,
         "y": 0,
-        "z": -22
-      },
-      "Rotation": {
-        "x": -90,
-        "y": 0,
-        "z": 0
-      },
-      "Color": {
-        "value": "#FF00FF"
-      },
-      "Scale": {
-        "x": 0.04,
-        "y": 0.04,
-        "z": 0.04
-      },
-      "Model": {
-        "url": "/crossway"
-      },
-      "name": "Crossway"
-    },
-    {
-      "id": "entity-1769588197772-zeap0i7vr",
-      "Position": {
-        "x": 6,
-        "y": 0,
-        "z": -22
-      },
-      "Rotation": {
-        "x": -90,
-        "y": 0,
-        "z": 0
-      },
-      "Color": {
-        "value": "#FF00FF"
-      },
-      "Scale": {
-        "x": 0.04,
-        "y": 0.04,
-        "z": 0.04
-      },
-      "Model": {
-        "url": "/crossway"
-      },
-      "name": "Crossway"
-    },
-    {
-      "id": "entity-1769588197774-4ud5c8axy",
-      "Position": {
-        "x": 3.4457,
-        "y": 0.47079,
-        "z": -4.72063
+        "z": -12
       },
       "Rotation": {
         "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "Scale": {
-        "x": 0.006,
-        "y": 0.006,
-        "z": 0.006
-      },
-      "Model": {
-        "url": "/garbage"
-      },
-      "name": "Garbage"
-    },
-    {
-      "id": "entity-1769588197776-j0bv6ex6t",
-      "Position": {
-        "x": 7.1917,
-        "y": 0,
-        "z": 5.6867
-      },
-      "Rotation": {
-        "x": 0,
-        "y": 0,
+        "y": 90,
         "z": 0
       },
       "Scale": {
@@ -164,36 +171,79 @@
       "Model": {
         "url": "/plottedPlant"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769588197778-zo7f12syp",
+      "id": "entity-1769665850547-r90f0ll8o",
       "Position": {
-        "x": -5.94954,
+        "x": 3,
         "y": 0,
-        "z": -4.92125
+        "z": -12
       },
       "Rotation": {
         "x": 0,
-        "y": 0,
+        "y": 90,
         "z": 0
       },
       "Scale": {
-        "x": 0.0005,
-        "y": 0.0005,
-        "z": 0.0005
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
       },
       "Model": {
-        "url": "/pole"
+        "url": "/plottedPlant"
       },
-      "name": "Pole"
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
+      "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769588197782-p5o7sy17d",
+      "id": "entity-1769665850548-2qg05v2uh",
       "Position": {
-        "x": -6.42454,
-        "y": 5.22582,
-        "z": 9.45539
+        "x": 6,
+        "y": 0,
+        "z": -12
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769665850549-4p558c2hc",
+      "Position": {
+        "x": 5.09383,
+        "y": 5.01391,
+        "z": -0.77112
       },
       "Rotation": {
         "x": 0,
@@ -208,14 +258,117 @@
       "Model": {
         "url": "/tree"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.2,
+          "y": 1,
+          "z": 0.02
+        }
+      },
       "name": "Tree"
     },
     {
-      "id": "entity-1769588197784-cajypom05",
+      "id": "entity-1769665850550-6z5ebd7iq",
       "Position": {
-        "x": 0.10565,
+        "x": 2.61844,
         "y": 0,
-        "z": -11.84782
+        "z": -20.5
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769665850551-0zcshw96l",
+      "Position": {
+        "x": 2.61844,
+        "y": 0,
+        "z": -20.5
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/Target"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Target"
+    },
+    {
+      "id": "entity-1769665850552-o93lk0s4t",
+      "Position": {
+        "x": 5.96717,
+        "y": 0,
+        "z": -20.5
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769665850553-q30gspkeb",
+      "Position": {
+        "x": 7.78208,
+        "y": 0,
+        "z": -21.01151
       },
       "Rotation": {
         "x": 0,
@@ -229,6 +382,13 @@
       },
       "Model": {
         "url": "/plottedPlant"
+      },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
       }
     }
   ]

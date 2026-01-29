@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 import type { Entity } from '../hooks/useScenarioWorld';
 import type { ModelInfo } from '../hooks/useModelLibrary.ts';
 
-interface ScenarioWorld {
+export interface World {
   entities: Entity[];
 }
 

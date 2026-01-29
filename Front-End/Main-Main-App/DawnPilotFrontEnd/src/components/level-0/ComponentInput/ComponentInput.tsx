@@ -25,10 +25,16 @@ function ComponentInput({ type, label, value, onChange, min = -10, max = 10 }: C
   switch (type) {
     case "Vector3":
       return (
-        <VectorInput label={label} min={min} max={max} value={value} onChange={onChange} />
+        <VectorInput 
+          label={label} 
+          min={min} 
+          max={max} 
+          value={typeof value === 'object' ? value : undefined} 
+          onChange={onChange as ((value: { x: number; y: number; z: number; }) => void) | undefined} 
+        />
       );
     case "String":
-      return <StringInput label={label} value={value} onChange={onChange} />;
+      return <StringInput label={label} value={typeof value === 'string' ? value : undefined} onChange={onChange as ((value: string) => void) | undefined} />;
     default:
       return null;
   }

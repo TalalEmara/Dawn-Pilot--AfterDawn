@@ -3,7 +3,7 @@ import "aframe-particle-system-component";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity as AEntity, Scene } from "aframe-react";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./BuilderPage.module.css";
 import BuilderSidePanel from "../../components/level-1/BuilderSidePanel/BuilderSidePanel";
 import ScenarioContext from "../../contexts/ScenarioContext";
@@ -12,8 +12,7 @@ import { useEntityManager } from "../../hooks/useEntityManager";
 import { useComponentManager } from "../../hooks/useComponentManager";
 import { useModelLibrary } from "../../hooks/useModelLibrary";
 import PropertiesPanel from "../../components/level-1/PropertiesPanel/PropertiesPanel";
-import { useDebugAFrameBuffersDev } from "../../hooks/useDebugAFrameBuffers";
-import { useAFrameSync } from "../../hooks/useAframeSync";
+import { useAFrameSync } from "../../hooks/useAFrameSync";
 import { usePersistentCamera } from "../../hooks/BuilderMode/usePersistentCamera";
 import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import ScenarioSaveDialog from "../../components/level-1/ScenarioSaveDialog/ScenarioSaveDialog";

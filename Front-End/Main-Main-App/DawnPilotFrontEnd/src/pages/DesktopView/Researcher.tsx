@@ -11,9 +11,9 @@ import { useCollisionDetection } from "../../hooks/useCollision";
 import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import { useExperimentVault } from "../../hooks/Recording/useExperimentVault";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
-import { SERVER_IP } from "../../ApiConfig";
 
-import datasetTest from "../../assets/testing/dataset.png";
+
+
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 import { useAiStream } from "../../hooks/useAiStream";
 import ResearcherSidePanel from "../../components/level-1/ResearcherSidePanel/ResearcherSidePanel";
@@ -139,7 +139,7 @@ const workerRef = useRef<Worker | null>(null);
 useFrameBuffer({
   downsamplePercentage: 50,
   enabled: aiWebSocket?.readyState === WebSocket.OPEN,
-  logInterval: 1000 / 10, // ~300ms
+  logInterval: 1000 / 10 , // ~300ms
   // UPDATE CALLBACK
   onFrame: async (pixelBuffer, width, height, depthBlob) => {
     if (aiWebSocket?.readyState !== WebSocket.OPEN) return;

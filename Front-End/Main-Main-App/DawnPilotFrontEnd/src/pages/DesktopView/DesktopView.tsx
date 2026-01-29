@@ -9,7 +9,7 @@ import { useCameraSync } from '../../hooks/useCameraSync';
 import { useFrameBuffer } from '../../hooks/useFrameBuffer';
 import { useCollisionDetection } from '../../hooks/useCollision';
 import { useScenarioSaveLoad } from '../../hooks/useScenarioSaveLoad';
-import ScenarioLoadDialog from '../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog';
+
 
 function DesktopViewer() {
   const cameraRef = useRef<any>(null);

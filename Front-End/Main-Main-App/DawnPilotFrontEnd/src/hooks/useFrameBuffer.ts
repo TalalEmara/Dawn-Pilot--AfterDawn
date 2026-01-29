@@ -179,7 +179,9 @@ function readDepthBuffer(gl: any, renderer: any, sceneEl: any, width: number, he
         side: THREE.DoubleSide
       });
     }
-    cachedDepthMaterial.uniforms.near.value = camera.near || 0.1;
+    if (cachedDepthMaterial) {
+      cachedDepthMaterial.uniforms.near.value = camera.near || 0.1;
+    }
 
     // 2. Reuse Target
     if (!cachedDepthTarget || cachedDepthTarget.width !== width || cachedDepthTarget.height !== height) {
@@ -280,7 +282,7 @@ async function pixelsToBlob(data: Uint8Array, width: number, height: number): Pr
   const ctx = encodingCanvas.getContext("2d");
   if (!ctx) return null;
 
-  const clampedData = new Uint8ClampedArray(data.buffer);
+  const clampedData = new Uint8ClampedArray(data);
   const imgData = new ImageData(clampedData, width, height);
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = width;

@@ -10,7 +10,7 @@ const API_BASE_URL = URLS.SCENARIO_API;
 
 export function useComponentManager(onEntityUpdate?: (entity: Entity) => void) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Debounce timers for each entity-component pair
   const updateTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});

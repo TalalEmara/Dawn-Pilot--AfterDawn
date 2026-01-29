@@ -16,7 +16,8 @@ interface CreateCustomEntityParams {
   components?: Record<string, unknown>;
 }
 
-export function useEntityManager(onWorldUpdate?: (entities: Entity[]) => void) {
+// Using overload-compatible callback
+export function useEntityManager(onWorldUpdate?: (dataOrId: Entity[] | string, action?: 'delete') => void) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

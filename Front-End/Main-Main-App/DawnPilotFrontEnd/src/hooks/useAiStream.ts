@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useBinaryStream } from './useBinarySystem';
-import { SERVER_IP, URLS } from '../ApiConfig';
+import { URLS } from '../ApiConfig';
 
 interface UseAiStreamOptions {
   /** * Optional dependency to force reconnection when changed.

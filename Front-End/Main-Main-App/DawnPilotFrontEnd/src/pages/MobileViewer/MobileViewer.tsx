@@ -15,7 +15,7 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
     schema: { src: { type: "selector" } },
 
-    init: function () {
+    init: function (this: any) {
       const canvas = this.data.src;
       if (!canvas) return;
 
@@ -23,15 +23,15 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
       const mesh = this.el.getObject3D("mesh");
       if (!mesh) return;
 
-      mesh.material = new AFRAME.THREE.MeshBasicMaterial({
+      (mesh as any).material = new AFRAME.THREE.MeshBasicMaterial({
         map: this.texture,
         transparent: true,
         side: AFRAME.THREE.DoubleSide,
       });
-      mesh.material.map.needsUpdate = true;
+      (mesh as any).material.map.needsUpdate = true;
     },
 
-    tick: function () {
+    tick: function (this: any) {
       const canvas = this.data.src;
       if (this.texture && canvas.getAttribute('data-updated') !== this.lastUpdated) {
         this.texture.needsUpdate = true;
@@ -181,19 +181,23 @@ function MobileView() {
 
   // Load world logic
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) return undefined;
     const handleReload = () => {
       setReloadTrigger(prev => prev + 1);
     };
     socket.on("scenario-loaded", handleReload);
-    return () => socket.off("scenario-loaded", handleReload);
+    return () => {
+      socket.off("scenario-loaded", handleReload);
+    };
   }, [socket]);
 
   useEffect(() => {
     loadWorld()
       .then(() => console.log("🌍 [MobileView] World loaded"))
       .catch((err) => console.error("❌ [MobileView] Failed to load world:", err));
-    return () => clearAllTimers();
+    return () => {
+      clearAllTimers();
+    };
   }, [loadWorld, clearAllTimers, reloadTrigger]);
 
   // Sync Rig Position logic

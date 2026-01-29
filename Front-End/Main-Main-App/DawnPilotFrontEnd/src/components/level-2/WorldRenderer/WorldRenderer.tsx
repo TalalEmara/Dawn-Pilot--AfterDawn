@@ -2,7 +2,7 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import React, { useMemo } from 'react';
+import React from 'react';
 import groundTexture from "../../../assets/ground/ground.jpg";
 
 interface WorldSceneProps {
@@ -25,11 +25,11 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
   // HARDCODED WORLD SETTINGS
   // ==================================================
   const WORLD_WIDTH = 40; 
-  const WORLD_DEPTH = 30;
+  const WORLD_DEPTH = 50;
 
   // 1. Define the Ground's Center Z
   // You want the ground to start at 0 and go to -60, so center is -30.
-  const GROUND_Z =  -WORLD_DEPTH / 2 +2; 
+  const GROUND_Z =  -WORLD_DEPTH / 2 + 15; 
 
   // 2. Define Wall Offsets relative to that center
   const wallOffsetX = WORLD_WIDTH / 2; // 20
