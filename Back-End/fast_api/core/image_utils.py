@@ -276,3 +276,68 @@ def save_debug_images(
     except Exception as e:
         logger.error(f"❌ Failed to save debug images: {str(e)}")
         return False
+
+
+def add_frame_id_overlay(
+    img: np.ndarray,
+    frame_id: int,
+    position: tuple = (15, 5),
+    color: tuple = (0, 0, 255),  # Red in BGR
+    font_scale: float = 0.15,
+    thickness: int = 1,
+    outline_color: tuple = (0, 0, 0)  # Black outline
+) -> np.ndarray:
+    """
+    Add frame ID text overlay to image (top-left corner by default)
+    
+    Args:
+        img: Input image (BGR or grayscale numpy array)
+        frame_id: Frame identifier (will be formatted as "F: {frame_id}")
+        position: (x, y) position for text in pixels (default: top-left with margin)
+        color: Text color in BGR format (default: red)
+        font_scale: Font size multiplier (default: 0.15 for very small)
+        thickness: Text thickness in pixels (default: 1)
+        outline_color: Outline color for better readability (default: black)
+        
+    Returns:
+        np.ndarray: Image with frame ID overlay (same dtype and shape as input)
+        
+    Notes:
+        - Creates a copy of the image (non-destructive)
+        - Draws black outline first, then colored text on top for readability
+        - Works with both grayscale and color images
+    """
+    # Create copy to avoid modifying original
+    img_with_text = img.copy()
+    
+    # Format frame ID text
+    text = f"F: {frame_id}"
+    
+    # Font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # Draw black outline for better readability (thicker)
+    cv2.putText(
+        img_with_text,
+        text,
+        position,
+        font,
+        font_scale,
+        outline_color,
+        thickness + 2,  # Thicker for outline
+        cv2.LINE_AA
+    )
+    
+    # Draw colored text on top
+    cv2.putText(
+        img_with_text,
+        text,
+        position,
+        font,
+        font_scale,
+        color,
+        thickness,
+        cv2.LINE_AA
+    )
+    
+    return img_with_text

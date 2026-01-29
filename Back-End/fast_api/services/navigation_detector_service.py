@@ -1342,12 +1342,22 @@ class NavigationDetectorService:
             # Convert phosphene output to image (scale to 0-255)
             phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
             
+            ################################ add frame ID overlay ################################
+            # Convert grayscale to BGR so we can add colored text overlay
+            if len(phosphene_img.shape) == 2:
+                phosphene_img = cv2.cvtColor(phosphene_img, cv2.COLOR_GRAY2BGR)
+            
+            # Add frame ID overlay to phosphene output
+            from core import add_frame_id_overlay
+            phosphene_img = add_frame_id_overlay(phosphene_img, frame_id)
+            ####################################################################################
+            
             # Optional debug: Save phosphene output
             if debug_mode and debug_input_prefix:
                 cv2.imwrite(f"{debug_input_prefix}_06_phosphene_output.png", phosphene_img)
                 logger.info(f"💾 Saved PHOSPHENE output")
             
-            # Encode phosphene output - optimized (grayscale, no color space needed)
+            # Encode phosphene output - now it's BGR with colored overlay
             output_b64 = encode_ndarray_to_base64(phosphene_img, color_space='BGR')
             
             result.update({
