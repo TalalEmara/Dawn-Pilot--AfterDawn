@@ -77,7 +77,9 @@ function DesktopViewer() {
       const r = remoteData.rotation;
       
       // Directly set the rotation on the A-Frame camera entity
-      el.setAttribute('rotation', `${r.x} ${r.y} ${r.z}`);
+      if (r) {
+        el.setAttribute('rotation', `${r.x} ${r.y} ${r.z}`);
+      }
     }
   });
 }, [setOnCameraUpdate]);

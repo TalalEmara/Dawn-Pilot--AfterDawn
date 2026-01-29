@@ -64,7 +64,7 @@ export function useCameraSync(options: UseCameraSyncOptions) {
     socket.on('camera:updated', (data: { clientId: string } & CameraState) => {
       const remoteCam: CameraState = {
         position: { ...data.position },
-        rotation: { ...data.rotation }
+        rotation: data.rotation ? { ...data.rotation } : undefined
       };
 
       remoteCameraRef.current = remoteCam;

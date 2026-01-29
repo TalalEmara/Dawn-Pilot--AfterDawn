@@ -240,7 +240,9 @@ useFrameBuffer({
       if (cameraRef.current) {
         const el = cameraRef.current.el;
         const r = remoteData.rotation;
-        el.setAttribute("rotation", `${r.x} ${r.y} ${r.z}`);
+        if (r) {
+          el.setAttribute("rotation", `${r.x} ${r.y} ${r.z}`);
+        }
       }
     });
   }, [setOnCameraUpdate]);
