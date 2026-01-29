@@ -85,6 +85,14 @@ class NavigationDetectorService:
                 torch.cuda.empty_cache()
                 print("✅ GPU memory optimized")
         
+        # Initialize reusable ThreadPool executor for parallel processing
+        # Avoids per-frame thread creation overhead (significant at 30 FPS)
+        import concurrent.futures
+        self.executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, 
+            thread_name_prefix="detection"
+        ) if self.parallel_processing else None
+        
         print(f"✓ Initialization complete. is_loaded={self.is_loaded}")
         print("="*60 + "\n")
     
@@ -385,20 +393,19 @@ class NavigationDetectorService:
             parallel_start = time.time()
             
             # PARALLEL EXECUTION: Object detection and Freepath detection run simultaneously
-            # Can be disabled for debugging or single-threaded environments
-            if self.parallel_processing:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="detection") as executor:
-                    # Submit both tasks in parallel
-                    object_detection_future = executor.submit(
-                        self._run_object_detection, rgb, depth, frame_id
-                    )
-                    freepath_detection_future = executor.submit(
-                        self._run_freepath_detection, rgb, frame_id, debug_mode
-                    )
-                    
-                    # Wait for both to complete and get results
-                    detections, detection_time = object_detection_future.result()
-                    freepath_data, freepath_time = freepath_detection_future.result()
+            # Using reusable ThreadPool executor (initialized in __init__) to avoid per-frame overhead
+            if self.parallel_processing and self.executor:
+                # Submit both tasks in parallel using reusable executor
+                object_detection_future = self.executor.submit(
+                    self._run_object_detection, rgb, depth, frame_id
+                )
+                freepath_detection_future = self.executor.submit(
+                    self._run_freepath_detection, rgb, frame_id, debug_mode
+                )
+                
+                # Wait for both to complete and get results
+                detections, detection_time = object_detection_future.result()
+                freepath_data, freepath_time = freepath_detection_future.result()
                 
                 parallel_time = (time.time() - parallel_start) * 1000
             else:
@@ -1122,7 +1129,7 @@ class NavigationDetectorService:
                 logger.info(f"💾 Saved DETECTOR output")
                 
                 # Save freepath visualization
-                if freepath_coordinates and len(freepath_coordinates) > 0:
+                if debug_mode and freepath_coordinates and len(freepath_coordinates) > 0:
                     freepath_vis = self._visualize_freepath_points(rgb, freepath_coordinates, freepath_circle)
                     cv2.imwrite(f"{debug_input_prefix}_03b_freepath_points.jpg", cv2.cvtColor(freepath_vis, cv2.COLOR_RGB2BGR))
                     # logger.info(f"💾 Saved FREEPATH visualization with {len(freepath_coordinates)} points")

@@ -86,6 +86,7 @@ self.onmessage = async (e: MessageEvent) => {
       rgb: rgbBase64,
       stage: stage,
       depth: depthBase64 || undefined,
+      debug: false,  // Prevent backend from saving debug images (saves disk I/O)
     };
 
     self.postMessage({ success: true, payload: JSON.stringify(message) });
