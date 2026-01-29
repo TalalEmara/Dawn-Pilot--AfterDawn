@@ -87,7 +87,7 @@ export function useCameraSync(options: UseCameraSyncOptions) {
       lastUpdateRef.current = now;
 
       if (socketRef.current?.connected) {
-        socketRef.current.emit('camera:update', camera);
+        socketRef.current.volatile.emit('camera:update', camera);
       }
     },
     [throttleMs]
