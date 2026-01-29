@@ -11,25 +11,36 @@ interface WorldSceneProps {
   isMobile?: boolean;
   showStats?: boolean;
   children?: React.ReactNode;
+  worldWidth?: number;
+  worldDepth?: number;
+  groundZShift?: number;
+  groundXShift?: number;
+  isLiteMode?: boolean;
 }
 
 export const WorldScene: React.FC<WorldSceneProps> = ({
   entities,
-  onCameraRef, // Intended for camera ref passing if needed, though camera usually passed in children
+  onCameraRef,
   isMobile = false,
   showStats = false,
-  children
+  children,
+  worldWidth = 40,
+  worldDepth = 30,
+  groundZShift = 2,
+  groundXShift = 0,
+  isLiteMode = false
 }) => {
 // ==================================================
   // ==================================================
-  // HARDCODED WORLD SETTINGS
+  // WORLD SETTINGS (Dynamic from Settings Panel)
   // ==================================================
-  const WORLD_WIDTH = 40; 
-  const WORLD_DEPTH = 30;
+  const WORLD_WIDTH = worldWidth; 
+  const WORLD_DEPTH = worldDepth;
 
   // 1. Define the Ground's Center Z
-  // You want the ground to start at 0 and go to -60, so center is -30.
-  const GROUND_Z =  -WORLD_DEPTH / 2 +2; 
+  const GROUND_Z_SHIFT = groundZShift; 
+  const GROUND_X_SHIFT = groundXShift;
+  const GROUND_Z = -WORLD_DEPTH / 2 + GROUND_Z_SHIFT; 
 
   // 2. Define Wall Offsets relative to that center
   const wallOffsetX = WORLD_WIDTH / 2; // 20
@@ -51,16 +62,20 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
        <Entity primitive="a-sky" color="#87CEEB" />
         <Entity light={{ type: "ambient", color: "#ffffff", intensity: 0.8 }} />
         <Entity light={{ type: "directional", color: "#ffffff", intensity: 1.0 }} position="5 10 2" />
-       {/* GROUND PLANE (Centered at 0, 0, -30) */}
+       {/* GROUND PLANE (Centered at X shift, 0, calculated Z) */}
         <Entity
+            key={`ground-${isLiteMode}`}
             primitive="a-plane"
-            position={`0 ${isMobile? .6 :0} ${GROUND_Z}`}
+            position={`${GROUND_X_SHIFT} ${isMobile? .6 :0} ${GROUND_Z}`}
             rotation="-90 0 0"
             width={WORLD_WIDTH}
             height={WORLD_DEPTH} 
-            material={{ src: groundTexture, repeat: `${texRepeatX} ${texRepeatZ}` }}
-            segments-width="50"
-            segments-height="100"
+            material={isLiteMode 
+              ? { shader: 'flat', src: groundTexture, repeat: `${texRepeatX} ${texRepeatZ}`, fog: false, flatShading: true, dithering: false }
+              : { src: groundTexture, repeat: `${texRepeatX} ${texRepeatZ}` }
+            }
+            segments-width={isLiteMode ? "10" : "50"}
+            segments-height={isLiteMode ? "20" : "100"}
         />
             
         {/* ================================================== */}
@@ -69,6 +84,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         
         {/* Left Wall (West) */}
         <Entity
+          key={`wall-left-${isLiteMode}`}
           primitive="a-box"
           className="collidable"
           // Center X: -20, Center Z: -30 (Same as ground)
@@ -76,11 +92,14 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
+         material={isLiteMode 
+           ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
+           : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
+         }
         />
-
         {/* Right Wall (East) */}
         <Entity
+          key={`wall-right-${isLiteMode}`}
           primitive="a-box"
           className="collidable"
           // Center X: 20, Center Z: -30 (Same as ground)
@@ -88,11 +107,15 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
+          material={isLiteMode 
+            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
+            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
+          }
         />
 
         {/* Front Wall (North / Far Negative Z) */}
         <Entity
+          key={`wall-front-${isLiteMode}`}
           primitive="a-box"
           className="collidable"
           // Center Z: -30 - 30 = -60 (The far edge)
@@ -100,11 +123,15 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
+          material={isLiteMode 
+            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
+            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
+          }
         />
 
         {/* Back Wall (South / Origin Z) */}
         <Entity
+          key={`wall-back-${isLiteMode}`}
           primitive="a-box"
           className="collidable"
           // Center Z: -30 + 30 = 0 (The start edge)
@@ -112,7 +139,10 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
+          material={isLiteMode 
+            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
+            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
+          }
         />
         
         {/* ================================================== */}
@@ -134,7 +164,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         const collisionWeightFormatted = `x: ${collisionWeight.x}; y: ${collisionWeight.y}; z: ${collisionWeight.z}`;
 
         return (
-          <React.Fragment key={e.id}>
+          <React.Fragment key={`${e.id}-${isLiteMode}`}>
             
             {/* 1. The Object Itself */}
             {url === 'Aframe' ? (
@@ -143,7 +173,10 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
                 position={`${adjustedPos.x} ${adjustedPos.y} ${adjustedPos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
-                material={`color: ${color}`}
+                material={isLiteMode 
+                  ? `shader: flat; color: ${color}; fog: false; flatShading: true; dithering: false` 
+                  : `color: ${color}`
+                }
                 className={isObstacle ? "collidable" : ""}
                 collision-weight={collisionWeightFormatted}
               />
@@ -154,7 +187,10 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
                 position={`${adjustedPos.x} ${adjustedPos.y} ${adjustedPos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
-                material={`color: ${color}`}
+                material={isLiteMode 
+                  ? `shader: flat; color: ${color}; fog: false; flatShading: true; dithering: false` 
+                  : `color: ${color}`
+                }
                 collision-weight={collisionWeightFormatted}
               />
             )}

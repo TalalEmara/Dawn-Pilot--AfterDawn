@@ -1,0 +1,36 @@
+.panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 5px;
+    padding: 1vh 1vw;
+    background: hsl(from var(--background-color) h calc(s*.1) calc(l * 4));
+    border: 1px solid var(--primary-color);
+    border-radius: 10px;
+    gap: 2vw;
+}
+
+.label {
+    margin: 0;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+}
+
+.count {
+    margin: 0;
+    font-size: 2.5em;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.count.danger {
+    color: #ef4444;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}

@@ -1,0 +1,72 @@
+.panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    margin: 5px;
+    padding: 1vh 1vw;
+    background: hsl(from var(--background-color) h calc(s*.1) calc(l * 4));
+    border: 1px solid var(--primary-color);
+    border-radius: 10px;
+    transition: border-color 0.3s ease;
+}
+
+.panel.recording {
+    border-color: #ef4444;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.timer {
+    margin: 0;
+    font-size: 2em;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.timer.recording {
+    color: #ef4444;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.recordButton, .stopButton {
+    background-color: var(--primary-color); 
+    color: var(--background-color);
+    border: none;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1vh 1vw .8vh 1vw;
+    transition: all 0.2s ease;
+}
+
+.recordButton:hover:not(:disabled) {
+    background-color: #ef4444;
+    transform: scale(1.05);
+}
+
+.stopButton:hover:not(:disabled) {
+    background-color: #f59e0b;
+    transform: scale(1.05);
+}
+
+.recordButton:disabled, .stopButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.recordButton.active {
+    background-color: #ef4444;
+    animation: recordPulse 1s ease-in-out infinite;
+}

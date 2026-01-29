@@ -92,6 +92,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // EYE CONTROL SYNC
+  socket.on('eye-control:update', (data: { control: string }) => {
+    // Broadcast to all other clients (especially Mobile)
+    socket.broadcast.emit('eye-control:changed', { control: data.control });
+    console.log(`Eye control synced: ${data.control}`);
+    
+    // Optionally log to experiment data
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('EYE_CONTROL', { control: data.control });
+    }
+  });
+
+  // LITE MODE SYNC
+  socket.on('lite-mode:update', (data: { enabled: boolean }) => {
+    // Broadcast to all other clients (especially Mobile)
+    socket.broadcast.emit('lite-mode:changed', { enabled: data.enabled });
+    console.log(`Lite mode synced: ${data.enabled}`);
+    
+    // Optionally log to experiment data
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('LITE_MODE', { enabled: data.enabled });
+    }
+  });
+
 //  COLLISION EVENTS
   socket.on('experiment:collision', (data: { obstacleId: string }) => {
     if (experimentVault.isRecording()) {

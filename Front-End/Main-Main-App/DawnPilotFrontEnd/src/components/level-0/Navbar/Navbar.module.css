@@ -1,0 +1,56 @@
+.navbar{
+    background-color: var(--primary-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    padding-top: 10vh;
+}
+
+.navButton {
+    background-color: color-mix(in srgb, var(--text-color) 40%, transparent);
+    width: 100%;
+    border: none;
+    padding: 1vh 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s ease;
+    font-size: 14px;
+    text-align: center;
+    border-radius: 0;
+}
+
+.navButton:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navButton:focus-visible {
+    outline: 2px solid var(--accent-color, #007bff);
+    outline-offset: -2px;
+}
+
+.navButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.navButton.active {
+    background-color: var(--text-color);
+    color: var(--primary-color);
+    font-weight: 1000;
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.label {
+    flex: 1;
+    text-align: center;
+}

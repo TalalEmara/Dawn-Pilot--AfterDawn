@@ -1,0 +1,106 @@
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 5px;
+    padding: 1vh 1vw;
+    background: hsl(from var(--background-color) h calc(s*.1) calc(l * 4));
+    border: 1px solid var(--primary-color);
+    border-radius: 10px;
+    transition: border-color 0.3s ease;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.sectionTitle {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.label {
+    font-size: 0.85em;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.input {
+    padding: 8px 12px;
+    border: 1px solid var(--primary-color);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    color: inherit;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.GroundDimensions, .GroundShifts, .frameSettings{
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.GroundDimensions .inputGroup,
+.GroundShifts .inputGroup,
+.frameSettings .inputGroup {
+    flex: 1;
+    min-width: 0;
+}
+
+.toggleGroup {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.toggleLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+}
+
+.checkbox:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

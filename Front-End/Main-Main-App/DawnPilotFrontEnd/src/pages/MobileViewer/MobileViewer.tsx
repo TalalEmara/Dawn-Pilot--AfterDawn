@@ -57,6 +57,13 @@ function MobileView() {
   useEffect(() => {
     localStorage.setItem("mobile_visionMode", visionMode);
   }, [visionMode]);
+
+  // EYE CONTROL STATE (R or L)
+  const [eyeControl, setEyeControl] = useState<'R' | 'L'>('R');
+  
+  // LITE MODE STATE
+  const [liteMode, setLiteMode] = useState(false);
+  
   // UI State
   const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
 
@@ -75,7 +82,7 @@ function MobileView() {
   // 1. SYNC CONNECTION
   const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera, socket } = useCameraSync({
     clientType: "mobile",
-    throttleMs: 16,
+    throttleMs: 1000/30,
   });
 
   // 2. AI CONNECTION (Receive Only)
@@ -96,6 +103,10 @@ function MobileView() {
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
   const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
   const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
+  
+  // Calculate HUD X position based on eye control
+  const baseHudX = holeDistance/2 + 0.012;
+  const hudX = eyeControl === 'R' ? baseHudX : -baseHudX;
 
   // --- LISTEN FOR VISION MODE UPDATES ---
 // --- LISTEN FOR VISION MODE UPDATES ---
@@ -110,6 +121,34 @@ function MobileView() {
     
     return () => {
       socket.off('vision-mode:changed', handleModeUpdate);
+    };
+  }, [socket]);
+
+  // --- LISTEN FOR EYE CONTROL UPDATES ---
+  useEffect(() => {
+    if (!socket) return;
+    const handleEyeControlUpdate = (data: { control: 'R' | 'L' }) => {
+      setEyeControl(data.control);
+    };
+    
+    socket.on('eye-control:changed', handleEyeControlUpdate);
+    
+    return () => {
+      socket.off('eye-control:changed', handleEyeControlUpdate);
+    };
+  }, [socket]);
+
+  // --- LISTEN FOR LITE MODE UPDATES ---
+  useEffect(() => {
+    if (!socket) return;
+    const handleLiteModeUpdate = (data: { enabled: boolean }) => {
+      setLiteMode(data.enabled);
+    };
+    
+    socket.on('lite-mode:changed', handleLiteModeUpdate);
+    
+    return () => {
+      socket.off('lite-mode:changed', handleLiteModeUpdate);
     };
   }, [socket]);
   // --- SOCKET LISTENER WITH MINIMUM DURATION LOGIC ---
@@ -276,7 +315,7 @@ useEffect(() => {
         📱 Mobile Viewer
       </div>
 
-      <WorldScene entities={world.entities} isMobile={true}>
+      <WorldScene entities={world.entities} isMobile={true} isLiteMode={liteMode}>
         
         {/* Environment Overrides */}
       
@@ -356,7 +395,7 @@ useEffect(() => {
                     width: hudWidth,
                     height: hudHeight
                   }}
-                  position={`${holeDistance/2 +.012} 0 -${depth}`}
+                  position={`${hudX} 0 -${depth}`}
                   canvas-updater="src: #hud-buffer"
                 />
               </>
@@ -364,7 +403,7 @@ useEffect(() => {
 
             {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
             {alertStatus === 'DANGER' && (
-                <Entity position={`${holeDistance/2 +.012} 0 -0.09`}>
+                <Entity position={`${hudX} 0 -0.09`}>
                    {/* Red Background */}
                    <Entity 
                      geometry={{ primitive: "plane", width: 0.025, height: 0.01 }}

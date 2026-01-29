@@ -7,7 +7,7 @@ import { URLS } from '../ApiConfig';
 const SOCKET_URL = URLS.SYNC_SOCKET;
 interface CameraState {
   position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
 }
 
 interface UseCameraSyncOptions {

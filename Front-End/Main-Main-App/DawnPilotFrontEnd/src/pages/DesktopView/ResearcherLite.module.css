@@ -1,0 +1,23 @@
+.page {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--background-color);
+  color: #eee;
+}
+
+.viewportContainer {
+  flex: 1;
+  position: relative;
+  background: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewport {
+  width: 100%;
+  max-width: 177.78vh;
+  aspect-ratio: 16/9;
+  position: relative;
+}

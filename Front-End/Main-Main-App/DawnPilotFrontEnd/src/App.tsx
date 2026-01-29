@@ -6,11 +6,15 @@ import DesktopViewer from './pages/DesktopView/DesktopView'
 import MobileViewer from './pages/MobileViewer/MobileViewer'
 import ResearcherView from './pages/DesktopView/Researcher'
 import ConnectPage from './pages/ConnectPage/ConnectPage'
+import ResearcherLite from './pages/DesktopView/ResearcherLite'
+
 
 function App() {
   return (
     <Routes>
       <Route path="/research" element={<ResearcherView />} />
+
+      <Route path="/lite" element={<ResearcherLite />} />
       <Route path="/desktop" element={<DesktopViewer />} />
       <Route path="/mobile" element={<MobileViewer />} />
       <Route path="/builder" element={<BuilderPage />} />

@@ -1,0 +1,86 @@
+.container {
+  height: 100%;
+  background-color: hsl(
+    from var(--background-color) h calc(s * 0.2) calc(l * 5)
+  );
+  box-sizing: border-box;
+  padding: 2vh 1vw;
+}
+.logo{
+    width: 100%;
+    font-size: 1em;
+    font-weight: bold;
+    margin: 0;
+    /* for graident text */
+    background: var(--text-color);
+    background-size: 200%;
+    background-clip: text;
+    color: transparent;
+    position: relative;
+}
+.pageLabel{
+    margin: 0;
+    padding: 0;
+    font-size: 1.8em;
+    font-weight:800 ;
+}
+.subjectName{
+    margin: 0;
+    padding: 0;
+    font-size: 1em;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.statusLine {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-top: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    font-size: 0.85em;
+}
+
+.statusItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.statusLabel {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.statusIndicator {
+    display: inline-flex;
+    align-items: center;
+    transition: transform 0.2s ease;
+}
+
+.statusIndicator.online {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.statusIndicator.offline {
+    opacity: 0.6;
+}
+
+.separator {
+    opacity: 0.5;
+    margin: 0 4px;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
