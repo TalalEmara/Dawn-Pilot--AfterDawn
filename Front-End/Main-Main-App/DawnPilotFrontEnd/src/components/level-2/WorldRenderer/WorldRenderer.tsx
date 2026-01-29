@@ -2,7 +2,7 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import groundTexture from "../../../assets/ground/ground.jpg";
 
 interface WorldSceneProps {
@@ -25,11 +25,11 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
   // HARDCODED WORLD SETTINGS
   // ==================================================
   const WORLD_WIDTH = 40; 
-  const WORLD_DEPTH = 50;
+  const WORLD_DEPTH = 30;
 
   // 1. Define the Ground's Center Z
   // You want the ground to start at 0 and go to -60, so center is -30.
-  const GROUND_Z =  -WORLD_DEPTH / 2 + 15; 
+  const GROUND_Z =  -WORLD_DEPTH / 2 +2; 
 
   // 2. Define Wall Offsets relative to that center
   const wallOffsetX = WORLD_WIDTH / 2; // 20
@@ -76,7 +76,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Right Wall (East) */}
@@ -88,7 +88,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Front Wall (North / Far Negative Z) */}
@@ -100,7 +100,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Back Wall (South / Origin Z) */}
@@ -112,7 +112,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
         
         {/* ================================================== */}
