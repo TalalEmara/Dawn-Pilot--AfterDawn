@@ -220,7 +220,7 @@
       "name": "Tree"
     },
     {
-      "id": "entity-1769553752108-k9h06hp3l",
+      "id": "entity-Target",
       "Position": {
         "x": 2.61844,
         "y": 0,
@@ -240,9 +240,9 @@
         "z": 0.04
       },
       "Model": {
-        "url": "/crossway"
+        "url": "/Target"
       },
-      "name": "Crossway"
+      "name": "Target"
     },
     {
       "id": "entity-1769553752109-cr68tqn56",
