@@ -127,7 +127,7 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
               disabled={disabled}
               className={styles.checkbox}
             />
-            <span>Lite Mode (Flat Shading)</span>
+            <span>Lite Mode</span>
           </label>
         </div>
 
