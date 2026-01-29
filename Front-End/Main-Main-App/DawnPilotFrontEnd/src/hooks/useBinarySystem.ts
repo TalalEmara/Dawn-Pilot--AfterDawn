@@ -1,9 +1,10 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function useBinaryStream(ws: WebSocket | null) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastProcessedFrameRef = useRef(0);
+  const [receivedFrameId, setReceivedFrameId] = useState<number>(0);
 
   useEffect(() => {
     if (!ws) return;
@@ -39,6 +40,7 @@ export function useBinaryStream(ws: WebSocket | null) {
             return;
           }
           lastProcessedFrameRef.current = frameId;
+          setReceivedFrameId(frameId);
           
           // Convert base64 to blob
           const base64 = data.data.output_image;
@@ -67,5 +69,5 @@ export function useBinaryStream(ws: WebSocket | null) {
     };
   }, [ws]);
 
-  return canvasRef;
+  return { canvasRef, receivedFrameId };
 }

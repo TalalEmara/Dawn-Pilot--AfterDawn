@@ -210,9 +210,9 @@ class Translator:
         # Distance scoring: closer objects are more important
         dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
         #for far objects of depth > specific threshold get a score distance of 0
-        depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
-        if dist < depth_gate:
-            return 0.0  
+        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
+        # if dist < depth_gate:
+        #     return 0.0  
         
         score_distance = 0.01*(dist) #near objects get higher score
         total_score = (weights.get("dist", 1) * score_distance)

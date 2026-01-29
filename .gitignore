@@ -165,3 +165,4 @@ Back-End/fast_api/models/final_deeplabv3_footpath.pth
 Back-End/fast_api/models/yolo_syn_100.pt
 YOLO_Dataset/
 .venv/
+Front-End/Main-Main-App/DawnPilotFrontEnd/pnpm-lock.yaml
