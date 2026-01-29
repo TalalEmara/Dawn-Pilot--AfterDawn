@@ -76,7 +76,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Right Wall (East) */}
@@ -88,7 +88,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width="1"
           height="10"
           depth={WORLD_DEPTH}
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Front Wall (North / Far Negative Z) */}
@@ -100,7 +100,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
 
         {/* Back Wall (South / Origin Z) */}
@@ -112,7 +112,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
           width={WORLD_WIDTH}
           height="10"
           depth="1"
-          material="opacity: 0; transparent: true"
+          material="color: white; shader: flat; depthTest: false; transparent: true; opacity: 0.8; wireframe: true"
         />
         
         {/* ================================================== */}
