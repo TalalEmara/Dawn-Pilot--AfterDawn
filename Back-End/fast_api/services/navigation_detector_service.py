@@ -344,7 +344,7 @@ class NavigationDetectorService:
         rgb: np.ndarray, 
         depth: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
         Process a single frame through the navigation pipeline (PARALLEL OPTIMIZED)
@@ -530,7 +530,7 @@ class NavigationDetectorService:
         self, 
         rgb: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Tuple[Tuple[np.ndarray, List[Tuple[int, int]], Optional[Dict[str, Any]]], float]:
         """
         Worker method for parallel freepath detection execution
@@ -679,7 +679,7 @@ class NavigationDetectorService:
         original_size: Tuple[int, int],
         cropping_config: Dict[str, Any],
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Optional[Tuple[int, int]]:
         """
         Calculate freepath ball position using smart selection algorithm
@@ -1213,6 +1213,46 @@ class NavigationDetectorService:
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
             simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
+            
+            # Get selected objects with translator scores
+            selected_objects = translator.select_objects()
+            
+            # Create lookup dict for selected objects (by class name for matching)
+            selected_lookup = {}
+            for sel_obj in selected_objects:
+                obj_class = sel_obj.get('class', 'unknown')
+                obj_bbox = sel_obj.get('bbox', [])
+                # Use class + bbox as key for matching
+                key = f"{obj_class}_{obj_bbox}"
+                selected_lookup[key] = {
+                    'score': sel_obj.get('score', 0.0),
+                    'distance_m': sel_obj.get('distance_m', sel_obj.get('depth', 0.0))
+                }
+            
+            # Add translator scores to original detections
+            for det in detections:
+                det_class = det.get('class', 'unknown')
+                det_bbox = det.get('bbox', [])
+                key = f"{det_class}_{det_bbox}"
+                
+                if key in selected_lookup:
+                    # Object was selected by translator
+                    sel_data = selected_lookup[key]
+                    det['translator_score'] = round(sel_data['score'], 3)
+                    det['selected'] = True
+                    det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
+                    # Score breakdown (currently distance-based)
+                    distance = sel_data['distance_m']
+                    det['score_breakdown'] = {
+                        'distance_m': round(distance, 2),
+                        'distance_score': round(0.01 * distance, 3)
+                    }
+                else:
+                    # Object was rejected by translator
+                    det['translator_score'] = 0.0
+                    det['selected'] = False
+                    det['selection_reason'] = f"Score too low or beyond K_max limit (T_min={self.t_min}, K_max={self.k_max})"
+                    det['score_breakdown'] = {}
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
