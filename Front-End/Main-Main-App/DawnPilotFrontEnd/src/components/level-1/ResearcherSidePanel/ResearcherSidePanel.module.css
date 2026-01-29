@@ -222,3 +222,41 @@
   font-size: 12px;
   width: 100%;
 }
+
+/* Frame ID Display Styles */
+.frameIdContainer {
+  margin-top: 12px;
+  padding: 10px;
+  background: #2a2a2a;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.frameIdRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 11px;
+}
+
+.frameIdLabel {
+  color: #aaa;
+  font-weight: normal;
+}
+
+.frameIdValue {
+  color: #fff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.frameIdMatch {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.frameIdMismatch {
+  color: #ff6b6b;
+  font-weight: bold;
+}

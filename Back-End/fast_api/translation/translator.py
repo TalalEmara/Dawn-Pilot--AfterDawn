@@ -142,7 +142,7 @@ class Translator:
     # OBJECT SCORING AND SELECTION METHODS
     # =====================================================================================
     
-    def score_object(self, obj):
+    def score_object_dynamic(self, obj):
         """
         Calculate importance score for an object based on multiple factors.
         
@@ -189,6 +189,33 @@ class Translator:
                       weights.get("vel", 0.0) * score_velocity +
                       weights.get("conf", 0.0) * score_confidence +
                       weights.get("hazard", 0.0) * score_hazard)
+        
+        return total_score
+    
+    def score_object(self, obj):
+        """
+        Calculate importance score for an object based on multiple factors.
+        
+        Scoring considers:
+        - Distance: Closer objects are more important for navigation
+        
+        Args:
+            obj (dict): Object data with keys like distance_m, class, velocity, etc.
+            
+        Returns:
+            float: Normalized importance score (0.0 to 1.0+)
+        """
+        weights = self.params.get("weights", {})
+        
+        # Distance scoring: closer objects are more important
+        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
+        #for far objects of depth > specific threshold get a score distance of 0
+        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
+        # if dist < depth_gate:
+        #     return 0.0  
+        
+        score_distance = 0.01*(dist) #near objects get higher score
+        total_score = (weights.get("dist", 1) * score_distance)
         
         return total_score
 
@@ -250,9 +277,9 @@ class Translator:
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
         
-        print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")
-        for obj in objs[:5]:  # Show first 5
-            print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")
+        # print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")  # Reduced logging
+        # for obj in objs[:5]:  # Show first 5
+        #     print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")  # Reduced logging
 
         selected = [o for o in objs if o["score"] > Tmin]
         if len(selected) > Kmax:
@@ -674,30 +701,30 @@ class Translator:
         selected = self.select_objects()
         select_time = (time.time() - select_start) * 1000
         
-        print(f"[Translator] Selected {len(selected)} objects to render")
-        for obj in selected:
-            print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")
+        # print(f"[Translator] Selected {len(selected)} objects to render")  # Reduced logging
+        # for obj in selected:  # Reduced logging
+        #     print(f"  - class={obj.get('class')}, bbox={obj.get('bbox')}, score={obj.get('score', 0):.3f}")  # Reduced logging
 
         # Step 3: Render each selected object with retinotopic coordinate mapping
         render_start = time.time()
         for i, obj in enumerate(selected):
             object_class = obj.get("class", "unknown")
             centroid_original = obj.get("centroid_px", [self.input_width//2, self.input_height//2])
-            print(f"[Translator] Drawing object {i}: class={object_class}, centroid_original={centroid_original}")
+            # print(f"[Translator] Drawing object {i}: class={object_class}, centroid_original={centroid_original}")  # Reduced logging
             # Apply retinotopic mapping: coordinates normalized and scaled to target canvas
             self.draw_shape(canvas, obj, target_canvas_size=target_canvas_size, original_image_size=original_image_size)
         render_time = (time.time() - render_start) * 1000
-        print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")
-        print(f"[Translator] Output canvas size: {target_width}x{target_height} (retinotopic mapping from {self.input_width}x{self.input_height})")
+        # print(f"[Translator] Timing (ms): free_path={free_path_time:.2f}, select={select_time:.2f}, render={render_time:.2f}")  # Reduced logging
+        # print(f"[Translator] Output canvas size: {target_width}x{target_height} (retinotopic mapping from {self.input_width}x{self.input_height})")  # Reduced logging
         
         # Step 5: Optionally save final simplified navigation image
         out_path = ""
         if save_to_disk:
             out_path = os.path.join(self.output_dir, out_name)
             cv2.imwrite(out_path, canvas)
-            print(f"Saved simplified image at {out_path}")
-        else:
-            print(f"[Translator] Skipping disk save (WebSocket mode)")
+            print(f"Saved simplified image at {out_path}")  # Reduced logging
+        # else:
+        #     print(f"[Translator] Skipping disk save (WebSocket mode)")  # Reduced logging
         
         return canvas, out_path
 

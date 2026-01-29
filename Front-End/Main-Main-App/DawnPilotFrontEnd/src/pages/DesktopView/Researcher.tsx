@@ -67,11 +67,13 @@ function ResearcherView() {
 
   // AI Socket State
  const frameIdRef = useRef<number>(0);
+  const [sentFrameId, setSentFrameId] = useState<number>(0);
 // Replaces all manual socket state, connection effects, and binary stream hooks
 const { 
   socket: aiWebSocket, 
   canvasRef: aiHudCanvasRef,
-  isConnected: aiConnected 
+  isConnected: aiConnected,
+  receivedFrameId
 } = useAiStream({ 
   reconnectDependency: visionMode 
 });
@@ -104,6 +106,23 @@ const workerRef = useRef<Worker | null>(null);
   // 2. Initialize Experiment Vault
   const vault = useExperimentVault(socket);
 
+  // Stop recording on mount (cleanup orphaned sessions), unmount, or page refresh
+  useEffect(() => {
+    // Always try to stop on mount (handles crash/refresh scenarios)
+    vault.stopExperiment().catch(() => {}); // Ignore errors if no recording
+
+    const handleBeforeUnload = () => {
+      vault.stopExperiment().catch(() => {});
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      vault.stopExperiment().catch(() => {}); // Ignore errors
+    };
+  }, []); // Empty deps - run once on mount
+
   const { world, loadWorld, setWorld } = useScenarioWorld();
 
   const {
@@ -119,40 +138,35 @@ const workerRef = useRef<Worker | null>(null);
 
 
   // --- Frame Capture & Sending ---
-  useFrameBuffer({
-    downsamplePercentage: 50,
-    enabled:  aiWebSocket?.readyState === WebSocket.OPEN,
-    logInterval: 2000,
-    onFrame: async (rgbBlob, depthBlob) => {
-      if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
+useFrameBuffer({
+  downsamplePercentage: 50,
+  enabled: aiWebSocket?.readyState === WebSocket.OPEN,
+  logInterval: 1000 / 10, // ~300ms
+  // UPDATE CALLBACK
+  onFrame: async (pixelBuffer, width, height, depthBlob) => {
+    if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
-      try {
-        const rgbBase64 = await blobToBase64(rgbBlob);
-        
-        // Only encode depth for prosthetic mode (phosphene pipeline needs it)
-        const needsDepth = visionMode === "prosthetic";
-        const depthBase64 = (needsDepth && depthBlob) ? await blobToBase64(depthBlob) : null;
+    try {
+      const needsDepth = visionMode === "prosthetic";
+      frameIdRef.current++;
+      setSentFrameId(frameIdRef.current);
 
-        frameIdRef.current++;
-
-        const message: any = {
-          type: "frame",
-          frame_id: String(frameIdRef.current).padStart(3, "0"),
-          rgb: rgbBase64,
+      workerRef.current?.postMessage(
+        {
+          pixelBuffer: pixelBuffer.buffer, // Send the internal buffer
+          depthBlob: needsDepth ? depthBlob : null,
+          frameId: frameIdRef.current,
           stage: getStageFromVisionMode(visionMode),
-        };
-        
-        // Only include depth if available and needed
-        if (depthBase64) {
-          message.depth = depthBase64;
-        }
-
-        aiWebSocket.send(JSON.stringify(message));
-      } catch (error) {
-        console.error("❌ Error sending frame:", error);
-      }
-    },
-  });
+          width: width,
+          height: height,
+        },
+        [pixelBuffer.buffer] // <--- CRITICAL: Transfer Ownership (Zero Copy)
+      );
+    } catch (error) {
+      console.error("❌ Error sending frame:", error);
+    }
+  },
+});
 
   // Events & Logic
   useEffect(() => {
@@ -171,7 +185,6 @@ const workerRef = useRef<Worker | null>(null);
   useEffect(() => {
     if (socket && socket.connected) {
       socket.emit('vision-mode:update', { mode: visionMode });
-      console.log(`📡 Synced vision mode: ${visionMode}`);
     }
   }, [visionMode, socket]);
 
@@ -190,7 +203,6 @@ const workerRef = useRef<Worker | null>(null);
     if (cameraRef.current?.el && !cameraInitialized.current) {
       cameraRef.current.el.setAttribute("position", "0 1.6 0");
       cameraInitialized.current = true;
-      console.log("[Camera] Initial position set to 0 1.6 0");
     }
   },[]);
 
@@ -199,8 +211,9 @@ const workerRef = useRef<Worker | null>(null);
  // Master of Position
   useEffect(() => {
     let animationId: number;
-
     const broadcastCamera = () => {
+    
+      
       const el = cameraRef.current?.el;
       
       // Optimization: Access Three.js Object3D directly to avoid slow DOM getAttribute calls
@@ -241,7 +254,7 @@ const workerRef = useRef<Worker | null>(null);
       if (!isCollidingRef.current && socket) {
         isCollidingRef.current = true;
         socket.emit('alert:status', { status: 'DANGER' });
-        console.log("💥 Sending DANGER");
+      
       }
 
       // 2. Reset the "Return to Safe" timer every time we get a hit
@@ -252,7 +265,6 @@ const workerRef = useRef<Worker | null>(null);
       // 3. If no new hits happen for 500ms, assume we are SAFE
       safetyTimerRef.current = setTimeout(() => {
         if (socket) {
-          console.log("✅ Sending SAFE");
           socket.emit('alert:status', { status: 'SAFE' });
         }
         isCollidingRef.current = false;
@@ -261,7 +273,7 @@ const workerRef = useRef<Worker | null>(null);
 
       const timestamp = new Date().toLocaleTimeString();
       const logMsg = `[${timestamp}] Hit: ${detail.obstacleId}`;
-      console.warn(`💥 ${logMsg}`);
+
       setCollisionCount((prev) => prev + 1);
       setCollisionLog((prev) => [logMsg, ...prev].slice(0, 10));
       vault.logCollision(detail.obstacleId);
@@ -354,6 +366,8 @@ useEffect(() => {
   collisionLog={collisionLog}
   onOpenLoadDialog={handleOpenLoadDialog}
   saveLoadLoading={saveLoadLoading}
+  sentFrameId={sentFrameId}
+  receivedFrameId={receivedFrameId}
 />
 
       {/* --- 3D VIEWPORT WITH ASPECT RATIO FIX --- */}
@@ -404,7 +418,7 @@ useEffect(() => {
               primitive="a-camera"
               look-controls="enabled: false"
               wasd-controls="enabled: true; acceleration: 15"
-              vr-movement-controls="speed: 5; verticalSpeed: 3; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
+              vr-movement-controls="speed: 1.5; verticalSpeed: 1; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
             >
               <Entity
                 ref={hitboxRef}

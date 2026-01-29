@@ -39,6 +39,10 @@ interface ResearcherSidePanelProps {
   // Load Dialog
   onOpenLoadDialog: () => void;
   saveLoadLoading: boolean;
+  
+  // Frame ID tracking
+  sentFrameId: number;
+  receivedFrameId: number;
 }
 
 const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
@@ -48,6 +52,8 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
   aiConnected,
   visionMode,
   setVisionMode,
+  sentFrameId,
+  receivedFrameId,
   currentScenarioId,
   socket,
   setCollisionCount,
@@ -101,7 +107,6 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
     configureKMax(k, {
       onSuccess: () => {
         setKMaxValue(k);
-        console.log(`✅ k_max configured to ${k}`);
       }
     });
   };
@@ -134,6 +139,13 @@ useEffect(() => {
           Laptop: {isConnected ? "🟢" : "🔴"} | Mobile:{" "}
           {mobileId ? "🟢" : "🔴"} | AI:{" "}
           {aiConnected ? "🟢" : "🔴"}
+        </div>
+          {/* DURATION */}
+        <div style={{ marginBottom: "24px" }}>
+          <div className={styles.sectionLabel}>Session Duration</div>
+          <div className={styles.timeDisplay}>
+            {formatTime(elapsedTime)}
+          </div>
         </div>
       </div>
 
@@ -228,15 +240,26 @@ useEffect(() => {
               className={styles.canvas}
             />
           </div>
-        </div>
-
-        {/* DURATION */}
-        <div style={{ marginBottom: "24px" }}>
-          <div className={styles.sectionLabel}>Session Duration</div>
-          <div className={styles.timeDisplay}>
-            {formatTime(elapsedTime)}
+          {/* Frame ID Display */}
+          <div className={styles.frameIdContainer}>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Sent Frame ID:</span>
+              <span className={styles.frameIdValue}>{sentFrameId}</span>
+            </div>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Received Frame ID:</span>
+              <span className={styles.frameIdValue}>{receivedFrameId}</span>
+            </div>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Status:</span>
+              <span className={sentFrameId === receivedFrameId ? styles.frameIdMatch : styles.frameIdMismatch}>
+                {sentFrameId === receivedFrameId ? '✓ Match' : '✗ Mismatch'}
+              </span>
+            </div>
           </div>
         </div>
+
+      
 
         {/* METRICS */}
         <div className={styles.sectionBox}>

@@ -1,15 +1,65 @@
 {
   "entities": [
     {
-      "id": "entity-1768600508754-8oo416ssx",
+      "id": "entity-1769588197763-quyhbrp03",
       "Position": {
-        "x": 0,
-        "y": 2.82745,
+        "x": -11,
+        "y": 0,
         "z": 0
       },
       "Rotation": {
         "x": 0,
         "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 50
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1769588197766-h2lo0ier7",
+      "Position": {
+        "x": 11,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#000000"
+      },
+      "Scale": {
+        "x": 1,
+        "y": 10,
+        "z": 50
+      },
+      "Model": {
+        "url": "Aframe"
+      },
+      "name": "Box"
+    },
+    {
+      "id": "entity-1769588197768-r6d9bbc23",
+      "Position": {
+        "x": 0.99346,
+        "y": 0,
+        "z": 1
+      },
+      "Rotation": {
+        "x": 0,
+        "y": -90,
         "z": 0
       },
       "Scale": {
@@ -23,11 +73,149 @@
       "name": "Car"
     },
     {
-      "id": "entity-1768600508756-1zfykmyly",
+      "id": "entity-1769588197770-jho0aaq0g",
       "Position": {
-        "x": -4,
+        "x": 2,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
         "y": 0,
         "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769588197772-zeap0i7vr",
+      "Position": {
+        "x": 6,
+        "y": 0,
+        "z": -22
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "name": "Crossway"
+    },
+    {
+      "id": "entity-1769588197774-4ud5c8axy",
+      "Position": {
+        "x": 3.4457,
+        "y": 0.47079,
+        "z": -4.72063
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.006,
+        "y": 0.006,
+        "z": 0.006
+      },
+      "Model": {
+        "url": "/garbage"
+      },
+      "name": "Garbage"
+    },
+    {
+      "id": "entity-1769588197776-j0bv6ex6t",
+      "Position": {
+        "x": 7.1917,
+        "y": 0,
+        "z": 5.6867
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.5,
+        "y": 0.5,
+        "z": 0.5
+      },
+      "Model": {
+        "url": "/plottedPlant"
+      },
+      "name": "PlottedPlant"
+    },
+    {
+      "id": "entity-1769588197778-zo7f12syp",
+      "Position": {
+        "x": -5.94954,
+        "y": 0,
+        "z": -4.92125
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.0005,
+        "y": 0.0005,
+        "z": 0.0005
+      },
+      "Model": {
+        "url": "/pole"
+      },
+      "name": "Pole"
+    },
+    {
+      "id": "entity-1769588197782-p5o7sy17d",
+      "Position": {
+        "x": -6.42454,
+        "y": 5.22582,
+        "z": 9.45539
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "name": "Tree"
+    },
+    {
+      "id": "entity-1769588197784-cajypom05",
+      "Position": {
+        "x": 0.10565,
+        "y": 0,
+        "z": -11.84782
       },
       "Rotation": {
         "x": 0,

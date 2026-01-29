@@ -139,7 +139,7 @@ class ObjectDetector:
             # YOLO processing with optimized memory management
             rgb_np = np.array(rgb_img)
             with torch.no_grad():
-                outputs = self.model(rgb_np)[0]
+                outputs = self.model(rgb_np, verbose=False)[0]  # Disable verbose output
             detections = outputs.boxes
             # Efficient CPU transfer
             boxes = detections.xyxy.detach().cpu().numpy()

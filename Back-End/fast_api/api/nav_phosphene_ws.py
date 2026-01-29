@@ -276,7 +276,8 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     continue
                 
                 frame_id = payload["frame_id"]
-                logger.info(f"🔄 Processing frame {frame_id}")
+                # logger.info(f"🔄 Processing frame {frame_id}")
+                print(f"⚡ Starting inference for frame {frame_id} [{payload['stage']} stage]")  # Essential inference marker
                 
                 # CRITICAL: Run heavy operations in thread pool (non-blocking)
                 inference_result = await asyncio.to_thread(run_heavy_inference, payload)
@@ -311,7 +312,9 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 frames_processed += 1
                 
                 total_time = sum(result.get("stats", {}).values())
-                logger.info(f"📡 Broadcasted frame {frame_id} to {connection_manager.get_connection_count()} clients (processed in {total_time:.2f}ms)")
+                num_detections = len(result.get("detections", []))
+                print(f"✅ Frame {frame_id} complete: {total_time:.0f}ms | {num_detections} objects | {connection_manager.get_connection_count()} clients")  # Essential completion marker
+                # logger.info(f"📡 Broadcasted frame {frame_id} to {connection_manager.get_connection_count()} clients (processed in {total_time:.2f}ms)")  # Reduced logging
                 
         except Exception as e:
             logger.error(f"Consumer error: {e}", exc_info=True)

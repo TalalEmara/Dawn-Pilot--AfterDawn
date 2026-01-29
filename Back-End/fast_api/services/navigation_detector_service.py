@@ -93,14 +93,14 @@ class NavigationDetectorService:
         import json
         
         # Default values (fallback)
-        self.model_type = "faster_rcnn"
-        self.model_path = os.path.join(self.base_dir, "object_path_detection", "models", "best_yolo.pt")
+        self.model_type = "yolo"
+        self.model_path = os.path.join(self.base_dir, "object_path_detection", "models", "yolo_our_data_50.pt")
         self.class_map_path = os.path.join(self.base_dir, "object_path_detection", "yolo_class_mapping.json")
         self.freepath_model_path = os.path.join(self.base_dir, "object_path_detection", "models", "final_deeplabv3_footpath.pth")
-        self.debug_mode = True
+        self.debug_mode = False
         
         # Configurable parameters (can be updated via API)
-        self.conf_threshold = 0.2  # YOLO detection confidence threshold
+        self.conf_threshold = 0.5  # YOLO detection confidence threshold
         self.t_min = 0.3  # Translator minimum score threshold
         self.k_min = 1    # Translator minimum objects to select
         self.k_max = 5    # Translator maximum objects to select
@@ -720,7 +720,7 @@ class NavigationDetectorService:
         BOTTOM_HALF_THRESHOLD = ball_config.get("bottom_half_threshold", 0.5)
         MIN_MARGIN = BALL_RADIUS + MARGIN_BUFFER
         
-        # print(f"\n🎯 BALL CONFIG - Radius: {BALL_RADIUS}, Margin: {MARGIN_BUFFER}, Threshold: {BOTTOM_HALF_THRESHOLD}")
+        # print(f"\n🎯 BALL CONFIG - Radius: {BALL_RADIUS}, Margin: {MARGIN_BUFFER}, Threshold: {BOTTOM_HALF_THRESHOLD}")  # Reduced logging
         if debug_mode:
             logger.info(f"🎯 Frame {frame_id}: Ball config - radius={BALL_RADIUS}, margin={MARGIN_BUFFER}, threshold={BOTTOM_HALF_THRESHOLD}")
         
@@ -1125,7 +1125,7 @@ class NavigationDetectorService:
                 if freepath_coordinates and len(freepath_coordinates) > 0:
                     freepath_vis = self._visualize_freepath_points(rgb, freepath_coordinates, freepath_circle)
                     cv2.imwrite(f"{debug_input_prefix}_03b_freepath_points.jpg", cv2.cvtColor(freepath_vis, cv2.COLOR_RGB2BGR))
-                    logger.info(f"💾 Saved FREEPATH visualization with {len(freepath_coordinates)} points")
+                    # logger.info(f"💾 Saved FREEPATH visualization with {len(freepath_coordinates)} points")
                     print(f"💾 Saved freepath visualization: {debug_input_prefix}_03b_freepath_points.jpg")
             
             if stop_at == "detector":

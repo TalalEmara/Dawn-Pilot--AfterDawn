@@ -1,7 +1,7 @@
 import "aframe";
 
 // ============== DEBUG CONTROL ==============
-const DEBUG_COLLISION = true; // <-- SET TO false TO DISABLE ALL LOGS
+const DEBUG_COLLISION = false; // <-- SET TO false TO DISABLE ALL LOGS
 // ===========================================
 
 const log = (...args: any[]) => DEBUG_COLLISION && console.log('[Collision]', ...args);
@@ -15,14 +15,14 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-weight"]) {
     AFRAME.registerComponent("collision-weight", {
         schema: {
             x: { type: 'number', default: 1 },
-            y: { type: 'number', default: 0.5 },
-            z: { type: 'number', default: 0.5 }
+            y: { type: 'number', default: 1 },
+            z: { type: 'number', default: 1 }
         }
     });
 }
 
 const applyCollisionWeight = (obstacle: any, box: any) => {
-    let weight = { x: 1, y: 0.5, z: 0.5 }; // Default weight
+    let weight = { x: 1, y: 1, z: 1 }; // Default weight
     
     // Check for collision-weight component first
     if (obstacle.el && obstacle.el.getAttribute) {
@@ -297,34 +297,37 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       // Always update the mover position to stop movement into obstacles
       this.mover.position.copy(finalPos);
 
-      if (hitOccurred && (now - this.lastCollisionTime > this.data.cooldown) || this.checkCollision(currentPos)) {
-        this.lastCollisionTime = now;
+      if (hitOccurred) {
+        const now = Date.now();
+        if (now - this.lastCollisionTime > this.data.cooldown) {
+          this.lastCollisionTime = now;
         
-        let obstacleId = "unknown";
-        const center = new THREE.Vector3();
-        const size = new THREE.Vector3();
+          let obstacleId = "unknown";
+          const center = new THREE.Vector3();
+          const size = new THREE.Vector3();
 
-        for(const obs of this.obstacles) {
-           this.obstacleBox.setFromObject(obs);
-           
-           // Apply same weighting
-           applyCollisionWeight(obs, this.obstacleBox);
+          for(const obs of this.obstacles) {
+            this.obstacleBox.setFromObject(obs);
+            
+            // Apply same weighting
+            applyCollisionWeight(obs, this.obstacleBox);
 
-           if(this.playerBox.intersectsBox(this.obstacleBox)) {
-               obstacleId = (obs as any).el.id; 
-               break;
-           }
+            if(this.playerBox.intersectsBox(this.obstacleBox)) {
+                obstacleId = (obs as any).el.id; 
+                break;
+            }
+          }
+
+          warn(`💥 COLLISION EVENT EMITTING! obstacleId: ${obstacleId}`);
+          log('Emitting on element:', this.el.tagName, this.el.id || '(no id)');
+          
+          this.el.emit("collision", {
+            obstacleId: obstacleId,
+            timestamp: now,
+          });
+          
+          log('Event emitted successfully');
         }
-
-        warn(`💥 COLLISION EVENT EMITTING! obstacleId: ${obstacleId}`);
-        log('Emitting on element:', this.el.tagName, this.el.id || '(no id)');
-        
-        this.el.emit("collision", {
-          obstacleId: obstacleId,
-          timestamp: now,
-        });
-        
-        log('Event emitted successfully');
       }
     },
   });

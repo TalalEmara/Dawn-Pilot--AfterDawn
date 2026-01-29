@@ -1,5 +1,5 @@
 import { EntityManager } from '../ECS-Pattern/ecsManager';
-import { Position, Rotation, Color, Scale, Model } from '../ECS-Pattern/components';
+import { Position, Rotation, Color, Scale, Model, Collision } from '../ECS-Pattern/components';
 import { Component } from '../ECS-Pattern/ecsManager';
 import { Entity } from '../ECS-Pattern/types';
 import { ModelDefinitions, getModelDefinition, modelExists } from './modelsDeclare';
@@ -25,7 +25,8 @@ const componentRegistry = new Map<string, new (...args: any[]) => Component>([
   ['Rotation', Rotation],
   ['Color', Color],
   ['Scale', Scale],
-  ['Model', Model]
+  ['Model', Model],
+  ['Collision', Collision]
 ]);
 
 // === Helper Functions ===
@@ -52,6 +53,9 @@ function entityToObject(objectId: string, entity: Entity): any {
   const model = entityManager.getComponent(entity, Model);
   if (model) obj.Model = { url: model.url };
 
+  const collision = entityManager.getComponent(entity, Collision);
+  if (collision) obj.Collision = { weight: collision.weight };
+
   return obj;
 }
 
@@ -69,6 +73,8 @@ function createComponentInstance(ComponentClass: new (...args: any[]) => Compone
     return new Color(data.value);
   } else if (ComponentClass === Model) {
     return new Model(data.url);
+  } else if (ComponentClass === Collision) {
+    return new Collision(data.weight);
   }
   return new ComponentClass();
 }
@@ -434,6 +440,21 @@ export function loadScenario(filename: string): SavedScenario {
     if (entityData.Scale) components.Scale = entityData.Scale;
     if (entityData.Color) components.Color = entityData.Color;
     if (entityData.Model) components.Model = entityData.Model;
+    
+    // Add Collision component - use saved data, lookup from model, or apply default
+    if (entityData.Collision) {
+      components.Collision = entityData.Collision;
+    } else if (entityData.name) {
+      // Try to get collision weights from model definition
+      const modelDef = getModelDefinition(entityData.name);
+      if (modelDef && modelDef.components.Collision) {
+        components.Collision = modelDef.components.Collision;
+      } else {
+        components.Collision = { weight: { x: 1, y: 1, z: 1 } };
+      }
+    } else {
+      components.Collision = { weight: { x: 1, y: 1, z: 1 } };
+    }
 
     const newEntity = createEntity(components);
     

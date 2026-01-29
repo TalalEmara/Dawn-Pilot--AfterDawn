@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import '../AFrameComponents/Collision'; // Import the component side-effect
 
 // ============== DEBUG CONTROL ==============
-const DEBUG_HOOK = true; // <-- SET TO false TO DISABLE ALL LOGS
+const DEBUG_HOOK = false; // <-- SET TO false TO DISABLE ALL LOGS
 // ===========================================
 
 const log = (...args: any[]) => DEBUG_HOOK && console.log('[useCollision]', ...args);
