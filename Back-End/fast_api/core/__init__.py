@@ -9,8 +9,7 @@ from .image_utils import (
     decode_base64_to_rgb,
     encode_ndarray_to_base64,
     decode_depth_map,
-    save_debug_images,
-    add_frame_id_overlay
+    save_debug_images
 )
 
 from .depth_utils import assign_depth_to_detections
@@ -23,7 +22,6 @@ __all__ = [
     "encode_ndarray_to_base64",
     "decode_depth_map",
     "save_debug_images",
-    "add_frame_id_overlay",
     "assign_depth_to_detections",
     "cleanup_old_files",
 ]

@@ -1284,47 +1284,47 @@ class NavigationDetectorService:
             translator.params['canvas_size'] = [h, w]
             simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
             
-            # Get selected objects with translator scores
-            selected_objects = translator.select_objects()
+            # # Get selected objects with translator scores
+            # selected_objects = translator.select_objects()
             
-            # Create lookup dict for selected objects (by class name for matching)
-            selected_lookup = {}
-            for sel_obj in selected_objects:
-                obj_class = sel_obj.get('class', 'unknown')
-                obj_bbox = sel_obj.get('bbox', [])
-                # Use class + bbox as key for matching
-                key = f"{obj_class}_{obj_bbox}"
-                selected_lookup[key] = {
-                    'score': sel_obj.get('score', 0.0),
-                    'distance_m': sel_obj.get('distance_m', sel_obj.get('depth', 0.0))
-                }
+            # # Create lookup dict for selected objects (by class name for matching)
+            # selected_lookup = {}
+            # for sel_obj in selected_objects:
+            #     obj_class = sel_obj.get('class', 'unknown')
+            #     obj_bbox = sel_obj.get('bbox', [])
+            #     # Use class + bbox as key for matching
+            #     key = f"{obj_class}_{obj_bbox}"
+            #     selected_lookup[key] = {
+            #         'score': sel_obj.get('score', 0.0),
+            #         'distance_m': sel_obj.get('distance_m', sel_obj.get('depth', 0.0))
+            #     }
             
-            # Add translator scores to original detections
-            for det in detections:
-                det_class = det.get('class', 'unknown')
-                det_bbox = det.get('bbox', [])
-                key = f"{det_class}_{det_bbox}"
+            # # Add translator scores to original detections
+            # for det in detections:
+            #     det_class = det.get('class', 'unknown')
+            #     det_bbox = det.get('bbox', [])
+            #     key = f"{det_class}_{det_bbox}"
                 
-                if key in selected_lookup:
-                    # Object was selected by translator
-                    sel_data = selected_lookup[key]
-                    det['translator_score'] = round(sel_data['score'], 3)
-                    det['selected'] = True
-                    det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
-                    # Score breakdown (currently distance-based)
-                    distance = sel_data['distance_m']
-                    det['score_breakdown'] = {
-                        'distance_m': round(distance, 2),
-                        'distance_score': round(0.01 * distance, 3)
-                    }
-                else:
-                    # Object was rejected by translator
-                    det['translator_score'] = 0.0
-                    det['selected'] = False
-                    det['selection_reason'] = f"Score too low or beyond K_max limit (T_min={self.t_min}, K_max={self.k_max})"
-                    det['score_breakdown'] = {}
+            #     if key in selected_lookup:
+            #         # Object was selected by translator
+            #         sel_data = selected_lookup[key]
+            #         det['translator_score'] = round(sel_data['score'], 3)
+            #         det['selected'] = True
+            #         det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
+            #         # Score breakdown (currently distance-based)
+            #         distance = sel_data['distance_m']
+            #         det['score_breakdown'] = {
+            #             'distance_m': round(distance, 2),
+            #             'distance_score': round(0.01 * distance, 3)
+            #         }
+            #     else:
+            #         # Object was rejected by translator
+            #         det['translator_score'] = 0.0
+            #         det['selected'] = False
+            #         det['selection_reason'] = f"Score too low or beyond K_max limit (T_min={self.t_min}, K_max={self.k_max})"
+            #         det['score_breakdown'] = {}
             
-            # End of translator lock - state is now safe, other frames can proceed
+            # # End of translator lock - state is now safe, other frames can proceed
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
@@ -1454,15 +1454,15 @@ class NavigationDetectorService:
             # Convert phosphene output to image (scale to 0-255)
             phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
             
-            ################################ add frame ID overlay ################################
-            # Convert grayscale to BGR so we can add colored text overlay
-            if len(phosphene_img.shape) == 2:
-                phosphene_img = cv2.cvtColor(phosphene_img, cv2.COLOR_GRAY2BGR)
+            # ################################ add frame ID overlay ################################
+            # # Convert grayscale to BGR so we can add colored text overlay
+            # if len(phosphene_img.shape) == 2:
+            #     phosphene_img = cv2.cvtColor(phosphene_img, cv2.COLOR_GRAY2BGR)
             
-            # Add frame ID overlay to phosphene output
-            from core import add_frame_id_overlay
-            phosphene_img = add_frame_id_overlay(phosphene_img, frame_id)
-            ####################################################################################
+            # # Add frame ID overlay to phosphene output
+            # from core import add_frame_id_overlay
+            # phosphene_img = add_frame_id_overlay(phosphene_img, frame_id)
+            # ####################################################################################
             
             # Optional debug: Save phosphene output
             if debug_mode and debug_input_prefix:

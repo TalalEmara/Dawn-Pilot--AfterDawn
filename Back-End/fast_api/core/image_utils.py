@@ -56,42 +56,46 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
 
 
-def decode_base64_image(base64_string: str) -> np.ndarray:
+def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
     """
-    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
+    Decode base64 string to RGB numpy array (optimized for ML models)
     
     Args:
-        base64_string: Base64 encoded image data
+        base64_string: Base64 encoded image data (with or without data URL prefix)
         
     Returns:
-        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
+        np.ndarray: RGB image (H, W, 3) in uint8 format
         
     Notes:
-        - Returns BGR format for backward compatibility
-        - Consider using decode_base64_to_rgb() for ML pipelines
+        - Returns RGB format (not BGR) for direct use with ML models
+        - Faster than decode_base64_image() + color conversion
+        - Applies Y-flip to correct WebGL coordinate system
     """
     try:
         # Remove data URL prefix if present
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
-        # Decode base64
-        img_data = base64.b64decode(base64_string)
+        # Decode base64 to bytes
+        img_bytes = base64.b64decode(base64_string)
         
-        # Convert to numpy array
-        nparr = np.frombuffer(img_data, np.uint8)
+        # Decode to numpy array (BGR format from cv2.imdecode)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Decode image (returns BGR)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if img is None:
+        if img_bgr is None:
             raise ValueError("Failed to decode image")
         
-        return img
+        # Convert BGR to RGB
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        
+        # Y-flip: WebGL origin is bottom-left, standard images are top-left
+        img_rgb = cv2.flip(img_rgb, 0)
+        
+        return img_rgb
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
-
 
 
 
@@ -291,67 +295,3 @@ def save_debug_images(
         logger.error(f"❌ Failed to save debug images: {str(e)}")
         return False
 
-
-def add_frame_id_overlay(
-    img: np.ndarray,
-    frame_id: int,
-    position: tuple = (15, 5),
-    color: tuple = (0, 0, 255),  # Red in BGR
-    font_scale: float = 0.15,
-    thickness: int = 1,
-    outline_color: tuple = (0, 0, 0)  # Black outline
-) -> np.ndarray:
-    """
-    Add frame ID text overlay to image (top-left corner by default)
-    
-    Args:
-        img: Input image (BGR or grayscale numpy array)
-        frame_id: Frame identifier (will be formatted as "F: {frame_id}")
-        position: (x, y) position for text in pixels (default: top-left with margin)
-        color: Text color in BGR format (default: red)
-        font_scale: Font size multiplier (default: 0.15 for very small)
-        thickness: Text thickness in pixels (default: 1)
-        outline_color: Outline color for better readability (default: black)
-        
-    Returns:
-        np.ndarray: Image with frame ID overlay (same dtype and shape as input)
-        
-    Notes:
-        - Creates a copy of the image (non-destructive)
-        - Draws black outline first, then colored text on top for readability
-        - Works with both grayscale and color images
-    """
-    # Create copy to avoid modifying original
-    img_with_text = img.copy()
-    
-    # Format frame ID text
-    text = f"F: {frame_id}"
-    
-    # Font settings
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    
-    # Draw black outline for better readability (thicker)
-    cv2.putText(
-        img_with_text,
-        text,
-        position,
-        font,
-        font_scale,
-        outline_color,
-        thickness + 2,  # Thicker for outline
-        cv2.LINE_AA
-    )
-    
-    # Draw colored text on top
-    cv2.putText(
-        img_with_text,
-        text,
-        position,
-        font,
-        font_scale,
-        color,
-        thickness,
-        cv2.LINE_AA
-    )
-    
-    return img_with_text

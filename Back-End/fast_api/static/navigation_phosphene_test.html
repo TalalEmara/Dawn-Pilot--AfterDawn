@@ -663,38 +663,13 @@
             let contentHtml = '';
             
             if (data.detections && data.detections.length > 0) {
-                contentHtml += '<h4 style="margin-bottom: 10px; color: #495057;">Detections & Translator Selection:</h4>';
-                contentHtml += data.detections.map(det => {
-                    const isSelected = det.selected || false;
-                    const translatorScore = det.translator_score !== undefined ? det.translator_score : 'N/A';
-                    const selectionStatus = isSelected 
-                        ? '<span style="color: #28a745; font-weight: 600;">✓ Selected</span>' 
-                        : '<span style="color: #dc3545; font-weight: 600;">✗ Not Selected</span>';
-                    
-                    // Score breakdown
-                    let breakdownHtml = '';
-                    if (det.score_breakdown && Object.keys(det.score_breakdown).length > 0) {
-                        const breakdown = det.score_breakdown;
-                        breakdownHtml = `<div style="font-size: 0.75rem; color: #6c757d; margin-top: 3px;">
-                            Distance: ${breakdown.distance_m?.toFixed(2) || 'N/A'}m → Score: ${breakdown.distance_score?.toFixed(3) || 'N/A'}
-                        </div>`;
-                    }
-                    
-                    return `
-                        <div class="detection-item" style="flex-direction: column; align-items: flex-start; padding: 12px; ${isSelected ? 'border-left: 3px solid #28a745;' : 'border-left: 3px solid #dc3545; opacity: 0.7;'}">
-                            <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
-                                <span class="detection-class" style="font-size: 1rem;">${det.class}</span>
-                                ${selectionStatus}
-                            </div>
-                            <div style="font-size: 0.85rem; color: #495057; width: 100%;">
-                                <div style="margin-bottom: 2px;">Detector Confidence: <strong>${(det.confidence * 100).toFixed(1)}%</strong></div>
-                                <div style="margin-bottom: 2px;">Translator Score: <strong>${typeof translatorScore === 'number' ? translatorScore.toFixed(3) : translatorScore}</strong></div>
-                                ${breakdownHtml}
-                            </div>
-                            ${det.selection_reason ? `<div style="font-size: 0.75rem; color: #6c757d; font-style: italic; margin-top: 5px;">${det.selection_reason}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
+                contentHtml += '<h4 style="margin-bottom: 10px; color: #495057;">Detections:</h4>';
+                contentHtml += data.detections.map(det => `
+                    <div class="detection-item">
+                        <span class="detection-class">${det.class}</span>
+                        <span class="detection-confidence">${(det.confidence * 100).toFixed(1)}%</span>
+                    </div>
+                `).join('');
             }
             
             if (data.freepath_coordinates && data.freepath_coordinates.length > 0) {
