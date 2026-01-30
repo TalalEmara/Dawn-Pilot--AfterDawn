@@ -293,11 +293,8 @@ function ResearcherLite() {
         subjectId={subjectId}
         onVisionModeChange={(mode) => {
           setVisionMode(mode);
-          // useAiStream will automatically reconnect due to dependency change
         }}
-        onKMaxChange={(k) => {
-          console.log("k-max configured:", k);
-        }}
+        
         onOpenLoadDialog={handleOpenLoadDialog}
         saveLoadLoading={saveLoadLoading}
         aiHudCanvasRef={aiHudCanvasRef as React.RefObject<HTMLCanvasElement>}

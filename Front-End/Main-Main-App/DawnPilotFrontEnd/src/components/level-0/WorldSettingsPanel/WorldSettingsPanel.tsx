@@ -151,7 +151,6 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
           </label>
         </div>
         {/* Throttle Settings */}
-        <div className={styles.sectionTitle} style={{ marginTop: '12px' }}>Camera Throttle (ms)</div>
         <div className={styles.frameSettings}>
           <div className={styles.inputGroup}>
             <label className={styles.label}>Desktop Position</label>
@@ -177,6 +176,8 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
             />
           </div>
         </div>
+        
+     
         <div className={styles.GroundDimensions}>
         <div className={styles.inputGroup}>
           <label className={styles.label}>Ground Width</label>

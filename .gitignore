@@ -89,6 +89,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
+builds
 dist
 dist01
 
