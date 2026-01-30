@@ -137,6 +137,8 @@ function ResearcherLite() {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
       try {
+        if (visionMode === "normal") { return; } // No processing for normal mode
+        
         const needsDepth = visionMode === "prosthetic";
         frameIdRef.current++;
 
@@ -194,8 +196,6 @@ function ResearcherLite() {
       cameraInitialized.current = true;
     }
   },[]);
-
-
 
  // Master of Position (broadcasts position only, receives rotation from mobile)
   useEffect(() => {

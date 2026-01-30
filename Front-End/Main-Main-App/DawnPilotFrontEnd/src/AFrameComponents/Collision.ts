@@ -145,8 +145,6 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
       this.playerBox.min.set(x - w, y - 0.8, z - d);
       this.playerBox.max.set(x + w, y + 0.8, z + d);
 
-      const center = new THREE.Vector3();
-      const size = new THREE.Vector3();
 
       for (const obstacle of this.obstacles) {
         if (!obstacle) continue;
@@ -303,8 +301,6 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["collision-detector"]) {
           this.lastCollisionTime = now;
         
           let obstacleId = "unknown";
-          const center = new THREE.Vector3();
-          const size = new THREE.Vector3();
 
           for(const obs of this.obstacles) {
             this.obstacleBox.setFromObject(obs);

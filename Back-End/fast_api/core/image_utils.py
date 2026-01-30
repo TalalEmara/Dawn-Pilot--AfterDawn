@@ -31,6 +31,7 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
     Notes:
         - Returns RGB format (not BGR) for direct use with ML models
         - Faster than decode_base64_image() + color conversion
+        - Applies Y-flip to correct WebGL coordinate system
     """
     try:
         # Remove data URL prefix if present
@@ -49,6 +50,9 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
         
         # Convert BGR to RGB
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        
+        # Y-flip: WebGL origin is bottom-left, standard images are top-left
+        img_rgb = cv2.flip(img_rgb, 0)
         
         return img_rgb
     
