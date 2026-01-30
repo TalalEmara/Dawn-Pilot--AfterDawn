@@ -950,8 +950,6 @@ class NavigationDetectorService:
         
         return img_copy
     
-
-    
     def _save_debug_frames(
         self,
         rgb: np.ndarray,
@@ -1632,34 +1630,7 @@ class NavigationDetectorService:
                 )
         
         return img_with_boxes
-    
-    def draw_freepath_ball_alt(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int], ball_radius: int = 10) -> np.ndarray:
-        """
-        Alternative draw freepath ball on simplified translator image (legacy compatibility)
-        
-        Args:
-            simplified_img: Simplified image from translator (grayscale or BGR)
-            ball_position: (x, y) position for ball in cropped coordinates, or None
-            crop_size: [width, height] of cropped image
-            ball_radius: Radius of the ball
-            
-        Returns:
-            np.ndarray: Image with drawn ball
-        """
-        # Create a copy
-        img_with_ball = simplified_img.copy()
-        
-        # Convert to BGR if grayscale for colored ball
-        if len(img_with_ball.shape) == 2:
-            img_with_ball = cv2.cvtColor(img_with_ball, cv2.COLOR_GRAY2BGR)
-        
-        if ball_position:
-            x, y = ball_position
-            # Use position as-is (never modify)
-            cv2.circle(img_with_ball, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
-        
-        return img_with_ball
-    
+     
     def crop_image(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
         """
         Crop image according to cropping configuration
