@@ -31,7 +31,6 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
     Notes:
         - Returns RGB format (not BGR) for direct use with ML models
         - Faster than decode_base64_image() + color conversion
-        - Applies Y-flip to correct WebGL coordinate system
     """
     try:
         # Remove data URL prefix if present
@@ -50,9 +49,6 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
         
         # Convert BGR to RGB
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        
-        # Y-flip: WebGL origin is bottom-left, standard images are top-left
-        img_rgb = cv2.flip(img_rgb, 0)
         
         return img_rgb
     
@@ -99,22 +95,26 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 
 
-def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.png') -> str:
+def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.jpg', quality: int = 75) -> str:
     """
     Encode numpy array to base64 string (optimized - minimal conversions)
     
     Args:
         img: Numpy array image (H, W, 3) or (H, W)
         color_space: 'RGB' or 'BGR' - specifies input color space
-        format: Image format ('.png', '.jpg')
+        format: Image format ('.jpg', '.png')
+        quality: Compression quality (0-100 for JPEG, 0-9 for PNG)
+                 JPEG: 100=best quality/largest size, 0=worst quality/smallest size (default: 95)
+                 PNG: 0=no compression/fastest, 9=max compression/slowest (default: 1)
         
     Returns:
         str: Base64 encoded image string (without data URL prefix)
         
     Notes:
-        - If img is RGB and you need PNG output, it will convert RGB->BGR once
+        - If img is RGB and you need JPG output, it will convert RGB->BGR once
         - If img is already BGR, no conversion needed
         - For grayscale images, color_space is ignored
+        - Lower quality = smaller file size = faster transmission
     """
     try:
         # Validate input image
@@ -134,8 +134,18 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
 
         # if the image is grayscale, no color conversion needed
         
-        # Encode to PNG/JPG bytes
-        success, buffer = cv2.imencode(format, img)
+        # Set encoding parameters based on format
+        if format.lower() in ['.jpg', '.jpeg']:
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+        elif format.lower() == '.png':
+            # For PNG, convert quality (0-100) to compression (0-9)
+            compression = min(9, max(0, int((100 - quality) / 11)))
+            encode_params = [cv2.IMWRITE_PNG_COMPRESSION, compression]
+        else:
+            encode_params = []
+        
+        # Encode to PNG/JPEG bytes with quality control
+        success, buffer = cv2.imencode(format, img, encode_params)
         if not success:
             raise ValueError(f"Failed to encode image to {format}. Image shape: {img.shape}, dtype: {img.dtype}")
         
@@ -280,3 +290,68 @@ def save_debug_images(
     except Exception as e:
         logger.error(f"❌ Failed to save debug images: {str(e)}")
         return False
+
+
+def add_frame_id_overlay(
+    img: np.ndarray,
+    frame_id: int,
+    position: tuple = (15, 5),
+    color: tuple = (0, 0, 255),  # Red in BGR
+    font_scale: float = 0.15,
+    thickness: int = 1,
+    outline_color: tuple = (0, 0, 0)  # Black outline
+) -> np.ndarray:
+    """
+    Add frame ID text overlay to image (top-left corner by default)
+    
+    Args:
+        img: Input image (BGR or grayscale numpy array)
+        frame_id: Frame identifier (will be formatted as "F: {frame_id}")
+        position: (x, y) position for text in pixels (default: top-left with margin)
+        color: Text color in BGR format (default: red)
+        font_scale: Font size multiplier (default: 0.15 for very small)
+        thickness: Text thickness in pixels (default: 1)
+        outline_color: Outline color for better readability (default: black)
+        
+    Returns:
+        np.ndarray: Image with frame ID overlay (same dtype and shape as input)
+        
+    Notes:
+        - Creates a copy of the image (non-destructive)
+        - Draws black outline first, then colored text on top for readability
+        - Works with both grayscale and color images
+    """
+    # Create copy to avoid modifying original
+    img_with_text = img.copy()
+    
+    # Format frame ID text
+    text = f"F: {frame_id}"
+    
+    # Font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # Draw black outline for better readability (thicker)
+    cv2.putText(
+        img_with_text,
+        text,
+        position,
+        font,
+        font_scale,
+        outline_color,
+        thickness + 2,  # Thicker for outline
+        cv2.LINE_AA
+    )
+    
+    # Draw colored text on top
+    cv2.putText(
+        img_with_text,
+        text,
+        position,
+        font,
+        font_scale,
+        color,
+        thickness,
+        cv2.LINE_AA
+    )
+    
+    return img_with_text

@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 import tempfile
+import threading
 import cv2
 import numpy as np
 import torch
@@ -84,6 +85,18 @@ class NavigationDetectorService:
                 print("🔄 Applying GPU memory optimizations...")
                 torch.cuda.empty_cache()
                 print("✅ GPU memory optimized")
+        
+        # Initialize reusable ThreadPool executor for parallel processing
+        # Avoids per-frame thread creation overhead (significant at 30 FPS)
+        import concurrent.futures
+        self.executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, 
+            thread_name_prefix="detection"
+        ) if self.parallel_processing else None
+        
+        # Thread lock for translator to prevent race conditions across parallel frames
+        # Critical: Without this, Frame N+1 can overwrite Frame N's translator state
+        self.translator_lock = threading.Lock()
         
         print(f"✓ Initialization complete. is_loaded={self.is_loaded}")
         print("="*60 + "\n")
@@ -329,12 +342,35 @@ class NavigationDetectorService:
             #     dist = float(det.get("distance_m"))
             #     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
             
+            # Safe float conversions with None handling
+            try:
+                conf_val = confidence
+                if conf_val is not None:
+                    safe_confidence = float(conf_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] Confidence is None, using 0.001")
+                    safe_confidence = 0.001
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting confidence: {e}")
+                safe_confidence = 0.001
+            
+            try:
+                dist_val = det.get("distance_m")
+                if dist_val is not None:
+                    safe_distance = float(dist_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                    safe_distance = 10.0
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting distance_m: {e}")
+                safe_distance = 10.0
+            
             standardized_detections.append({
                 "class": str(det.get("class", "unknown")),
-                "confidence": float(confidence),
+                "confidence": safe_confidence,
                 "bbox": bbox,
                 "centroid_px": [int(cx), int(cy)],
-                "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                "distance_m": safe_distance
             })
         
         return standardized_detections
@@ -344,7 +380,7 @@ class NavigationDetectorService:
         rgb: np.ndarray, 
         depth: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
         Process a single frame through the navigation pipeline (PARALLEL OPTIMIZED)
@@ -385,20 +421,19 @@ class NavigationDetectorService:
             parallel_start = time.time()
             
             # PARALLEL EXECUTION: Object detection and Freepath detection run simultaneously
-            # Can be disabled for debugging or single-threaded environments
-            if self.parallel_processing:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="detection") as executor:
-                    # Submit both tasks in parallel
-                    object_detection_future = executor.submit(
-                        self._run_object_detection, rgb, depth, frame_id
-                    )
-                    freepath_detection_future = executor.submit(
-                        self._run_freepath_detection, rgb, frame_id, debug_mode
-                    )
-                    
-                    # Wait for both to complete and get results
-                    detections, detection_time = object_detection_future.result()
-                    freepath_data, freepath_time = freepath_detection_future.result()
+            # Using reusable ThreadPool executor (initialized in __init__) to avoid per-frame overhead
+            if self.parallel_processing and self.executor:
+                # Submit both tasks in parallel using reusable executor
+                object_detection_future = self.executor.submit(
+                    self._run_object_detection, rgb, depth, frame_id
+                )
+                freepath_detection_future = self.executor.submit(
+                    self._run_freepath_detection, rgb, frame_id, debug_mode
+                )
+                
+                # Wait for both to complete and get results
+                detections, detection_time = object_detection_future.result()
+                freepath_data, freepath_time = freepath_detection_future.result()
                 
                 parallel_time = (time.time() - parallel_start) * 1000
             else:
@@ -433,15 +468,47 @@ class NavigationDetectorService:
                 # Use distance as confidence if available
                 confidence = 0.8
                 if det.get("distance_m"):
-                    dist = float(det.get("distance_m"))
+                    try:
+                        dist_val = det.get("distance_m")
+                        if dist_val is not None:
+                            dist = float(dist_val)
+                        else:
+                            print(f"⚠️ [Frame {frame_id}] distance_m is None, using 10.0m")
+                            dist = 10.0
+                    except (TypeError, ValueError) as e:
+                        print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                        dist = 10.0
                     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+                
+                # Safe float conversions with None handling
+                try:
+                    conf_val = real_confidence
+                    if conf_val is not None:
+                        safe_confidence = float(conf_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] Confidence is None, using 0.001")
+                        safe_confidence = 0.001
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting confidence: {e}")
+                    safe_confidence = 0.001
+                
+                try:
+                    dist_val = det.get("distance_m")
+                    if dist_val is not None:
+                        safe_distance = float(dist_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                        safe_distance = 10.0
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                    safe_distance = 10.0
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
-                    "confidence": float(real_confidence),
+                    "confidence": safe_confidence,
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
-                    "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                    "distance_m": safe_distance
                 })
             
             # Calculate total processing time
@@ -456,18 +523,18 @@ class NavigationDetectorService:
                     k: (
                         [int(x) for x in v] if isinstance(v, (list, tuple, np.ndarray))
                         else int(v) if isinstance(v, (np.integer, int))
-                        else float(v)
+                        else float(v) if v is not None else None
                     )
                     for k, v in freepath_circle.items()
                 } if freepath_circle else None,
-                "processing_time_ms": float(processing_time),
+                "processing_time_ms": float(processing_time) if processing_time is not None else 0.0,
                 "stats": {
                     "num_detections": int(len(standardized_detections)),
                     "freepath_points": int(len(freepath_coordinates)),
                     "has_freepath_circle": bool(freepath_circle is not None),
-                    "detection_time_ms": float(detection_time),
-                    "freepath_time_ms": float(freepath_time),
-                    "parallel_total_ms": float(parallel_time)
+                    "detection_time_ms": float(detection_time) if detection_time is not None else 0.0,
+                    "freepath_time_ms": float(freepath_time) if freepath_time is not None else 0.0,
+                    "parallel_total_ms": float(parallel_time) if parallel_time is not None else 0.0
                 }
             })
             
@@ -530,7 +597,7 @@ class NavigationDetectorService:
         self, 
         rgb: np.ndarray, 
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Tuple[Tuple[np.ndarray, List[Tuple[int, int]], Optional[Dict[str, Any]]], float]:
         """
         Worker method for parallel freepath detection execution
@@ -679,7 +746,7 @@ class NavigationDetectorService:
         original_size: Tuple[int, int],
         cropping_config: Dict[str, Any],
         frame_id: int,
-        debug_mode: bool = True
+        debug_mode: bool = False
     ) -> Optional[Tuple[int, int]]:
         """
         Calculate freepath ball position using smart selection algorithm
@@ -882,8 +949,6 @@ class NavigationDetectorService:
         cv2.circle(img_copy, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
         
         return img_copy
-    
-
     
     def _save_debug_frames(
         self,
@@ -1122,7 +1187,7 @@ class NavigationDetectorService:
                 logger.info(f"💾 Saved DETECTOR output")
                 
                 # Save freepath visualization
-                if freepath_coordinates and len(freepath_coordinates) > 0:
+                if debug_mode and freepath_coordinates and len(freepath_coordinates) > 0:
                     freepath_vis = self._visualize_freepath_points(rgb, freepath_coordinates, freepath_circle)
                     cv2.imwrite(f"{debug_input_prefix}_03b_freepath_points.jpg", cv2.cvtColor(freepath_vis, cv2.COLOR_RGB2BGR))
                     # logger.info(f"💾 Saved FREEPATH visualization with {len(freepath_coordinates)} points")
@@ -1145,39 +1210,44 @@ class NavigationDetectorService:
             # STAGE 2: TRANSLATOR - Simplify image to canonical shapes
             stage_start = time.time()
             
-            # Translator already initialized at startup
-            if self.translator_service is None:
-                raise RuntimeError("TranslatorService not initialized")
-            
-            # Convert detections to translator format
-            h, w = rgb.shape[:2]
-            translator_objects = []
-            for det in detections:
-                bbox = det.get('bbox', [])
-                if len(bbox) == 4:
-                    translator_objects.append({
-                        "class": det.get('class', 'unknown'),
-                        "confidence": det.get('confidence', 0.8),
-                        "bbox": bbox,
-                        "centroid_px": det.get('centroid_px', [0, 0]),
-                        "distance_m": det.get('distance_m')
-                    })
-            
-            # Create detection bundle for translator - exclude freepath for clean canonical shapes
-            detection_data = {
-                "frame_id": f"nav_frame_{frame_id}",
-                "file_path": "navigation_pipeline",
-                "metadata": {
-                    "image_width": w,
-                    "image_height": h,
-                    "camera_intrinsics": None
-                },
-                "free_path": None,  # Exclude freepath data for clean translator output
-                "obstacles": translator_objects
-            }
-            
-            # Get translator instance
-            translator = self.translator_service.translator
+            # CRITICAL: Lock translator to prevent race conditions
+            # Without this lock, parallel frames can interfere with each other:
+            # - Frame N+1 overwrites translator.bundle while Frame N is rendering
+            # - Causes image fluctuation (old frames appearing after new ones)
+            with self.translator_lock:
+                # Translator already initialized at startup
+                if self.translator_service is None:
+                    raise RuntimeError("TranslatorService not initialized")
+                
+                # Convert detections to translator format
+                h, w = rgb.shape[:2]
+                translator_objects = []
+                for det in detections:
+                    bbox = det.get('bbox', [])
+                    if len(bbox) == 4:
+                        translator_objects.append({
+                            "class": det.get('class', 'unknown'),
+                            "confidence": det.get('confidence', 0.8),
+                            "bbox": bbox,
+                            "centroid_px": det.get('centroid_px', [0, 0]),
+                            "distance_m": det.get('distance_m')
+                        })
+                
+                # Create detection bundle for translator - exclude freepath for clean canonical shapes
+                detection_data = {
+                    "frame_id": f"nav_frame_{frame_id}",
+                    "file_path": "navigation_pipeline",
+                    "metadata": {
+                        "image_width": w,
+                        "image_height": h,
+                        "camera_intrinsics": None
+                    },
+                    "free_path": None,  # Exclude freepath data for clean translator output
+                    "obstacles": translator_objects
+                }
+                
+                # Get translator instance
+                translator = self.translator_service.translator
             if translator is None:
                 # Initialize if needed
                 import json
@@ -1213,6 +1283,48 @@ class NavigationDetectorService:
             # Translator ALWAYS outputs to full image size with retinotopic mapping
             translator.params['canvas_size'] = [h, w]
             simplified_canvas, _ = translator.run(f"nav_frame_{frame_id}.png", save_to_disk=False, target_canvas_size=(w, h), draw_freepath=True)
+            
+            # Get selected objects with translator scores
+            selected_objects = translator.select_objects()
+            
+            # Create lookup dict for selected objects (by class name for matching)
+            selected_lookup = {}
+            for sel_obj in selected_objects:
+                obj_class = sel_obj.get('class', 'unknown')
+                obj_bbox = sel_obj.get('bbox', [])
+                # Use class + bbox as key for matching
+                key = f"{obj_class}_{obj_bbox}"
+                selected_lookup[key] = {
+                    'score': sel_obj.get('score', 0.0),
+                    'distance_m': sel_obj.get('distance_m', sel_obj.get('depth', 0.0))
+                }
+            
+            # Add translator scores to original detections
+            for det in detections:
+                det_class = det.get('class', 'unknown')
+                det_bbox = det.get('bbox', [])
+                key = f"{det_class}_{det_bbox}"
+                
+                if key in selected_lookup:
+                    # Object was selected by translator
+                    sel_data = selected_lookup[key]
+                    det['translator_score'] = round(sel_data['score'], 3)
+                    det['selected'] = True
+                    det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
+                    # Score breakdown (currently distance-based)
+                    distance = sel_data['distance_m']
+                    det['score_breakdown'] = {
+                        'distance_m': round(distance, 2),
+                        'distance_score': round(0.01 * distance, 3)
+                    }
+                else:
+                    # Object was rejected by translator
+                    det['translator_score'] = 0.0
+                    det['selected'] = False
+                    det['selection_reason'] = f"Score too low or beyond K_max limit (T_min={self.t_min}, K_max={self.k_max})"
+                    det['score_breakdown'] = {}
+            
+            # End of translator lock - state is now safe, other frames can proceed
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
@@ -1342,12 +1454,22 @@ class NavigationDetectorService:
             # Convert phosphene output to image (scale to 0-255)
             phosphene_img = np.clip(phosphene_output * 255.0, 0, 255).astype(np.uint8)
             
+            ################################ add frame ID overlay ################################
+            # Convert grayscale to BGR so we can add colored text overlay
+            if len(phosphene_img.shape) == 2:
+                phosphene_img = cv2.cvtColor(phosphene_img, cv2.COLOR_GRAY2BGR)
+            
+            # Add frame ID overlay to phosphene output
+            from core import add_frame_id_overlay
+            phosphene_img = add_frame_id_overlay(phosphene_img, frame_id)
+            ####################################################################################
+            
             # Optional debug: Save phosphene output
             if debug_mode and debug_input_prefix:
                 cv2.imwrite(f"{debug_input_prefix}_06_phosphene_output.png", phosphene_img)
                 logger.info(f"💾 Saved PHOSPHENE output")
             
-            # Encode phosphene output - optimized (grayscale, no color space needed)
+            # Encode phosphene output - now it's BGR with colored overlay
             output_b64 = encode_ndarray_to_base64(phosphene_img, color_space='BGR')
             
             result.update({
@@ -1508,34 +1630,7 @@ class NavigationDetectorService:
                 )
         
         return img_with_boxes
-    
-    def draw_freepath_ball_alt(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int], ball_radius: int = 10) -> np.ndarray:
-        """
-        Alternative draw freepath ball on simplified translator image (legacy compatibility)
-        
-        Args:
-            simplified_img: Simplified image from translator (grayscale or BGR)
-            ball_position: (x, y) position for ball in cropped coordinates, or None
-            crop_size: [width, height] of cropped image
-            ball_radius: Radius of the ball
-            
-        Returns:
-            np.ndarray: Image with drawn ball
-        """
-        # Create a copy
-        img_with_ball = simplified_img.copy()
-        
-        # Convert to BGR if grayscale for colored ball
-        if len(img_with_ball.shape) == 2:
-            img_with_ball = cv2.cvtColor(img_with_ball, cv2.COLOR_GRAY2BGR)
-        
-        if ball_position:
-            x, y = ball_position
-            # Use position as-is (never modify)
-            cv2.circle(img_with_ball, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
-        
-        return img_with_ball
-    
+     
     def crop_image(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
         """
         Crop image according to cropping configuration
