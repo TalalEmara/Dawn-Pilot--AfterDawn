@@ -18,39 +18,38 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
-def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
+def decode_base64_image(base64_string: str) -> np.ndarray:
     """
-    Decode base64 string to RGB numpy array (optimized for ML models)
+    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
     
     Args:
-        base64_string: Base64 encoded image data (with or without data URL prefix)
+        base64_string: Base64 encoded image data
         
     Returns:
-        np.ndarray: RGB image (H, W, 3) in uint8 format
+        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
         
     Notes:
-        - Returns RGB format (not BGR) for direct use with ML models
-        - Faster than decode_base64_image() + color conversion
+        - Returns BGR format for backward compatibility
+        - Consider using decode_base64_to_rgb() for ML pipelines
     """
     try:
         # Remove data URL prefix if present
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
-        # Decode base64 to bytes
-        img_bytes = base64.b64decode(base64_string)
+        # Decode base64
+        img_data = base64.b64decode(base64_string)
         
-        # Decode to numpy array (BGR format from cv2.imdecode)
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # Convert to numpy array
+        nparr = np.frombuffer(img_data, np.uint8)
         
-        if img_bgr is None:
+        # Decode image (returns BGR)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
             raise ValueError("Failed to decode image")
         
-        # Convert BGR to RGB
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        
-        return img_rgb
+        return img
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
