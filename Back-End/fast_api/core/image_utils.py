@@ -95,20 +95,20 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 
 
-def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.png') -> str:
+def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.jpg') -> str:
     """
     Encode numpy array to base64 string (optimized - minimal conversions)
     
     Args:
         img: Numpy array image (H, W, 3) or (H, W)
         color_space: 'RGB' or 'BGR' - specifies input color space
-        format: Image format ('.png', '.jpg')
+        format: Image format ('.jpg', '.png')
         
     Returns:
         str: Base64 encoded image string (without data URL prefix)
         
     Notes:
-        - If img is RGB and you need PNG output, it will convert RGB->BGR once
+        - If img is RGB and you need JPG output, it will convert RGB->BGR once
         - If img is already BGR, no conversion needed
         - For grayscale images, color_space is ignored
     """
