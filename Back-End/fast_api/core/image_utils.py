@@ -95,7 +95,7 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 
 
-def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.jpg') -> str:
+def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.jpg', quality: int = 75) -> str:
     """
     Encode numpy array to base64 string (optimized - minimal conversions)
     
@@ -103,6 +103,9 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
         img: Numpy array image (H, W, 3) or (H, W)
         color_space: 'RGB' or 'BGR' - specifies input color space
         format: Image format ('.jpg', '.png')
+        quality: Compression quality (0-100 for JPEG, 0-9 for PNG)
+                 JPEG: 100=best quality/largest size, 0=worst quality/smallest size (default: 95)
+                 PNG: 0=no compression/fastest, 9=max compression/slowest (default: 1)
         
     Returns:
         str: Base64 encoded image string (without data URL prefix)
@@ -111,6 +114,7 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
         - If img is RGB and you need JPG output, it will convert RGB->BGR once
         - If img is already BGR, no conversion needed
         - For grayscale images, color_space is ignored
+        - Lower quality = smaller file size = faster transmission
     """
     try:
         # Validate input image
@@ -130,8 +134,18 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
 
         # if the image is grayscale, no color conversion needed
         
-        # Encode to PNG/JPG bytes
-        success, buffer = cv2.imencode(format, img)
+        # Set encoding parameters based on format
+        if format.lower() in ['.jpg', '.jpeg']:
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+        elif format.lower() == '.png':
+            # For PNG, convert quality (0-100) to compression (0-9)
+            compression = min(9, max(0, int((100 - quality) / 11)))
+            encode_params = [cv2.IMWRITE_PNG_COMPRESSION, compression]
+        else:
+            encode_params = []
+        
+        # Encode to PNG/JPEG bytes with quality control
+        success, buffer = cv2.imencode(format, img, encode_params)
         if not success:
             raise ValueError(f"Failed to encode image to {format}. Image shape: {img.shape}, dtype: {img.dtype}")
         
