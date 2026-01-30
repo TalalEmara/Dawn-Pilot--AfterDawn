@@ -203,7 +203,7 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     if message.get("type") == "frame":
                         frame_id = message.get("frame_id", "unknown")
                         stage = message.get("stage", "phosphene")
-                        debug_mode = message.get("debug", True)
+                        debug_mode = message.get("debug", False)
                         cropping_config = message.get("cropping_config")
                         
                         valid_stages = ["passthrough", "edge_mode", "detector", "translator", "pre_phosphene", "phosphene"]
@@ -276,8 +276,10 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                     continue
                 
                 frame_id = payload["frame_id"]
-                # logger.info(f"🔄 Processing frame {frame_id}")
-                print(f"⚡ Starting inference for frame {frame_id} [{payload['stage']} stage]")  # Essential inference marker
+                # Reduce logging to prevent frame drops (only log every 30 frames = 1 sec at 30 FPS)
+                frame_num = int(frame_id) if isinstance(frame_id, (int, str)) and str(frame_id).isdigit() else frames_processed
+                if frame_num % 30 == 0:
+                    print(f"⚡ Starting inference for frame {frame_id} [{payload['stage']} stage]")
                 
                 # CRITICAL: Run heavy operations in thread pool (non-blocking)
                 inference_result = await asyncio.to_thread(run_heavy_inference, payload)
@@ -311,10 +313,11 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 await connection_manager.broadcast(response)
                 frames_processed += 1
                 
-                total_time = sum(result.get("stats", {}).values())
-                num_detections = len(result.get("detections", []))
-                print(f"✅ Frame {frame_id} complete: {total_time:.0f}ms | {num_detections} objects | {connection_manager.get_connection_count()} clients")  # Essential completion marker
-                # logger.info(f"📡 Broadcasted frame {frame_id} to {connection_manager.get_connection_count()} clients (processed in {total_time:.2f}ms)")  # Reduced logging
+                # Reduce logging to prevent blocking I/O (only log every 30 frames = 1 sec at 30 FPS)
+                if frame_num % 30 == 0:
+                    total_time = sum(result.get("stats", {}).values())
+                    num_detections = len(result.get("detections", []))
+                    print(f"✅ Frame {frame_id} complete: {total_time:.0f}ms | {num_detections} objects | {connection_manager.get_connection_count()} clients")
                 
         except Exception as e:
             logger.error(f"Consumer error: {e}", exc_info=True)

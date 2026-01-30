@@ -11,10 +11,8 @@ Legacy endpoints:
 - /ws/navigation: Navigation pipeline without phosphene - see old_experiments/
 """
 
-from .routes import router, set_services
+from .routes import router, set_navigation_service
 from .nav_phosphene_ws import handle_navigation_phosphene_websocket, navigation_detector_service
-
-# Legacy websocket handlers moved to old_experiments/legacy_websockets.py
 
 __all__ = [
     "router",
