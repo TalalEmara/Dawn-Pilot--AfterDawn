@@ -1,13 +1,11 @@
 """
 Services Package
 
-Exposes detector and translator services.
+Exposes navigation detector service.
 """
 
-from .detector_service import DetectorService
-from .translator_service import TranslatorService
+from .navigation_detector_service import NavigationDetectorService
 
 __all__ = [
-    "DetectorService",
-    "TranslatorService",
+    "NavigationDetectorService",
 ]

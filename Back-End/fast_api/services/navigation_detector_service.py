@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 import tempfile
+import threading
 import cv2
 import numpy as np
 import torch
@@ -92,6 +93,10 @@ class NavigationDetectorService:
             max_workers=2, 
             thread_name_prefix="detection"
         ) if self.parallel_processing else None
+        
+        # Thread lock for translator to prevent race conditions across parallel frames
+        # Critical: Without this, Frame N+1 can overwrite Frame N's translator state
+        self.translator_lock = threading.Lock()
         
         print(f"✓ Initialization complete. is_loaded={self.is_loaded}")
         print("="*60 + "\n")
@@ -1152,39 +1157,44 @@ class NavigationDetectorService:
             # STAGE 2: TRANSLATOR - Simplify image to canonical shapes
             stage_start = time.time()
             
-            # Translator already initialized at startup
-            if self.translator_service is None:
-                raise RuntimeError("TranslatorService not initialized")
-            
-            # Convert detections to translator format
-            h, w = rgb.shape[:2]
-            translator_objects = []
-            for det in detections:
-                bbox = det.get('bbox', [])
-                if len(bbox) == 4:
-                    translator_objects.append({
-                        "class": det.get('class', 'unknown'),
-                        "confidence": det.get('confidence', 0.8),
-                        "bbox": bbox,
-                        "centroid_px": det.get('centroid_px', [0, 0]),
-                        "distance_m": det.get('distance_m')
-                    })
-            
-            # Create detection bundle for translator - exclude freepath for clean canonical shapes
-            detection_data = {
-                "frame_id": f"nav_frame_{frame_id}",
-                "file_path": "navigation_pipeline",
-                "metadata": {
-                    "image_width": w,
-                    "image_height": h,
-                    "camera_intrinsics": None
-                },
-                "free_path": None,  # Exclude freepath data for clean translator output
-                "obstacles": translator_objects
-            }
-            
-            # Get translator instance
-            translator = self.translator_service.translator
+            # CRITICAL: Lock translator to prevent race conditions
+            # Without this lock, parallel frames can interfere with each other:
+            # - Frame N+1 overwrites translator.bundle while Frame N is rendering
+            # - Causes image fluctuation (old frames appearing after new ones)
+            with self.translator_lock:
+                # Translator already initialized at startup
+                if self.translator_service is None:
+                    raise RuntimeError("TranslatorService not initialized")
+                
+                # Convert detections to translator format
+                h, w = rgb.shape[:2]
+                translator_objects = []
+                for det in detections:
+                    bbox = det.get('bbox', [])
+                    if len(bbox) == 4:
+                        translator_objects.append({
+                            "class": det.get('class', 'unknown'),
+                            "confidence": det.get('confidence', 0.8),
+                            "bbox": bbox,
+                            "centroid_px": det.get('centroid_px', [0, 0]),
+                            "distance_m": det.get('distance_m')
+                        })
+                
+                # Create detection bundle for translator - exclude freepath for clean canonical shapes
+                detection_data = {
+                    "frame_id": f"nav_frame_{frame_id}",
+                    "file_path": "navigation_pipeline",
+                    "metadata": {
+                        "image_width": w,
+                        "image_height": h,
+                        "camera_intrinsics": None
+                    },
+                    "free_path": None,  # Exclude freepath data for clean translator output
+                    "obstacles": translator_objects
+                }
+                
+                # Get translator instance
+                translator = self.translator_service.translator
             if translator is None:
                 # Initialize if needed
                 import json
@@ -1260,6 +1270,8 @@ class NavigationDetectorService:
                     det['selected'] = False
                     det['selection_reason'] = f"Score too low or beyond K_max limit (T_min={self.t_min}, K_max={self.k_max})"
                     det['score_breakdown'] = {}
+            
+            # End of translator lock - state is now safe, other frames can proceed
             
             # Safety check: Ensure simplified_canvas is valid
             if simplified_canvas is None or simplified_canvas.size == 0:
