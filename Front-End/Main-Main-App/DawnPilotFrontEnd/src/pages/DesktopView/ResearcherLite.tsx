@@ -69,6 +69,15 @@ function ResearcherLite() {
     return saved === 'true';
   });
 
+  const [throttleSettings, setThrottleSettings] = useState(() => {
+    const desktop = localStorage.getItem('throttle_desktop');
+    const mobile = localStorage.getItem('throttle_mobile');
+    return {
+      desktopMs: desktop ? parseInt(desktop) : 33,
+      mobileMs: mobile ? parseInt(mobile) : 33
+    };
+  });
+
   const { world, loadWorld, setWorld } = useScenarioWorld();
   const {
     socket: aiWebSocket,
@@ -81,7 +90,7 @@ function ResearcherLite() {
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
     useCameraSync({
       clientType: "desktop",
-      throttleMs: 1000/30,
+      throttleMs: throttleSettings.desktopMs,
     });
 
   const {
@@ -169,6 +178,12 @@ function ResearcherLite() {
       socket.emit('lite-mode:update', { enabled: liteMode });
     }
   }, [liteMode, socket]);
+
+  useEffect(() => {
+    if (socket && socket.connected) {
+      socket.emit('throttle:update', { mobileMs: throttleSettings.mobileMs });
+    }
+  }, [throttleSettings.mobileMs, socket]);
 
 
   
@@ -290,6 +305,7 @@ function ResearcherLite() {
         onWorldChange={(settings) => setWorldSettings(settings)}
         onSubjectIdChange={(id) => setSubjectId(id)}
         onLiteModeChange={(enabled) => setLiteMode(enabled)}
+        onThrottleChange={(settings) => setThrottleSettings(settings)}
         onEyeControlChange={(control) => {
           if (socket) {
             socket.emit('eye-control:update', { control });

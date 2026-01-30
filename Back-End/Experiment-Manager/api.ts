@@ -116,6 +116,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  // THROTTLE SYNC
+  socket.on('throttle:update', (data: { mobileMs: number }) => {
+    // Broadcast to all other clients (especially Mobile)
+    socket.broadcast.emit('throttle:changed', { mobileMs: data.mobileMs });
+    console.log(`Throttle synced: ${data.mobileMs}ms`);
+    
+   
+  });
+
 //  COLLISION EVENTS
   socket.on('experiment:collision', (data: { obstacleId: string }) => {
     if (experimentVault.isRecording()) {

@@ -63,6 +63,12 @@ function MobileView() {
   
   // LITE MODE STATE
   const [liteMode, setLiteMode] = useState(false);
+
+  // THROTTLE STATE
+  const [mobileThrottle, setMobileThrottle] = useState(() => {
+    const saved = localStorage.getItem('throttle_mobile');
+    return saved ? parseInt(saved) : 33;
+  });
   
   // UI State
   const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
@@ -82,7 +88,7 @@ function MobileView() {
   // 1. SYNC CONNECTION
   const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera, socket } = useCameraSync({
     clientType: "mobile",
-    throttleMs: 1000/30,
+    throttleMs: mobileThrottle,
   });
 
   // 2. AI CONNECTION (Receive Only)
@@ -149,6 +155,21 @@ function MobileView() {
     
     return () => {
       socket.off('lite-mode:changed', handleLiteModeUpdate);
+    };
+  }, [socket]);
+
+  // --- LISTEN FOR THROTTLE UPDATES ---
+  useEffect(() => {
+    if (!socket) return;
+    const handleThrottleUpdate = (data: { mobileMs: number }) => {
+      setMobileThrottle(data.mobileMs);
+      localStorage.setItem('throttle_mobile', data.mobileMs.toString());
+    };
+    
+    socket.on('throttle:changed', handleThrottleUpdate);
+    
+    return () => {
+      socket.off('throttle:changed', handleThrottleUpdate);
     };
   }, [socket]);
   // --- SOCKET LISTENER WITH MINIMUM DURATION LOGIC ---

@@ -5,6 +5,7 @@ interface WorldSettingsPanelProps {
   onFrameBufferChange?: (settings: { frequency: number; downsamplePercentage: number }) => void;
   onWorldChange?: (settings: { width: number; depth: number; zShift: number; xShift: number }) => void;
   onLiteModeChange?: (enabled: boolean) => void;
+  onThrottleChange?: (settings: { desktopMs: number; mobileMs: number }) => void;
   disabled?: boolean;
 }
 
@@ -12,6 +13,7 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
   onFrameBufferChange,
   onWorldChange,
   onLiteModeChange,
+  onThrottleChange,
   disabled = false
 }) => {
   // Frame Buffer Settings
@@ -52,6 +54,17 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
     return saved === 'true';
   });
 
+  // Throttle Settings (in milliseconds)
+  const [desktopThrottle, setDesktopThrottle] = useState(() => {
+    const saved = localStorage.getItem('throttle_desktop');
+    return saved ? parseInt(saved) : 33; // Default 33ms = ~30fps
+  });
+
+  const [mobileThrottle, setMobileThrottle] = useState(() => {
+    const saved = localStorage.getItem('throttle_mobile');
+    return saved ? parseInt(saved) : 33; // Default 33ms = ~30fps
+  });
+
   // Persist Frame Buffer settings
   useEffect(() => {
     localStorage.setItem('frameBuffer_frequency', frequency.toString());
@@ -79,6 +92,13 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
     onLiteModeChange?.(liteMode);
   }, [liteMode]);
 
+  // Persist Throttle settings
+  useEffect(() => {
+    localStorage.setItem('throttle_desktop', desktopThrottle.toString());
+    localStorage.setItem('throttle_mobile', mobileThrottle.toString());
+    onThrottleChange?.({ desktopMs: desktopThrottle, mobileMs: mobileThrottle });
+  }, [desktopThrottle, mobileThrottle]);
+
   return (
     <div className={styles.panel}>
       {/* Frame Buffer Settings */}
@@ -89,10 +109,10 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
           <label className={styles.label}>Log Interval (FPS)</label>
           <input
             type="number"
-            min="5"
+            min="1"
             max="100"
             value={frequency}
-            onChange={(e) => setFrequency(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+            onChange={(e) => setFrequency(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
             disabled={disabled}
             className={styles.input}
           />
@@ -102,10 +122,10 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
           <label className={styles.label}>Downsampling (%)</label>
           <input
             type="number"
-            min="5"
+            min="0"
             max="100"
             value={downsampling}
-            onChange={(e) => setDownsampling(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+            onChange={(e) => setDownsampling(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
             disabled={disabled}
             className={styles.input}
           />
@@ -130,7 +150,33 @@ const WorldSettingsPanel: React.FC<WorldSettingsPanelProps> = ({
             <span>Lite Mode</span>
           </label>
         </div>
+        {/* Throttle Settings */}
+        <div className={styles.sectionTitle} style={{ marginTop: '12px' }}>Camera Throttle (ms)</div>
+        <div className={styles.frameSettings}>
+          <div className={styles.inputGroup}>
+            <label className={styles.label}>Desktop Position</label>
+            <input
+              type="number"
+              min="1"
+              value={desktopThrottle}
+              onChange={(e) => setDesktopThrottle( Math.max(1, parseInt(e.target.value) || 33))}
+              disabled={disabled}
+              className={styles.input}
+            />
+          </div>
 
+          <div className={styles.inputGroup}>
+            <label className={styles.label}>Mobile Rotation</label>
+            <input
+              type="number"
+              min="1"
+              value={mobileThrottle}
+              onChange={(e) => setMobileThrottle( Math.max(1, parseInt(e.target.value) || 33))}
+              disabled={disabled}
+              className={styles.input}
+            />
+          </div>
+        </div>
         <div className={styles.GroundDimensions}>
         <div className={styles.inputGroup}>
           <label className={styles.label}>Ground Width</label>

@@ -81,6 +81,9 @@ interface ExperimentSidebarProps {
   onLiteModeChange?: (enabled: boolean) => void;
   // Callback when lite mode changes
   
+  onThrottleChange?: (settings: { desktopMs: number; mobileMs: number }) => void;
+  // Callback when throttle settings change
+  
   onEyeControlChange?: (control: string) => void;
   // Callback when eye control mode changes
 }
@@ -108,6 +111,7 @@ function ExperimentSidebar({
   onWorldChange,
   onSubjectIdChange,
   onLiteModeChange,
+  onThrottleChange,
   onEyeControlChange,
 }: ExperimentSidebarProps) {
   const [activeTab, setActiveTab] = useState<string>("controls");
@@ -189,6 +193,7 @@ function ExperimentSidebar({
               onFrameBufferChange={onFrameBufferChange}
               onWorldChange={onWorldChange}
               onLiteModeChange={onLiteModeChange}
+              onThrottleChange={onThrottleChange}
             />
           </div>
         )}
