@@ -2,7 +2,7 @@ import 'aframe';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity, Scene } from 'aframe-react';
-import React, { useMemo } from 'react';
+import React, { useEffect, useRef } from 'react';
 import groundTexture from "../../../assets/ground/ground.jpg";
 
 interface WorldSceneProps {
@@ -30,6 +30,39 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
   groundXShift = 0,
   isLiteMode = false
 }) => {
+  const sceneRef = useRef<any>(null);
+
+  // 🧹 CLEANUP LEAK: Force WebGL Context Disposal on Unmount
+  useEffect(() => {
+    return () => {
+      const scene = sceneRef.current;
+      if (scene) {
+        console.log("🧹 Disposing A-Frame Scene & Renderer...");
+        
+        // 1. Dispose Renderer (Frees GPU Memory & WebGL Contexts)
+        if (scene.renderer) {
+          scene.renderer.dispose();
+          scene.renderer.forceContextLoss();
+          scene.renderer = null;
+        }
+
+        // 2. Deep Dispose of Objects (Frees Geometry/Material RAM)
+        if (scene.object3D) {
+          scene.object3D.traverse((node: any) => {
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach((m: any) => m.dispose());
+              } else {
+                node.material.dispose();
+              }
+            }
+          });
+        }
+      }
+    };
+  }, []); // Run once on mount/unmount
+
 // ==================================================
   // ==================================================
   // WORLD SETTINGS (Dynamic from Settings Panel)
@@ -52,6 +85,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
 
   return (
     <Scene
+      ref={sceneRef}
       embedded
       vr-mode-ui={`enabled: ${isMobile}`}
       renderer="preserveDrawingBuffer: true; antialias: false"
@@ -164,7 +198,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         const collisionWeightFormatted = `x: ${collisionWeight.x}; y: ${collisionWeight.y}; z: ${collisionWeight.z}`;
 
         return (
-          <React.Fragment key={`${e.id}-${isLiteMode}`}>
+          <React.Fragment key={e.id}>
             
             {/* 1. The Object Itself */}
             {url === 'Aframe' ? (
@@ -187,6 +221,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
                 position={`${adjustedPos.x} ${adjustedPos.y} ${adjustedPos.z}`}
                 rotation={`${rot.x} ${rot.y} ${rot.z}`}
                 scale={`${scl.x} ${scl.y} ${scl.z}`}
+                model-flattener={isLiteMode}
                 material={isLiteMode 
                   ? `shader: flat; color: ${color}; fog: false; flatShading: true; dithering: false` 
                   : `color: ${color}`

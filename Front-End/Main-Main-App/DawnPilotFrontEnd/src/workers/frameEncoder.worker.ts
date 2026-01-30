@@ -1,5 +1,8 @@
 // src/workers/frameEncoder.worker.ts
 
+/// <reference lib="webworker" />
+declare const self: DedicatedWorkerGlobalScope;
+
 const reader = new FileReader();
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -12,12 +15,12 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// We only need to persist the Canvas and Context
 let offscreenCanvas: OffscreenCanvas | null = null;
 let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
-let imageData: ImageData | null = null;
 
 self.onmessage = async (e: MessageEvent) => {
-  const { pixelBuffer, depthBlob, frameId, stage, width, height } = e.data;
+  const { pixelBuffer, depthBlob, frameId, stage, width, height, debug, cropping_config } = e.data;
 
   try {
     let rgbBase64 = "";
@@ -25,26 +28,31 @@ self.onmessage = async (e: MessageEvent) => {
     if (pixelBuffer && width && height) {
       const stride = width * 4;
       
-      // Safety Check: Ensure buffer size matches expected dimensions
+      // Safety Check
       if (pixelBuffer.byteLength !== stride * height) {
           throw new Error(`Buffer size mismatch: Expected ${stride * height}, got ${pixelBuffer.byteLength}`);
       }
 
-      // 1. Setup Canvas & ImageData (only when dimensions change)
+      // 1. Setup Canvas (Only runs once or when size changes)
       if (!offscreenCanvas || offscreenCanvas.width !== width || offscreenCanvas.height !== height) {
         offscreenCanvas = new OffscreenCanvas(width, height);
         offscreenCtx = offscreenCanvas.getContext("2d");
-        
-        // Create ImageData once with internal buffer
-        const buffer = new Uint8ClampedArray(stride * height);
-        imageData = new ImageData(buffer, width, height);
       }
 
-      if (offscreenCtx && imageData) {
-        // Copy transferred data into reusable ImageData buffer (single copy operation)
-        imageData.data.set(pixelBuffer instanceof Uint8ClampedArray ? pixelBuffer : new Uint8ClampedArray(pixelBuffer));
-        // Draw & Compress
-        offscreenCtx.putImageData(imageData, 0, 0);
+      if (offscreenCtx) {
+        // 🔥 ZERO-COPY OPTIMIZATION START 🔥
+        
+        // 1. Wrap the buffer directly (No memory copy)
+        // We cast to ArrayBuffer to satisfy TypeScript strictness
+        const view = new Uint8ClampedArray(pixelBuffer as ArrayBuffer);
+
+        // 2. Create the lightweight wrapper
+        const imgData = new ImageData(view, width, height);
+
+        // 3. Draw directly
+        offscreenCtx.putImageData(imgData, 0, 0);
+
+        // 🔥 OPTIMIZATION END 🔥
 
         const blob = await offscreenCanvas.convertToBlob({ type: "image/jpeg", quality: 0.5 });
         rgbBase64 = await blobToBase64(blob);
@@ -62,12 +70,13 @@ self.onmessage = async (e: MessageEvent) => {
       rgb: rgbBase64,
       stage: stage,
       depth: depthBase64 || undefined,
+      debug: debug !== undefined ? debug : false,
+      cropping_config: cropping_config || undefined,
     };
 
     self.postMessage({ success: true, payload: JSON.stringify(message) });
 
   } catch (error) {
-    // Send the error back so the main thread can log it
     self.postMessage({ success: false, error: String(error) });
   }
 };

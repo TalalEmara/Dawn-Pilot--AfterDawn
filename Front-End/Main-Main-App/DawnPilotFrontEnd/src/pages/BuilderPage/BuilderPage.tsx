@@ -42,9 +42,9 @@ const BuilderPage = () => {
   } = useEntityManager((dataOrId, action) => {
     if (action === 'delete' && typeof dataOrId === 'string') {
       // Optimistic delete: remove from UI immediately
-      setWorld((prevWorld) => ({
-        entities: prevWorld.entities.filter(e => e.id !== dataOrId)
-      }));
+      setWorld({
+        entities: world.entities.filter(e => e.id !== dataOrId)
+      });
     } else if (Array.isArray(dataOrId)) {
       // Full entity array update (for create operations)
       setWorld({ entities: dataOrId });
@@ -127,13 +127,13 @@ const BuilderPage = () => {
       );
       
       // ✅ OPTIMISTIC UPDATE: Immediately update React state
-      setWorld((prevWorld) => ({
-        entities: prevWorld.entities.map((e) =>
+      setWorld({
+        entities: world.entities.map((e) =>
           e.id === entityId 
             ? { ...e, [componentName]: componentData } 
             : e
         ),
-      }));
+      });
       
       // ⏱️ DEBOUNCED SAVE: Save to backend after 500ms of inactivity
       updateComponentDebounced(entityId, componentName, componentData, 500);
@@ -308,6 +308,31 @@ const BuilderPage = () => {
 
   const isLoading = worldLoading || entityLoading || componentLoading;
 
+  // GPU Memory Cleanup - Dispose A-Frame scene and renderer on unmount
+  useEffect(() => {
+    return () => {
+      console.log("🧹 Cleaning up A-Frame scene and GPU resources (Builder)...");
+      
+      // 1. Force A-Frame to release the renderer
+      const scene = document.querySelector('a-scene');
+      if (scene) {
+        const sceneEl = scene as any;
+        
+        // Dispose of the Three.js renderer to free GPU memory
+        if (sceneEl.renderer) {
+          sceneEl.renderer.dispose();
+          console.log("✅ Builder: Renderer disposed");
+        }
+        
+        // Remove the scene from DOM to free DOM memory
+        if (scene.parentNode) {
+          scene.parentNode.removeChild(scene);
+          console.log("✅ Builder: Scene removed from DOM");
+        }
+      }
+    };
+  }, []);
+
   return (
     <ScenarioContext.Provider
       value={{
@@ -315,7 +340,7 @@ const BuilderPage = () => {
         models,
         loading: isLoading,
         error: worldError || entityError,
-        loadWorld,
+        loadWorld: async () => { await loadWorld(); },
         createNewWorld: handleCreateNewWorld,
         addEntity: handleAddEntity,
         removeLastEntity: handleRemoveLastEntity,

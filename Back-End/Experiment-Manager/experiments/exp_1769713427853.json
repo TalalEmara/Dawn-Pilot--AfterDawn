@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "id": "exp_1769713427853",
+    "startTime": "2026-01-29T19:03:47.853Z",
+    "duration": 3,
+    "laptop": " params.laptopSocketId",
+    "mobile": "38e0RpQz-e6Yg8jJAAAG",
+    "subjectId": "test_subject_01",
+    "scenarioID": "default_world",
+    "visionMode": "prosthetic"
+  },
+  "numberOfCollision": 0,
+  "timeline": [
+    {
+      "t": 1,
+      "type": "START",
+      "data": {}
+    },
+    {
+      "t": 3,
+      "type": "STOP",
+      "data": {}
+    }
+  ]
+}

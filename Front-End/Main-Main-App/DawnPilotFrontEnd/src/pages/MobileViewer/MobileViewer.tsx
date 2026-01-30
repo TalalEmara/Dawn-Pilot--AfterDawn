@@ -10,7 +10,7 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
-// --- DEBUGGED CANVAS UPDATER ---
+// --- DEBUGGED & OPTIMIZED CANVAS UPDATER ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
     schema: { src: { type: "selector" } },
@@ -19,25 +19,79 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
       const canvas = this.data.src;
       if (!canvas) return;
 
+      // Create the texture once
       this.texture = new AFRAME.THREE.CanvasTexture(canvas);
+      
+      // OPTIONAL: Disable mipmaps for HUD/Video to save GPU memory & CPU cycles
+      this.texture.generateMipmaps = false;
+      this.texture.minFilter = AFRAME.THREE.LinearFilter;
+      this.texture.magFilter = AFRAME.THREE.LinearFilter;
+
       const mesh = this.el.getObject3D("mesh");
       if (!mesh) return;
 
+      // Assign material
       (mesh as any).material = new AFRAME.THREE.MeshBasicMaterial({
         map: this.texture,
         transparent: true,
         side: AFRAME.THREE.DoubleSide,
       });
-      (mesh as any).material.map.needsUpdate = true;
     },
 
     tick: function (this: any) {
       const canvas = this.data.src;
-      if (this.texture && canvas.getAttribute('data-updated') !== this.lastUpdated) {
+      
+      // 🚀 OPTIMIZATION: Check JS property (O(1)) instead of DOM Attribute (Slow)
+      if (this.texture && canvas && canvas.needsUpdate) {
         this.texture.needsUpdate = true;
-        this.lastUpdated = canvas.getAttribute('data-updated');
+        canvas.needsUpdate = false; // Reset flag immediately
       }
     },
+  });
+}
+
+// --- MODEL FLATTENER: Swap Materials Instead of Recreating Entities ---
+if (typeof AFRAME !== "undefined" && !AFRAME.components["model-flattener"]) {
+  AFRAME.registerComponent('model-flattener', {
+    schema: { type: 'boolean', default: false }, // true = lite mode
+    
+    update: function(this: any) {
+       this.processModel();
+    },
+    
+    init: function(this: any) {
+       this.el.addEventListener('model-loaded', () => this.processModel());
+    },
+
+    processModel: function(this: any) {
+       const mesh = this.el.getObject3D('mesh');
+       if (!mesh) return;
+
+       const isLite = this.data;
+       
+       mesh.traverse((node: any) => {
+          if (node.isMesh) {
+             // If we haven't saved the original material, save it
+             if (!node.userData.originalMat) {
+                 node.userData.originalMat = node.material;
+             }
+
+             if (isLite) {
+                // SWAP TO CHEAP MATERIAL
+                if (!node.userData.liteMat) {
+                    node.userData.liteMat = new AFRAME.THREE.MeshBasicMaterial({
+                        color: node.userData.originalMat.color || 'white',
+                        wireframe: false
+                    });
+                }
+                node.material = node.userData.liteMat;
+             } else {
+                // RESTORE ORIGINAL
+                node.material = node.userData.originalMat;
+             }
+          }
+       });
+    }
   });
 }
 
@@ -302,6 +356,38 @@ useEffect(() => {
     }, 1000);
     return () => clearInterval(timer);
   }, [aiWebSocket]);
+
+  // GPU Memory Cleanup - Dispose A-Frame scene and renderer on unmount
+  useEffect(() => {
+    return () => {
+      console.log("🧹 Cleaning up A-Frame scene and GPU resources...");
+      
+      // 1. Force A-Frame to release the renderer
+      const scene = document.querySelector('a-scene');
+      if (scene) {
+        const sceneEl = scene as any;
+        
+        // Dispose of the Three.js renderer to free GPU memory
+        if (sceneEl.renderer) {
+          sceneEl.renderer.dispose();
+          console.log("✅ Renderer disposed");
+        }
+        
+        // Remove the scene from DOM to free DOM memory
+        if (scene.parentNode) {
+          scene.parentNode.removeChild(scene);
+          console.log("✅ Scene removed from DOM");
+        }
+      }
+
+      // 2. Clear canvas references to help browser release textures
+      if (hudCanvasRef.current) {
+        hudCanvasRef.current.width = 0;
+        hudCanvasRef.current.height = 0;
+        console.log("✅ Canvas reference cleared");
+      }
+    };
+  }, [hudCanvasRef]);
 
   return (
     <div style={{ background: "black", width: "100vw", height: "100vh", overflow: "hidden" }}>

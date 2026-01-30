@@ -39,7 +39,7 @@ function ResearcherLite() {
 
   const [subjectId, setSubjectId] = useState(() => {
     const saved = localStorage.getItem("subject_id");
-    return saved || "test_subject_01";
+    return saved || "NOT_SET";
   });
 
   const [frameBufferSettings, setFrameBufferSettings] = useState(() => {
@@ -324,7 +324,7 @@ function ResearcherLite() {
               ref={cameraRef}
               primitive="a-camera"
               look-controls="enabled: false"
-              wasd-controls="enabled: true; acceleration: 15"
+              wasd-controls="enabled: true; acceleration: 9"
               vr-movement-controls="speed: 1.5; verticalSpeed: 1; acceleration: 15; heightUpButton: 7; heightDownButton: 6"
             >
               <Entity
