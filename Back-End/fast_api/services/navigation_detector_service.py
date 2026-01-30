@@ -342,12 +342,35 @@ class NavigationDetectorService:
             #     dist = float(det.get("distance_m"))
             #     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
             
+            # Safe float conversions with None handling
+            try:
+                conf_val = confidence
+                if conf_val is not None:
+                    safe_confidence = float(conf_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] Confidence is None, using 0.001")
+                    safe_confidence = 0.001
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting confidence: {e}")
+                safe_confidence = 0.001
+            
+            try:
+                dist_val = det.get("distance_m")
+                if dist_val is not None:
+                    safe_distance = float(dist_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                    safe_distance = 10.0
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting distance_m: {e}")
+                safe_distance = 10.0
+            
             standardized_detections.append({
                 "class": str(det.get("class", "unknown")),
-                "confidence": float(confidence),
+                "confidence": safe_confidence,
                 "bbox": bbox,
                 "centroid_px": [int(cx), int(cy)],
-                "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                "distance_m": safe_distance
             })
         
         return standardized_detections
@@ -445,15 +468,47 @@ class NavigationDetectorService:
                 # Use distance as confidence if available
                 confidence = 0.8
                 if det.get("distance_m"):
-                    dist = float(det.get("distance_m"))
+                    try:
+                        dist_val = det.get("distance_m")
+                        if dist_val is not None:
+                            dist = float(dist_val)
+                        else:
+                            print(f"⚠️ [Frame {frame_id}] distance_m is None, using 10.0m")
+                            dist = 10.0
+                    except (TypeError, ValueError) as e:
+                        print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                        dist = 10.0
                     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+                
+                # Safe float conversions with None handling
+                try:
+                    conf_val = real_confidence
+                    if conf_val is not None:
+                        safe_confidence = float(conf_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] Confidence is None, using 0.001")
+                        safe_confidence = 0.001
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting confidence: {e}")
+                    safe_confidence = 0.001
+                
+                try:
+                    dist_val = det.get("distance_m")
+                    if dist_val is not None:
+                        safe_distance = float(dist_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                        safe_distance = 10.0
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                    safe_distance = 10.0
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
-                    "confidence": float(real_confidence),
+                    "confidence": safe_confidence,
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
-                    "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                    "distance_m": safe_distance
                 })
             
             # Calculate total processing time
@@ -468,18 +523,18 @@ class NavigationDetectorService:
                     k: (
                         [int(x) for x in v] if isinstance(v, (list, tuple, np.ndarray))
                         else int(v) if isinstance(v, (np.integer, int))
-                        else float(v)
+                        else float(v) if v is not None else None
                     )
                     for k, v in freepath_circle.items()
                 } if freepath_circle else None,
-                "processing_time_ms": float(processing_time),
+                "processing_time_ms": float(processing_time) if processing_time is not None else 0.0,
                 "stats": {
                     "num_detections": int(len(standardized_detections)),
                     "freepath_points": int(len(freepath_coordinates)),
                     "has_freepath_circle": bool(freepath_circle is not None),
-                    "detection_time_ms": float(detection_time),
-                    "freepath_time_ms": float(freepath_time),
-                    "parallel_total_ms": float(parallel_time)
+                    "detection_time_ms": float(detection_time) if detection_time is not None else 0.0,
+                    "freepath_time_ms": float(freepath_time) if freepath_time is not None else 0.0,
+                    "parallel_total_ms": float(parallel_time) if parallel_time is not None else 0.0
                 }
             })
             
