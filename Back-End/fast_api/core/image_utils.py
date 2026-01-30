@@ -18,6 +18,43 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
+def decode_base64_image(base64_string: str) -> np.ndarray:
+    """
+    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
+    
+    Args:
+        base64_string: Base64 encoded image data
+        
+    Returns:
+        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
+        
+    Notes:
+        - Returns BGR format for backward compatibility
+        - Consider using decode_base64_to_rgb() for ML pipelines
+    """
+    try:
+        # Remove data URL prefix if present
+        if ',' in base64_string:
+            base64_string = base64_string.split(',')[1]
+        
+        # Decode base64
+        img_data = base64.b64decode(base64_string)
+        
+        # Convert to numpy array
+        nparr = np.frombuffer(img_data, np.uint8)
+        
+        # Decode image (returns BGR)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise ValueError("Failed to decode image")
+        
+        return img
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+
+
 def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
     """
     Decode base64 string to RGB numpy array (optimized for ML models)
@@ -60,61 +97,27 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
 
 
-def decode_base64_image(base64_string: str) -> np.ndarray:
-    """
-    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
-    
-    Args:
-        base64_string: Base64 encoded image data
-        
-    Returns:
-        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
-        
-    Notes:
-        - Returns BGR format for backward compatibility
-        - Consider using decode_base64_to_rgb() for ML pipelines
-    """
-    try:
-        # Remove data URL prefix if present
-        if ',' in base64_string:
-            base64_string = base64_string.split(',')[1]
-        
-        # Decode base64
-        img_data = base64.b64decode(base64_string)
-        
-        # Convert to numpy array
-        nparr = np.frombuffer(img_data, np.uint8)
-        
-        # Decode image (returns BGR)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if img is None:
-            raise ValueError("Failed to decode image")
-        
-        return img
-    
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
 
-
-
-
-def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.png') -> str:
+def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: str = '.jpg', quality: int = 75) -> str:
     """
     Encode numpy array to base64 string (optimized - minimal conversions)
     
     Args:
         img: Numpy array image (H, W, 3) or (H, W)
         color_space: 'RGB' or 'BGR' - specifies input color space
-        format: Image format ('.png', '.jpg')
+        format: Image format ('.jpg', '.png')
+        quality: Compression quality (0-100 for JPEG, 0-9 for PNG)
+                 JPEG: 100=best quality/largest size, 0=worst quality/smallest size (default: 95)
+                 PNG: 0=no compression/fastest, 9=max compression/slowest (default: 1)
         
     Returns:
         str: Base64 encoded image string (without data URL prefix)
         
     Notes:
-        - If img is RGB and you need PNG output, it will convert RGB->BGR once
+        - If img is RGB and you need JPG output, it will convert RGB->BGR once
         - If img is already BGR, no conversion needed
         - For grayscale images, color_space is ignored
+        - Lower quality = smaller file size = faster transmission
     """
     try:
         # Validate input image
@@ -134,8 +137,18 @@ def encode_ndarray_to_base64(img: np.ndarray, color_space: str = 'RGB', format: 
 
         # if the image is grayscale, no color conversion needed
         
-        # Encode to PNG/JPG bytes
-        success, buffer = cv2.imencode(format, img)
+        # Set encoding parameters based on format
+        if format.lower() in ['.jpg', '.jpeg']:
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+        elif format.lower() == '.png':
+            # For PNG, convert quality (0-100) to compression (0-9)
+            compression = min(9, max(0, int((100 - quality) / 11)))
+            encode_params = [cv2.IMWRITE_PNG_COMPRESSION, compression]
+        else:
+            encode_params = []
+        
+        # Encode to PNG/JPEG bytes with quality control
+        success, buffer = cv2.imencode(format, img, encode_params)
         if not success:
             raise ValueError(f"Failed to encode image to {format}. Image shape: {img.shape}, dtype: {img.dtype}")
         
@@ -280,3 +293,4 @@ def save_debug_images(
     except Exception as e:
         logger.error(f"❌ Failed to save debug images: {str(e)}")
         return False
+

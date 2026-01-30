@@ -67,11 +67,13 @@ function ResearcherView() {
 
   // AI Socket State
  const frameIdRef = useRef<number>(0);
+  const [sentFrameId, setSentFrameId] = useState<number>(0);
 // Replaces all manual socket state, connection effects, and binary stream hooks
 const { 
   socket: aiWebSocket, 
   canvasRef: aiHudCanvasRef,
-  isConnected: aiConnected 
+  isConnected: aiConnected,
+  receivedFrameId
 } = useAiStream({ 
   reconnectDependency: visionMode 
 });
@@ -147,6 +149,7 @@ useFrameBuffer({
     try {
       const needsDepth = visionMode === "prosthetic";
       frameIdRef.current++;
+      setSentFrameId(frameIdRef.current);
 
       workerRef.current?.postMessage(
         {
@@ -365,6 +368,8 @@ useEffect(() => {
   collisionLog={collisionLog}
   onOpenLoadDialog={handleOpenLoadDialog}
   saveLoadLoading={saveLoadLoading}
+  sentFrameId={sentFrameId}
+  receivedFrameId={receivedFrameId}
 />
 
       {/* --- 3D VIEWPORT WITH ASPECT RATIO FIX --- */}

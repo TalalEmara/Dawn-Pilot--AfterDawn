@@ -53,11 +53,12 @@ export const useAiStream = ({
   }, [reconnectDependency, endpoint]); // Re-run effect if dependency changes
 
   // 3. Handle Binary Stream (Canvas Updates)
-  const canvasRef = useBinaryStream(socket);
+  const { canvasRef, receivedFrameId } = useBinaryStream(socket);
 
   return { 
     socket, 
     canvasRef, 
-    isConnected 
+    isConnected,
+    receivedFrameId
   };
 };

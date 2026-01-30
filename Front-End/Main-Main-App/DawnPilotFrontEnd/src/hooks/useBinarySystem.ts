@@ -57,5 +57,5 @@ export function useBinaryStream(ws: WebSocket | null) {
     };
   }, [ws]);
 
-  return canvasRef;
+  return { canvasRef, receivedFrameId };
 }

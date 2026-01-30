@@ -39,6 +39,10 @@ interface ResearcherSidePanelProps {
   // Load Dialog
   onOpenLoadDialog: () => void;
   saveLoadLoading: boolean;
+  
+  // Frame ID tracking
+  sentFrameId: number;
+  receivedFrameId: number;
 }
 
 const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
@@ -48,6 +52,8 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
   aiConnected,
   visionMode,
   setVisionMode,
+  sentFrameId,
+  receivedFrameId,
   currentScenarioId,
   socket,
   setCollisionCount,
@@ -233,6 +239,23 @@ useEffect(() => {
               ref={aiHudCanvasRef}
               className={styles.canvas}
             />
+          </div>
+          {/* Frame ID Display */}
+          <div className={styles.frameIdContainer}>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Sent Frame ID:</span>
+              <span className={styles.frameIdValue}>{sentFrameId}</span>
+            </div>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Received Frame ID:</span>
+              <span className={styles.frameIdValue}>{receivedFrameId}</span>
+            </div>
+            <div className={styles.frameIdRow}>
+              <span className={styles.frameIdLabel}>Status:</span>
+              <span className={sentFrameId === receivedFrameId ? styles.frameIdMatch : styles.frameIdMismatch}>
+                {sentFrameId === receivedFrameId ? '✓ Match' : '✗ Mismatch'}
+              </span>
+            </div>
           </div>
         </div>
 

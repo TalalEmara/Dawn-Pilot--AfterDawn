@@ -210,9 +210,9 @@ class Translator:
         # Distance scoring: closer objects are more important
         dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
         #for far objects of depth > specific threshold get a score distance of 0
-        depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
-        if dist < depth_gate:
-            return 0.0  
+        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
+        # if dist < depth_gate:
+        #     return 0.0  
         
         score_distance = 0.01*(dist) #near objects get higher score
         total_score = (weights.get("dist", 1) * score_distance)
@@ -260,13 +260,32 @@ class Translator:
                 if "centroid_px" not in o:
                     o["centroid_px"] = [int((self.input_width / 2) * scale_x), int((self.input_height / 2) * scale_y)]
 
-            # ensure distance field available
-            if "distance_m" in o:
-                o["depth"] = float(o["distance_m"])
-            elif "depth_z" in o:
-                o["depth"] = float(o["depth_z"])
-            else:
-                o["depth"] = float(o.get("depth", 10.0))
+            # ensure distance field available with None protection
+            try:
+                if "distance_m" in o:
+                    distance_val = o["distance_m"]
+                    if distance_val is not None:
+                        o["depth"] = float(distance_val)
+                    else:
+                        print(f"⚠️ [Translator.select_objects] distance_m is None for {o.get('class', 'unknown')}, using 10.0m")
+                        o["depth"] = 10.0
+                elif "depth_z" in o:
+                    depth_z_val = o["depth_z"]
+                    if depth_z_val is not None:
+                        o["depth"] = float(depth_z_val)
+                    else:
+                        print(f"⚠️ [Translator.select_objects] depth_z is None for {o.get('class', 'unknown')}, using 10.0m")
+                        o["depth"] = 10.0
+                else:
+                    depth_val = o.get("depth", 10.0)
+                    if depth_val is not None:
+                        o["depth"] = float(depth_val)
+                    else:
+                        print(f"⚠️ [Translator.select_objects] depth is None for {o.get('class', 'unknown')}, using 10.0m")
+                        o["depth"] = 10.0
+            except (TypeError, ValueError) as e:
+                print(f"❌ [Translator.select_objects] Error converting depth value: {e}, using 10.0m")
+                o["depth"] = 10.0
 
             o["score"] = self.score_object(o)
             objs.append(o)
