@@ -158,20 +158,20 @@ class ObjectDetector:
             # Fetch Depth of Detected Object
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             # Clamp bbox coordinates to image boundaries to avoid empty ROI
-            img_h, img_w = depth_img.shape[:2]
-            x1 = max(0, min(x1, img_w - 1))
-            x2 = max(0, min(x2, img_w))
-            y1 = max(0, min(y1, img_h - 1))
-            y2 = max(0, min(y2, img_h))
+            # img_h, img_w = depth_img.shape[:2]
+            # x1 = max(0, min(x1, img_w - 1))
+            # x2 = max(0, min(x2, img_w))
+            # y1 = max(0, min(y1, img_h - 1))
+            # y2 = max(0, min(y2, img_h))
 
-            # If box has no area after clamping, log and use whole-image fallback
+            # # If box has no area after clamping, log and use whole-image fallback
             import logging
             logger = logging.getLogger(__name__)
-            if x2 <= x1 or y2 <= y1:
-                logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
-                roi = depth_img
-            else:
-                roi = depth_img[y1:y2, x1:x2]
+            # if x2 <= x1 or y2 <= y1:
+            #     logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
+            #     roi = depth_img
+            # else:
+            roi = depth_img[y1:y2, x1:x2]
 
             # Use only valid (non-zero) depth pixels
             valid = roi[roi > 0]
