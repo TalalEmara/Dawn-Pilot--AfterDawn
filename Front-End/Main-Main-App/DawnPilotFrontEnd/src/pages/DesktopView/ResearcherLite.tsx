@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import styles from "./ResearcherLite.module.css";
+import "aframe";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error
 import { Entity } from "aframe-react";
@@ -12,6 +13,79 @@ import { useFrameBuffer } from "../../hooks/useFrameBuffer";
 import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
 import FrameEncoderWorker from "../../workers/frameEncoder.worker?worker";
+
+// --- WALL COLLISION VISIBILITY: Show walls only when colliding (like alert system) ---
+if (typeof AFRAME !== "undefined" && !AFRAME.components["wall-collision-visibility"]) {
+  AFRAME.registerComponent('wall-collision-visibility', {
+    schema: {
+      duration: { type: 'number', default: 2000 }
+    },
+
+    init: function(this: any) {
+      this.onCollision = this.onCollision.bind(this);
+      this.hideTimerRef = null;
+      this.isVisible = false;
+      this.collisionStartTime = 0;
+      
+      // Listen for collision events
+      this.el.addEventListener('collision', this.onCollision);
+      
+      console.log('🧱 Wall collision visibility initialized on:', this.el.id || 'wall');
+    },
+
+    onCollision: function(this: any, event: any) {
+      console.log('🚨 Wall collision detected!', event.detail);
+      
+      // Start showing the wall
+      if (!this.isVisible) {
+        this.isVisible = true;
+        this.collisionStartTime = Date.now();
+        
+        // Make wall visible with proper material settings
+        this.el.setAttribute('material', {
+          opacity: 0.9,
+          transparent: true,
+          color: '#FF0000',
+          shader: 'flat',
+          depthTest: false,
+          depthWrite: false
+        });
+        
+        console.log('✅ Wall now visible (red)');
+      }
+      
+      // Clear any existing hide timer
+      if (this.hideTimerRef) {
+        clearTimeout(this.hideTimerRef);
+        this.hideTimerRef = null;
+      }
+      
+      // Set new hide timer with minimum duration logic
+      const MIN_DURATION = this.data.duration;
+      const elapsed = Date.now() - this.collisionStartTime;
+      
+      const hideDelay = elapsed < MIN_DURATION ? MIN_DURATION - elapsed : 0;
+      
+      this.hideTimerRef = setTimeout(() => {
+        this.el.setAttribute('material', {
+          opacity: 0,
+          transparent: true
+        });
+        this.isVisible = false;
+        this.hideTimerRef = null;
+        console.log('👻 Wall hidden again');
+      }, hideDelay);
+    },
+
+    remove: function(this: any) {
+      this.el.removeEventListener('collision', this.onCollision);
+      if (this.hideTimerRef) {
+        clearTimeout(this.hideTimerRef);
+      }
+    }
+  });
+}
+
 const getStageFromVisionMode = (mode: string): string => {
   switch (mode) {
     case "normal":
@@ -32,6 +106,9 @@ function ResearcherLite() {
   const [mobileId, setMobileId] = useState<string>("");
   const frameIdRef = useRef<number>(0);
   const workerRef = useRef<Worker | null>(null);
+  const [wallsTransparent, setWallsTransparent] = useState(true);
+  
+  
   const [visionMode, setVisionMode] = useState(() => {
     const saved = localStorage.getItem("researcher_visionMode");
     return saved || "prosthetic";
@@ -108,6 +185,7 @@ function ResearcherLite() {
       console.error("Researcher - Failed to load world:", err),
     );
   }, [loadWorld]);
+
 
   // sending to AI
   useEffect(() => {
@@ -279,7 +357,15 @@ function ResearcherLite() {
     setSavedScenarios(scenarios);
     setShowLoadDialog(true);
   };
-
+const handleManualWallTrigger = () => {
+   const newState = !wallsTransparent;
+    setWallsTransparent(newState);
+    
+    // Sync with Mobile
+    if (socket && socket.connected) {
+      socket.emit('walls-transparent:update', { enabled: newState });
+    }
+  };
   return (
     <div className={styles.page}>
       <ExperimentSidebar
@@ -294,7 +380,8 @@ function ResearcherLite() {
         onVisionModeChange={(mode) => {
           setVisionMode(mode);
         }}
-        
+        wallsTransparent={wallsTransparent}
+        onTriggerWallVisibilty={handleManualWallTrigger}
         onOpenLoadDialog={handleOpenLoadDialog}
         saveLoadLoading={saveLoadLoading}
         aiHudCanvasRef={aiHudCanvasRef as React.RefObject<HTMLCanvasElement>}
@@ -319,6 +406,7 @@ function ResearcherLite() {
             groundZShift={worldSettings.zShift}
             groundXShift={worldSettings.xShift}
             isLiteMode={liteMode}
+            areWallsTransparent={wallsTransparent}
           >
             <Entity
               ref={cameraRef}

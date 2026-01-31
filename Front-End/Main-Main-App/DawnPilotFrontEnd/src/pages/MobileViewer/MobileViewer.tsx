@@ -10,269 +10,138 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useAiStream } from "../../hooks/useAiStream";
 import WorldScene from "../../components/level-2/WorldRenderer/WorldRenderer";
 
-// --- DEBUGGED & OPTIMIZED CANVAS UPDATER ---
+// ... canvas-updater (unchanged) ...
 if (typeof AFRAME !== "undefined" && !AFRAME.components["canvas-updater"]) {
   AFRAME.registerComponent("canvas-updater", {
     schema: { src: { type: "selector" } },
-
     init: function (this: any) {
       const canvas = this.data.src;
       if (!canvas) return;
-
-      // Create the texture once
       this.texture = new AFRAME.THREE.CanvasTexture(canvas);
-      
-      // OPTIONAL: Disable mipmaps for HUD/Video to save GPU memory & CPU cycles
       this.texture.generateMipmaps = false;
       this.texture.minFilter = AFRAME.THREE.LinearFilter;
       this.texture.magFilter = AFRAME.THREE.LinearFilter;
-
       const mesh = this.el.getObject3D("mesh");
       if (!mesh) return;
-
-      // Assign material
-      (mesh as any).material = new AFRAME.THREE.MeshBasicMaterial({
-        map: this.texture,
-        transparent: true,
-        side: AFRAME.THREE.DoubleSide,
-      });
+      (mesh as any).material = new AFRAME.THREE.MeshBasicMaterial({ map: this.texture, transparent: true, side: AFRAME.THREE.DoubleSide });
     },
-
     tick: function (this: any) {
       const canvas = this.data.src;
-      
-      // 🚀 OPTIMIZATION: Check JS property (O(1)) instead of DOM Attribute (Slow)
       if (this.texture && canvas && canvas.needsUpdate) {
         this.texture.needsUpdate = true;
-        canvas.needsUpdate = false; // Reset flag immediately
+        canvas.needsUpdate = false;
       }
     },
   });
 }
 
-// --- MODEL FLATTENER: Swap Materials Instead of Recreating Entities ---
-if (typeof AFRAME !== "undefined" && !AFRAME.components["model-flattener"]) {
-  AFRAME.registerComponent('model-flattener', {
-    schema: { type: 'boolean', default: false }, // true = lite mode
-    
-    update: function(this: any) {
-       this.processModel();
+// --- WALL COLLISION COMPONENT (Mobile Receiver) ---
+if (typeof AFRAME !== "undefined" && !AFRAME.components["wall-collision-visibility"]) {
+  AFRAME.registerComponent("wall-collision-visibility", {
+    schema: { duration: { type: "number", default: 2000 } },
+    init: function (this: any) {
+      this.onCollision = this.onCollision.bind(this);
+      this.hideTimerRef = null;
+      this.isVisible = false;
+      this.el.addEventListener("collision", this.onCollision);
     },
-    
-    init: function(this: any) {
-       this.el.addEventListener('model-loaded', () => this.processModel());
+    onCollision: function (this: any, event: any) {
+      // 🛑 FILTER: On mobile, ONLY accept remote signals
+      if (!event.detail?.isRemote) return;
+
+      console.log("📱 [Mobile] Wall Visible:", this.el.id);
+      
+      if (!this.isVisible) {
+        this.isVisible = true;
+        this.el.object3D.renderOrder = 9999;
+        this.el.setAttribute("material", {
+          opacity: 0.9, transparent: true, color: "#FF0000", shader: "flat", depthTest: false, depthWrite: false,
+        });
+      }
+      
+      if (this.hideTimerRef) clearTimeout(this.hideTimerRef);
+      this.hideTimerRef = setTimeout(() => {
+        this.el.setAttribute("material", { opacity: 0, transparent: true });
+        this.isVisible = false;
+        this.hideTimerRef = null;
+      }, this.data.duration);
     },
-
-    processModel: function(this: any) {
-       const mesh = this.el.getObject3D('mesh');
-       if (!mesh) return;
-
-       const isLite = this.data;
-       
-       mesh.traverse((node: any) => {
-          if (node.isMesh) {
-             // If we haven't saved the original material, save it
-             if (!node.userData.originalMat) {
-                 node.userData.originalMat = node.material;
-             }
-
-             if (isLite) {
-                // SWAP TO CHEAP MATERIAL
-                if (!node.userData.liteMat) {
-                    node.userData.liteMat = new AFRAME.THREE.MeshBasicMaterial({
-                        color: node.userData.originalMat.color || 'white',
-                        wireframe: false
-                    });
-                }
-                node.material = node.userData.liteMat;
-             } else {
-                // RESTORE ORIGINAL
-                node.material = node.userData.originalMat;
-             }
-          }
-       });
-    }
+    remove: function (this: any) {
+      this.el.removeEventListener("collision", this.onCollision);
+      if (this.hideTimerRef) clearTimeout(this.hideTimerRef);
+    },
   });
 }
 
 function MobileView() {
   const cameraRef = useRef<any>(null);
   const rigRef = useRef<any>(null);
-  const [reloadTrigger, setReloadTrigger] = useState(0);  
-  
-  // 1. ADD VISION MODE STATE
-// ✅ 1. CHANGED: Load from storage
-  const [visionMode, setVisionMode] = useState(() => {
-    const saved = localStorage.getItem("mobile_visionMode");
-    return saved || 'prosthetic';
-  });
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
-  // ✅ 2. ADDED: Save to storage
-  useEffect(() => {
-    localStorage.setItem("mobile_visionMode", visionMode);
-  }, [visionMode]);
-
-  // EYE CONTROL STATE (R or L)
-  const [eyeControl, setEyeControl] = useState<'R' | 'L'>('R');
+  // Vision Mode
+  const [visionMode, setVisionMode] = useState(() => localStorage.getItem("mobile_visionMode") || "prosthetic");
+  useEffect(() => { localStorage.setItem("mobile_visionMode", visionMode); }, [visionMode]);
   
-  // LITE MODE STATE
+  const [eyeControl, setEyeControl] = useState<"R" | "L">("R");
   const [liteMode, setLiteMode] = useState(false);
+  const [mobileThrottle, setMobileThrottle] = useState(() => parseInt(localStorage.getItem("throttle_mobile") || "33"));
+  const [alertStatus, setAlertStatus] = useState<"DANGER" | "SAFE">("SAFE");
 
-  // THROTTLE STATE
-  const [mobileThrottle, setMobileThrottle] = useState(() => {
-    const saved = localStorage.getItem('throttle_mobile');
-    return saved ? parseInt(saved) : 33;
-  });
-  
-  // UI State
-  const [alertStatus, setAlertStatus] = useState<'DANGER' | 'SAFE'>('SAFE');
+  // X-RAY STATE
+  const [collisionActive, setCollisionActive] = useState(false);
+  const collisionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- LOGIC REFS (For Socket Listener) ---
-  const alertStartTime = useRef<number>(0);       
-  const isAlertVisible = useRef<boolean>(false);  
-  const hideTimerRef = useRef<NodeJS.Timeout | null>(null); 
-
-  // Position Sync State
   const hasReceivedPosition = useRef(false);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
 
   const { world, loadWorld } = useScenarioWorld();
   const { clearAllTimers } = useComponentManager();
+  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera, socket } = useCameraSync({ clientType: "mobile", throttleMs: mobileThrottle });
+  const { socket: aiWebSocket, canvasRef: hudCanvasRef, isConnected: isAiConnected } = useAiStream();
 
-  // 1. SYNC CONNECTION
-  const { isConnected: isSyncConnected, setOnCameraUpdate, updateCamera, socket } = useCameraSync({
-    clientType: "mobile",
-    throttleMs: mobileThrottle,
-  });
-
-  // 2. AI CONNECTION (Receive Only)
-  const { 
-    socket: aiWebSocket, 
-    canvasRef: hudCanvasRef, 
-    isConnected: isAiConnected 
-  } = useAiStream();
-
-  // 3. FOV & BLINDER CALCULATIONS
-  const depth = 0.1; 
-  const fovWidth = 17; 
-  const fovHeight = 17; 
-  // CHHHHHANGEEE HEEEEEEEEEEEEEREEEEEEE
+  // FOV
+  const depth = 0.1;
+  const fovWidth = 17;
+  const fovHeight = 17;
   const holeDistance = 0.08;
-
-
   const degToRad = (deg: number) => (deg * Math.PI) / 180;
   const hudWidth = 2 * depth * Math.tan(degToRad(fovWidth / 2));
   const hudHeight = 2 * depth * Math.tan(degToRad(fovHeight / 2));
-  
-  // Calculate HUD X position based on eye control
-  const baseHudX = holeDistance/2 + 0.012;
-  const hudX = eyeControl === 'R' ? baseHudX : -baseHudX;
+  const baseHudX = holeDistance / 2 + 0.012;
+  const hudX = eyeControl === "R" ? baseHudX : -baseHudX;
 
-  // --- LISTEN FOR VISION MODE UPDATES ---
-// --- LISTEN FOR VISION MODE UPDATES ---
+  const [wallsTransparent, setWallsTransparent] = useState(true);
   useEffect(() => {
     if (!socket) return;
-    const handleModeUpdate = (data: { mode: string }) => {
-      setVisionMode(data.mode);
+    const handleWallUpdate = (data: { enabled: boolean }) => {
+      setWallsTransparent(data.enabled);
     };
-    
-    // ✅ FIX: Listen for 'changed', not 'update'
-    socket.on('vision-mode:changed', handleModeUpdate);
-    
-    return () => {
-      socket.off('vision-mode:changed', handleModeUpdate);
-    };
+    socket.on("walls-transparent:changed", handleWallUpdate);
+    return () => { socket.off("walls-transparent:changed", handleWallUpdate); };
   }, [socket]);
-
-  // --- LISTEN FOR EYE CONTROL UPDATES ---
+  // Listeners
   useEffect(() => {
     if (!socket) return;
-    const handleEyeControlUpdate = (data: { control: 'R' | 'L' }) => {
-      setEyeControl(data.control);
-    };
-    
-    socket.on('eye-control:changed', handleEyeControlUpdate);
-    
-    return () => {
-      socket.off('eye-control:changed', handleEyeControlUpdate);
-    };
+    socket.on("vision-mode:changed", (d) => setVisionMode(d.mode));
+    socket.on("eye-control:changed", (d) => setEyeControl(d.control));
+    socket.on("lite-mode:changed", (d) => setLiteMode(d.enabled));
+    socket.on("throttle:changed", (d) => { setMobileThrottle(d.mobileMs); localStorage.setItem("throttle_mobile", d.mobileMs.toString()); });
+    return () => { socket.off("vision-mode:changed"); socket.off("eye-control:changed"); socket.off("lite-mode:changed"); socket.off("throttle:changed"); };
   }, [socket]);
 
-  // --- LISTEN FOR LITE MODE UPDATES ---
+  // Alert Handler (unchanged)
   useEffect(() => {
     if (!socket) return;
-    const handleLiteModeUpdate = (data: { enabled: boolean }) => {
-      setLiteMode(data.enabled);
+    const handleAlert = (data: { status: "DANGER" | "SAFE" }) => {
+      setAlertStatus(data.status);
     };
-    
-    socket.on('lite-mode:changed', handleLiteModeUpdate);
-    
-    return () => {
-      socket.off('lite-mode:changed', handleLiteModeUpdate);
-    };
+    socket.on("alert:status", handleAlert);
+    return () => { socket.off("alert:status", handleAlert); };
   }, [socket]);
 
-  // --- LISTEN FOR THROTTLE UPDATES ---
-  useEffect(() => {
-    if (!socket) return;
-    const handleThrottleUpdate = (data: { mobileMs: number }) => {
-      setMobileThrottle(data.mobileMs);
-      localStorage.setItem('throttle_mobile', data.mobileMs.toString());
-    };
-    
-    socket.on('throttle:changed', handleThrottleUpdate);
-    
-    return () => {
-      socket.off('throttle:changed', handleThrottleUpdate);
-    };
-  }, [socket]);
-  // --- SOCKET LISTENER WITH MINIMUM DURATION LOGIC ---
-  useEffect(() => {
-    if (!socket) return;
 
-    const handleAlert = (data: { status: 'DANGER' | 'SAFE' }) => {
-      if (data.status === 'DANGER') {
-        if (!isAlertVisible.current) {
-           isAlertVisible.current = true;
-           alertStartTime.current = Date.now();
-           setAlertStatus('DANGER');
-        }
-        if (hideTimerRef.current) {
-          clearTimeout(hideTimerRef.current);
-          hideTimerRef.current = null;
-        }
-      } 
-      else { 
-        if (isAlertVisible.current) {
-           const MIN_DURATION = 2000;
-           const elapsed = Date.now() - alertStartTime.current;
 
-           if (elapsed < MIN_DURATION) {
-             if (!hideTimerRef.current) {
-                const remaining = MIN_DURATION - elapsed;
-                hideTimerRef.current = setTimeout(() => {
-                  setAlertStatus('SAFE');
-                  isAlertVisible.current = false;
-                  hideTimerRef.current = null;
-                }, remaining);
-             }
-           } else {
-             setAlertStatus('SAFE');
-             isAlertVisible.current = false;
-           }
-        }
-      }
-    };
-
-    socket.on('alert:status', handleAlert);
-
-    return () => {
-      socket.off('alert:status', handleAlert);
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    };
-  }, [socket]);
-
-  // Broadcast Loop
+  // Sync / Load / Loop Logic (Unchanged)
   useEffect(() => {
     const broadcastLoop = () => {
       if (cameraRef.current && isSyncConnected) {
@@ -280,12 +149,7 @@ function MobileView() {
         const rigEl = rigRef.current?.el;
         const rot = camEl.getAttribute("rotation");
         const pos = rigEl ? rigEl.getAttribute("position") : { x: 0, y: 0, z: 0 };
-        if (rot) {
-          updateCamera({
-            position: { x: pos.x, y: pos.y, z: pos.z },
-            rotation: { x: rot.x, y: rot.y, z: rot.z },
-          });
-        }
+        if (rot) updateCamera({ position: { x: pos.x, y: pos.y, z: pos.z }, rotation: { x: rot.x, y: rot.y, z: rot.z } });
       }
       requestAnimationFrame(broadcastLoop);
     };
@@ -293,246 +157,108 @@ function MobileView() {
     return () => cancelAnimationFrame(animationId);
   }, [updateCamera, isSyncConnected]);
 
-  // Load world logic
   useEffect(() => {
     if (!socket) return undefined;
-    const handleReload = () => {
-      setReloadTrigger(prev => prev + 1);
-    };
+    const handleReload = () => setReloadTrigger((prev) => prev + 1);
     socket.on("scenario-loaded", handleReload);
-    return () => {
-      socket.off("scenario-loaded", handleReload);
-    };
+    return () => { socket.off("scenario-loaded", handleReload); };
   }, [socket]);
 
   useEffect(() => {
-    loadWorld()
-      .then(() => console.log("🌍 [MobileView] World loaded"))
-      .catch((err) => console.error("❌ [MobileView] Failed to load world:", err));
-    return () => {
-      clearAllTimers();
-    };
+    loadWorld().catch((err) => console.error("❌ Failed to load world:", err));
+    return () => clearAllTimers();
   }, [loadWorld, clearAllTimers, reloadTrigger]);
 
-  // Sync Rig Position logic
-// Inside MobileViewer.tsx (Sync Rig Position logic)
-useEffect(() => {
-  setOnCameraUpdate((camera) => {
-    const newPos = camera.position;
-    
-    // Define your desired height offset
-    const HEIGHT_OFFSET = -1; 
-
-    // Apply it to the Y coordinate
-    const targetY = newPos.y + HEIGHT_OFFSET; 
-
-    if (!hasReceivedPosition.current) {
-      hasReceivedPosition.current = true;
-      // Use targetY here
-      rigRef.current.el.object3D.position.set(newPos.x, targetY, newPos.z);
-    } else {
-      const rigEl = rigRef.current?.el;
-      if (rigEl) {
-        rigEl.setAttribute("animation__follow", {
-          property: "position",
-          // Use targetY here
-          to: `${newPos.x} ${targetY} ${newPos.z}`, 
-          dur: 200,
-          easing: "easeOutQuad",
-          startEvents: "follow-target",
-          autoplay: false,
-        });
-        rigEl.emit("follow-target", null, false);
-      }
-    }
-    setCameraPosition(newPos);
-  });
-}, [setOnCameraUpdate]);
-  // Keep-alive Heartbeat
   useEffect(() => {
-    if (!aiWebSocket || aiWebSocket.readyState !== WebSocket.OPEN) return;
-    const timer = setInterval(() => {
-      aiWebSocket.send(JSON.stringify({ type: "ping" })); 
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [aiWebSocket]);
+    setOnCameraUpdate((camera) => {
+      const newPos = camera.position;
+      const HEIGHT_OFFSET = -1;
+      const targetY = newPos.y + HEIGHT_OFFSET;
+      if (!hasReceivedPosition.current) {
+        hasReceivedPosition.current = true;
+        rigRef.current.el.object3D.position.set(newPos.x, targetY, newPos.z);
+      } else {
+        const rigEl = rigRef.current?.el;
+        if (rigEl) {
+          rigEl.setAttribute("animation__follow", { property: "position", to: `${newPos.x} ${targetY} ${newPos.z}`, dur: 200, easing: "easeOutQuad", startEvents: "follow-target", autoplay: false });
+          rigEl.emit("follow-target", null, false);
+        }
+      }
+      setCameraPosition(newPos);
+    });
+  }, [setOnCameraUpdate]);
 
-  // GPU Memory Cleanup - Dispose A-Frame scene and renderer on unmount
   useEffect(() => {
     return () => {
-      console.log("🧹 Cleaning up A-Frame scene and GPU resources...");
-      
-      // 1. Force A-Frame to release the renderer
-      const scene = document.querySelector('a-scene');
-      if (scene) {
-        const sceneEl = scene as any;
-        
-        // Dispose of the Three.js renderer to free GPU memory
-        if (sceneEl.renderer) {
-          sceneEl.renderer.dispose();
-          console.log("✅ Renderer disposed");
-        }
-        
-        // Remove the scene from DOM to free DOM memory
-        if (scene.parentNode) {
-          scene.parentNode.removeChild(scene);
-          console.log("✅ Scene removed from DOM");
-        }
-      }
-
-      // 2. Clear canvas references to help browser release textures
-      if (hudCanvasRef.current) {
-        hudCanvasRef.current.width = 0;
-        hudCanvasRef.current.height = 0;
-        console.log("✅ Canvas reference cleared");
-      }
+      try {
+        const scene = document.querySelector("a-scene") as any;
+        if (scene && scene.renderer && typeof scene.renderer.dispose === "function") scene.renderer.dispose();
+        if (hudCanvasRef.current) { hudCanvasRef.current.width = 0; hudCanvasRef.current.height = 0; }
+      } catch (err) {}
     };
   }, [hudCanvasRef]);
 
   return (
-    <div style={{ background: "black", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <style>{`
-        .a-enter-vr-button { bottom: 20% !important; position: fixed !important; z-index: 99999 !important; }
-        body { overflow: hidden !important; }
-      `}</style>
-
-      {/* Debug Info UI */}
-      <div style={{
-        position: "absolute", top: 10, right: 10, zIndex: 1000,
-        background: "rgba(0,0,0,0.5)", color: "white", padding: "8px 16px",
-        borderRadius: "4px", fontSize: "12px", fontFamily: "monospace", textAlign: "right"
-      }}>
-        <canvas
-          ref={hudCanvasRef}
-          id="hud-buffer"
-          width="640"
-          height="360"
-          style={{ display: "none" }}
-        />
+    <div style={{ background: "blue", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      <style>{`.a-enter-vr-button { bottom: 20% !important; position: fixed !important; z-index: 99999 !important; } body { overflow: hidden !important; }`}</style>
+      
+      {/* ... Debug UI & Header ... */}
+      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, background: "rgba(0,0,0,0.5)", color: "white", padding: "8px 16px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace", textAlign: "right" }}>
+        <canvas ref={hudCanvasRef} id="hud-buffer" width="640" height="360" style={{ display: "none" }} />
         <div>Mode: {visionMode}</div>
         <div>Sync: {isSyncConnected ? "🟢" : "🔴"}</div>
         <div>AI (Recv): {isAiConnected ? "🟢" : "🔴"}</div>
       </div>
-
-      <div style={{
-          position: "absolute", top: 10, left: 10, zIndex: 1000,
-          background: "#2196F3", color: "white", padding: "8px 16px",
-          borderRadius: "4px", fontSize: "12px", fontFamily: "monospace",
-        }}>
+      <div style={{ position: "absolute", top: 10, left: 10, zIndex: 1000, background: "#2196F3", color: "white", padding: "8px 16px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace" }}>
         📱 Mobile Viewer
       </div>
 
-      <WorldScene entities={world.entities} isMobile={true} isLiteMode={liteMode}>
-        
-        {/* Environment Overrides */}
-      
-
-        <Entity
-          ref={rigRef}
-          animation__follow={{
-            property: "position",
-            dur: 200,
-            easing: "easeOutQuad",
-            startEvents: "follow-target",
-            autoplay: false,
-          }}
-        >
-          <Entity
-            ref={cameraRef}
-            primitive="a-entity" 
-            camera="active: true"
-            look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false;"
-            position="0 0 0" 
-          >
-            {/* ========================================================= */}
-            {/* 🕶️ MODE 1: NORMAL VISION (Stereoscopic Mask)               */}
-            {/* ========================================================= */}
-            {visionMode === 'normal' && (
+      <WorldScene entities={world.entities} isMobile={true} isLiteMode={liteMode}  areWallsTransparent={wallsTransparent}>
+        <Entity ref={rigRef} animation__follow={{ property: "position", dur: 200, easing: "easeOutQuad", startEvents: "follow-target", autoplay: false }}>
+          <Entity ref={cameraRef} primitive="a-entity" camera="active: true" look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false;" position="0 0 0">
+            
+            {/* NORMAL MODE */}
+            {visionMode === "normal" && (
               <>
-                {/* Top Bar */}
-                <Entity
-                  geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-                  position={`0 ${(5 + hudHeight) / 4} -${depth + 0.001}`}
-                  material="color: black; shader: flat; transparent: false;"
-                />
-                {/* Bottom Bar */}
-                <Entity
-                  geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }}
-                  position={`0 -${(5 + hudHeight) / 4} -${depth + 0.001}`}
-                  material="color: black; shader: flat; transparent: false;"
-                />
-                {/* Center Divider */}
-                <Entity
-                  geometry={{ primitive: "plane", width: holeDistance, height: hudHeight }}
-                  position={`0 0 -${depth + 0.001}`}
-                  material="color: black; shader: flat; transparent: false;"
-                />
-                {/* Left Blinder */}
-                <Entity
-                  geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
-                  position={`-${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
-                  material="color: black; shader: flat; transparent: false;"
-                />
-                {/* Right Blinder */}
-                <Entity
-                  geometry={{ primitive: "plane", width: 2.5, height: hudHeight }}
-                  position={`${(holeDistance/2) + hudWidth + 1.25} 0 -${depth + 0.001}`}
-                  material="color: black; shader: flat; transparent: false;"
-                />
+                <Entity geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }} position={`0 ${(5 + hudHeight) / 4} -${depth + 0.001}`} material="color: black; shader: flat; transparent: false;" />
+                <Entity geometry={{ primitive: "plane", width: 5, height: (5 - hudHeight) / 2 }} position={`0 -${(5 + hudHeight) / 4} -${depth + 0.001}`} material="color: black; shader: flat; transparent: false;" />
+                <Entity geometry={{ primitive: "plane", width: holeDistance, height: hudHeight }} position={`0 0 -${depth + 0.001}`} material="color: black; shader: flat; transparent: false;" />
+                <Entity geometry={{ primitive: "plane", width: 2.5, height: hudHeight }} position={`-${holeDistance / 2 + hudWidth + 1.25} 0 -${depth + 0.001}`} material="color: black; shader: flat; transparent: false;" />
+                <Entity geometry={{ primitive: "plane", width: 2.5, height: hudHeight }} position={`${holeDistance / 2 + hudWidth + 1.25} 0 -${depth + 0.001}`} material="color: black; shader: flat; transparent: false;" />
               </>
             )}
 
-            {/* ========================================================= */}
-            {/* 🤖 MODE 2: PROSTHETIC / LOW RES (HUD + Full Blinder)      */}
-            {/* ========================================================= */}
-            {visionMode !== 'normal' && (
+            {/* PROSTHETIC MODE */}
+            {visionMode !== "normal" && (
               <>
-                {/* Full Blackout Blinder (Behind HUD) */}
+                {/* 👀 BLACK BLINDER 
+                   Controlled by 'collisionActive' state.
+                   Opacity 1 = Full Black (Normal)
+                   Opacity 0.1 = See-through (Collision)
+                */}
                 <Entity
                   geometry="primitive: plane; width: 5; height: 5"
-                  position={`0 0 -${depth + 0.01}`} 
-                  material="color: black; shader: flat; transparent: false;"
-                />
-                
-                {/* The HUD Screen (AI Stream) */}
-                <Entity
-                  className="hud-ignore"
-                  geometry={{
-                    primitive: "plane",
-                    width: hudWidth,
-                    height: hudHeight
+                  position={`0 0 -0.11`}
+                  material={{
+                    color: "black",
+                    shader: "flat",
+                    transparent: true,
+                    opacity: collisionActive ? 0.1 : 1, // <--- X-RAY EFFECT
                   }}
-                  position={`${hudX} 0 -${depth}`}
-                  canvas-updater="src: #hud-buffer"
                 />
+
+                <Entity className="hud-ignore" geometry={{ primitive: "plane", width: hudWidth, height: hudHeight }} position={`${hudX} 0 -${depth}`} canvas-updater="src: #hud-buffer" />
               </>
             )}
 
-            {/* 3. SAFETY ALERT OVERLAY (With Correct Z-Index) */}
-            {alertStatus === 'DANGER' && (
-                <Entity position={`${hudX} 0 -0.09`}>
-                   {/* Red Background */}
-                   <Entity 
-                     geometry={{ primitive: "plane", width: 0.025, height: 0.01 }}
-                     material={{ color: "#770000", opacity: 0.9, transparent: true }}
-                   />
-                   
-                   {/* Warning Text */}
-                   <Entity 
-                     text={{ 
-                       value: "⚠️ TURN BACK ⚠️\nUNSAFE AREA", 
-                       align: "center", 
-                       color: "#FFF", 
-                       width: 0.015,
-                       wrapCount: 15
-                     }}
-                     position="0 0 0.001"
-                   />
-                </Entity>
-             )}
+            {alertStatus === "DANGER" && (
+              <Entity position={`${hudX} 0 -0.09`}>
+                <Entity geometry={{ primitive: "plane", width: 0.025, height: 0.01 }} material={{ color: "#770000", opacity: 0.9, transparent: true }} />
+                <Entity text={{ value: "⚠️ TURN BACK ⚠️\nUNSAFE AREA", align: "center", color: "#FFF", width: 0.015, wrapCount: 15 }} position="0 0 0.001" />
+              </Entity>
+            )}
           </Entity>
         </Entity>
-
       </WorldScene>
     </div>
   );

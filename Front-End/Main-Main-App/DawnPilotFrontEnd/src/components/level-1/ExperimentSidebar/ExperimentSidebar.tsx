@@ -86,6 +86,9 @@ interface ExperimentSidebarProps {
   
   onEyeControlChange?: (control: string) => void;
   // Callback when eye control mode changes
+
+  wallsTransparent?: boolean;
+  onTriggerWallVisibilty?: () => void;
 }
 
 const tabs = [
@@ -113,6 +116,8 @@ function ExperimentSidebar({
   onLiteModeChange,
   onThrottleChange,
   onEyeControlChange,
+  wallsTransparent = true,
+  onTriggerWallVisibilty,
 }: ExperimentSidebarProps) {
   const [activeTab, setActiveTab] = useState<string>("controls");
   
@@ -168,7 +173,11 @@ function ExperimentSidebar({
               onKMaxChange={onKMaxChange}
             />
 
-            
+               <button
+                className={styles.loadButton}
+                onClick={onTriggerWallVisibilty}
+              >{!wallsTransparent ? '🧱 WALLS: visible' : '👻 WALLS: invisible'}
+              </button>
 
             {onOpenLoadDialog && (
               <button
@@ -179,6 +188,7 @@ function ExperimentSidebar({
                 📂 Load Scenario
               </button>
             )}
+           
           </div>
         )}
         

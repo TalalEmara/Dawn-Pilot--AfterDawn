@@ -16,6 +16,7 @@ interface WorldSceneProps {
   groundZShift?: number;
   groundXShift?: number;
   isLiteMode?: boolean;
+  areWallsTransparent?: boolean;
 }
 
 export const WorldScene: React.FC<WorldSceneProps> = ({
@@ -28,37 +29,69 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
   worldDepth = 30,
   groundZShift = 2,
   groundXShift = 0,
-  isLiteMode = false
+  isLiteMode = false,
+  areWallsTransparent = true
 }) => {
   const sceneRef = useRef<any>(null);
-
+const wallMaterial = areWallsTransparent 
+    ? { 
+        // Ghost Mode: Invisible, waiting for collision
+        opacity: 0, 
+        transparent: true, 
+        color: '#ffffff', 
+        shader: 'flat', 
+        depthWrite: false 
+      }
+    : { 
+        // Solid Mode: X-RAY VISIBLE (In front of Blinder)
+        opacity: 1, 
+        transparent: true, // Required for proper overlay blending
+        color: '#808080', 
+        shader: 'flat', 
+        wireframe: true, 
+        depthTest: false // <--- THE KEY: Draws on top of everything
+      };
+  // Only attach the visibility logic component if we are in Transparent mode
+  const wallProps = areWallsTransparent 
+    ? { 'wall-collision-visibility': "duration: 2000" } 
+    : {};
   // 🧹 CLEANUP LEAK: Force WebGL Context Disposal on Unmount
   useEffect(() => {
     return () => {
-      const scene = sceneRef.current;
-      if (scene) {
-        console.log("🧹 Disposing A-Frame Scene & Renderer...");
-        
-        // 1. Dispose Renderer (Frees GPU Memory & WebGL Contexts)
-        if (scene.renderer) {
-          scene.renderer.dispose();
-          scene.renderer.forceContextLoss();
-          scene.renderer = null;
-        }
-
-        // 2. Deep Dispose of Objects (Frees Geometry/Material RAM)
-        if (scene.object3D) {
-          scene.object3D.traverse((node: any) => {
-            if (node.geometry) node.geometry.dispose();
-            if (node.material) {
-              if (Array.isArray(node.material)) {
-                node.material.forEach((m: any) => m.dispose());
-              } else {
-                node.material.dispose();
-              }
+      try {
+        const scene = sceneRef.current;
+        if (scene) {
+          console.log("🧹 Disposing A-Frame Scene & Renderer...");
+          
+          // 1. Dispose Renderer (Frees GPU Memory & WebGL Contexts)
+          if (scene.renderer && typeof scene.renderer.dispose === 'function') {
+            scene.renderer.dispose();
+            if (typeof scene.renderer.forceContextLoss === 'function') {
+              scene.renderer.forceContextLoss();
             }
-          });
+            scene.renderer = null;
+          }
+
+          // 2. Deep Dispose of Objects (Frees Geometry/Material RAM)
+          if (scene.object3D && typeof scene.object3D.traverse === 'function') {
+            scene.object3D.traverse((node: any) => {
+              if (node.geometry && typeof node.geometry.dispose === 'function') {
+                node.geometry.dispose();
+              }
+              if (node.material) {
+                if (Array.isArray(node.material)) {
+                  node.material.forEach((m: any) => {
+                    if (m && typeof m.dispose === 'function') m.dispose();
+                  });
+                } else if (typeof node.material.dispose === 'function') {
+                  node.material.dispose();
+                }
+              }
+            });
+          }
         }
+      } catch (err) {
+        console.warn("⚠️ Scene cleanup error (non-critical):", err);
       }
     };
   }, []); // Run once on mount/unmount
@@ -87,7 +120,7 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
     <Scene
       ref={sceneRef}
       embedded
-      vr-mode-ui={`enabled: ${isMobile}`}
+      vr-mode-ui={isMobile ? "enabled: true" : "enabled: false"}
       renderer="preserveDrawingBuffer: true; antialias: false"
       style={{ width: '100%', height: '100%' }}
       {...(showStats ? { stats: true } : {})}
@@ -115,68 +148,56 @@ export const WorldScene: React.FC<WorldSceneProps> = ({
         {/* ================================================== */}
         {/* BOUNDARY WALLS (Aligned to Ground Z)               */}
         {/* ================================================== */}
-        
-        {/* Left Wall (West) */}
+        {/* Left Wall */}
         <Entity
-          key={`wall-left-${isLiteMode}`}
+          key={`wall-left-${areWallsTransparent}`} // Key forces re-render on switch
+          id="wall-left"
           primitive="a-box"
-          className="collidable"
-          // Center X: -20, Center Z: -30 (Same as ground)
+          className="collidable wall"
           position={`${-wallOffsetX} 5 ${GROUND_Z}`}
-          width="1"
-          height="10"
-          depth={WORLD_DEPTH}
-         material={isLiteMode 
-           ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
-           : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
-         }
+          width="1" height="10" depth={WORLD_DEPTH}
+          
+          material={wallMaterial}
+          {...wallProps} // Spreads the component if needed
         />
-        {/* Right Wall (East) */}
+
+        {/* Right Wall */}
         <Entity
-          key={`wall-right-${isLiteMode}`}
+          key={`wall-right-${areWallsTransparent}`}
+          id="wall-right"
           primitive="a-box"
-          className="collidable"
-          // Center X: 20, Center Z: -30 (Same as ground)
+          className="collidable wall"
           position={`${wallOffsetX} 5 ${GROUND_Z}`}
-          width="1"
-          height="10"
-          depth={WORLD_DEPTH}
-          material={isLiteMode 
-            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
-            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
-          }
+          width="1" height="10" depth={WORLD_DEPTH}
+          
+          material={wallMaterial}
+          {...wallProps}
         />
 
-        {/* Front Wall (North / Far Negative Z) */}
+        {/* Front Wall */}
         <Entity
-          key={`wall-front-${isLiteMode}`}
+          key={`wall-front-${areWallsTransparent}`}
+          id="wall-front"
           primitive="a-box"
-          className="collidable"
-          // Center Z: -30 - 30 = -60 (The far edge)
+          className="collidable wall"
           position={`0 5 ${GROUND_Z - wallOffsetZ}`}
-          width={WORLD_WIDTH}
-          height="10"
-          depth="1"
-          material={isLiteMode 
-            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
-            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
-          }
+          width={WORLD_WIDTH} height="10" depth="1"
+          
+          material={wallMaterial}
+          {...wallProps}
         />
 
-        {/* Back Wall (South / Origin Z) */}
+        {/* Back Wall */}
         <Entity
-          key={`wall-back-${isLiteMode}`}
+          key={`wall-back-${areWallsTransparent}`}
+          id="wall-back"
           primitive="a-box"
-          className="collidable"
-          // Center Z: -30 + 30 = 0 (The start edge)
+          className="collidable wall"
           position={`0 5 ${GROUND_Z + wallOffsetZ}`}
-          width={WORLD_WIDTH}
-          height="10"
-          depth="1"
-          material={isLiteMode 
-            ? "shader: flat; color: white; opacity: 0.2; wireframe: true; fog: false; flatShading: true; dithering: false"
-            : "color: white; depthTest: false; opacity: 0.2; wireframe: true"
-          }
+          width={WORLD_WIDTH} height="10" depth="1"
+          
+          material={wallMaterial}
+          {...wallProps}
         />
         
         {/* ================================================== */}

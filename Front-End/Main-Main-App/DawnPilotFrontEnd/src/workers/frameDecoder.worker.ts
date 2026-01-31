@@ -18,7 +18,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       // ⚡ OPTIMIZATION: Use fetch instead of loop
       // Note: Ensure the MIME type matches your backend (png vs jpeg)
-      const res = await fetch(`data:image/jepg;base64,${base64}`);
+      const res = await fetch(`data:image/png;base64,${base64}`);
       const blob = await res.blob();
 
       const bitmap = await createImageBitmap(blob);
