@@ -342,12 +342,35 @@ class NavigationDetectorService:
             #     dist = float(det.get("distance_m"))
             #     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
             
+            # Safe float conversions with None handling
+            try:
+                conf_val = confidence
+                if conf_val is not None:
+                    safe_confidence = float(conf_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] Confidence is None, using 0.001")
+                    safe_confidence = 0.001
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting confidence: {e}")
+                safe_confidence = 0.001
+            
+            try:
+                dist_val = det.get("distance_m")
+                if dist_val is not None:
+                    safe_distance = float(dist_val)
+                else:
+                    logger.warning(f"⚠️ [Frame detect] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                    safe_distance = 10.0
+            except (TypeError, ValueError) as e:
+                logger.warning(f"❌ [Frame detect] Error converting distance_m: {e}")
+                safe_distance = 10.0
+            
             standardized_detections.append({
                 "class": str(det.get("class", "unknown")),
-                "confidence": float(confidence),
+                "confidence": safe_confidence,
                 "bbox": bbox,
                 "centroid_px": [int(cx), int(cy)],
-                "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                "distance_m": safe_distance
             })
         
         return standardized_detections
@@ -445,15 +468,47 @@ class NavigationDetectorService:
                 # Use distance as confidence if available
                 confidence = 0.8
                 if det.get("distance_m"):
-                    dist = float(det.get("distance_m"))
+                    try:
+                        dist_val = det.get("distance_m")
+                        if dist_val is not None:
+                            dist = float(dist_val)
+                        else:
+                            print(f"⚠️ [Frame {frame_id}] distance_m is None, using 10.0m")
+                            dist = 10.0
+                    except (TypeError, ValueError) as e:
+                        print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                        dist = 10.0
                     confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+                
+                # Safe float conversions with None handling
+                try:
+                    conf_val = real_confidence
+                    if conf_val is not None:
+                        safe_confidence = float(conf_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] Confidence is None, using 0.001")
+                        safe_confidence = 0.001
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting confidence: {e}")
+                    safe_confidence = 0.001
+                
+                try:
+                    dist_val = det.get("distance_m")
+                    if dist_val is not None:
+                        safe_distance = float(dist_val)
+                    else:
+                        print(f"⚠️ [Frame {frame_id}] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
+                        safe_distance = 10.0
+                except (TypeError, ValueError) as e:
+                    print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
+                    safe_distance = 10.0
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
-                    "confidence": float(real_confidence),
+                    "confidence": safe_confidence,
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
-                    "distance_m": float(det.get("distance_m")) if det.get("distance_m") else None
+                    "distance_m": safe_distance
                 })
             
             # Calculate total processing time
@@ -468,18 +523,18 @@ class NavigationDetectorService:
                     k: (
                         [int(x) for x in v] if isinstance(v, (list, tuple, np.ndarray))
                         else int(v) if isinstance(v, (np.integer, int))
-                        else float(v)
+                        else float(v) if v is not None else None
                     )
                     for k, v in freepath_circle.items()
                 } if freepath_circle else None,
-                "processing_time_ms": float(processing_time),
+                "processing_time_ms": float(processing_time) if processing_time is not None else 0.0,
                 "stats": {
                     "num_detections": int(len(standardized_detections)),
                     "freepath_points": int(len(freepath_coordinates)),
                     "has_freepath_circle": bool(freepath_circle is not None),
-                    "detection_time_ms": float(detection_time),
-                    "freepath_time_ms": float(freepath_time),
-                    "parallel_total_ms": float(parallel_time)
+                    "detection_time_ms": float(detection_time) if detection_time is not None else 0.0,
+                    "freepath_time_ms": float(freepath_time) if freepath_time is not None else 0.0,
+                    "parallel_total_ms": float(parallel_time) if parallel_time is not None else 0.0
                 }
             })
             
@@ -894,8 +949,6 @@ class NavigationDetectorService:
         cv2.circle(img_copy, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
         
         return img_copy
-    
-
     
     def _save_debug_frames(
         self,
@@ -1577,34 +1630,7 @@ class NavigationDetectorService:
                 )
         
         return img_with_boxes
-    
-    def draw_freepath_ball_alt(self, simplified_img: np.ndarray, ball_position: Optional[Tuple[int, int]], crop_size: List[int], ball_radius: int = 10) -> np.ndarray:
-        """
-        Alternative draw freepath ball on simplified translator image (legacy compatibility)
-        
-        Args:
-            simplified_img: Simplified image from translator (grayscale or BGR)
-            ball_position: (x, y) position for ball in cropped coordinates, or None
-            crop_size: [width, height] of cropped image
-            ball_radius: Radius of the ball
-            
-        Returns:
-            np.ndarray: Image with drawn ball
-        """
-        # Create a copy
-        img_with_ball = simplified_img.copy()
-        
-        # Convert to BGR if grayscale for colored ball
-        if len(img_with_ball.shape) == 2:
-            img_with_ball = cv2.cvtColor(img_with_ball, cv2.COLOR_GRAY2BGR)
-        
-        if ball_position:
-            x, y = ball_position
-            # Use position as-is (never modify)
-            cv2.circle(img_with_ball, (int(x), int(y)), ball_radius, (255, 255, 255), -1)
-        
-        return img_with_ball
-    
+     
     def crop_image(self, img: np.ndarray, cropping_config: Dict[str, Any]) -> np.ndarray:
         """
         Crop image according to cropping configuration

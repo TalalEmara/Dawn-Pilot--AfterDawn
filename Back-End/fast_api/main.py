@@ -42,7 +42,13 @@ if torch.cuda.is_available():
         os.environ['CUDA_VISIBLE_DEVICES'] = str(nvidia_device)  # Hide other GPUs
         print(f"✅ Default CUDA device set to: cuda:{torch.cuda.current_device()}\n")
     else:
-        print("⚠️  No NVIDIA GPU detected, using default CUDA device")
+        # No NVIDIA GPU found, use first available CUDA device (e.g., Intel GPU)
+        default_device = 0
+        torch.cuda.set_device(default_device)
+        gpu_name = torch.cuda.get_device_name(default_device)
+        print(f"\n⚠️  No NVIDIA GPU detected")
+        print(f"⚡ Using available CUDA device {default_device}: {gpu_name}")
+        print(f"✅ Default CUDA device set to: cuda:{torch.cuda.current_device()}\n")
 else:
     print("⚠️  CUDA not available, running on CPU")
 
