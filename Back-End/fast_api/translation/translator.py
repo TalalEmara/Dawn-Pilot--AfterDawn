@@ -22,6 +22,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+from .logger_config import get_depth_logger
 import matplotlib.patches as patches
 
 
@@ -63,6 +64,10 @@ class Translator:
         # Create output directory if it doesn't exist
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
+
+        # Initialize a dedicated depth/debug logger (writes to depth_debug.log in output directory)
+        self.logger = get_depth_logger(os.path.join(self.output_dir, "depth_debug.log"))
+        self.logger.debug(f"Depth logger initialized at {os.path.join(self.output_dir, 'depth_debug.log')}")
 
         # Detect obstacles key format (handles different bundle schemas)
         if "obstacles" in self.bundle:
@@ -206,15 +211,24 @@ class Translator:
             float: Normalized importance score (0.0 to 1.0+)
         """
         weights = self.params.get("weights", {})
-        
+
+        #add logger statements here for debugging the depth values, 
+        #         
         # Distance scoring: closer objects are more important
-        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
+        raw_dist = obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0)))
+        try:
+            dist = float(raw_dist)
+        except (TypeError, ValueError):
+            self.logger.error(f"score_object: invalid depth value for object class={obj.get('class','unknown')} raw={raw_dist!r}; defaulting to 10.0")
+            dist = 10.0
+        self.logger.debug(f"Scoring object: class={obj.get('class','unknown')} raw_depth={raw_dist!r} used_depth={dist}")
+
         #for far objects of depth > specific threshold get a score distance of 0
         # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
         # if dist < depth_gate:
         #     return 0.0  
         
-        score_distance = 0.01*(dist) #near objects get higher score
+        score_distance = (dist) #near objects get higher score
         total_score = (weights.get("dist", 1) * score_distance)
         
         return total_score
@@ -260,13 +274,22 @@ class Translator:
                 if "centroid_px" not in o:
                     o["centroid_px"] = [int((self.input_width / 2) * scale_x), int((self.input_height / 2) * scale_y)]
 
-            # ensure distance field available
+            # ensure distance field available (safe conversion with logging)
+            raw_distance = None
             if "distance_m" in o:
-                o["depth"] = float(o["distance_m"])
+                raw_distance = o.get("distance_m")
             elif "depth_z" in o:
-                o["depth"] = float(o["depth_z"])
+                raw_distance = o.get("depth_z")
             else:
-                o["depth"] = float(o.get("depth", 10.0))
+                raw_distance = o.get("depth", 10.0)
+            try:
+                o["depth"] = float(raw_distance)
+            except (TypeError, ValueError):
+                self.logger.warning(f"select_objects: invalid depth value for object class={o.get('class','unknown')} bbox={bbox!r} raw={raw_distance!r}; defaulting to 10.0")
+                o["depth"] = 10.0
+
+            # Log depth and key metadata for debugging
+            self.logger.debug(f"select_objects: class={o.get('class','unknown')} distance_m={o.get('distance_m')!r} depth_z={o.get('depth_z')!r} used_depth={o['depth']}")
 
             o["score"] = self.score_object(o)
             objs.append(o)
@@ -620,12 +643,19 @@ class Translator:
                 if "centroid_px" not in obj_copy:
                     obj_copy["centroid_px"] = [self.input_width // 2, self.input_height // 2]
 
+            # Safe conversion with logging for threshold testing
+            raw_d = None
             if "distance_m" in obj_copy:
-                obj_copy["depth"] = float(obj_copy["distance_m"])
+                raw_d = obj_copy.get("distance_m")
             elif "depth_z" in obj_copy:
-                obj_copy["depth"] = float(obj_copy["depth_z"])
+                raw_d = obj_copy.get("depth_z")
             else:
-                obj_copy["depth"] = float(obj_copy.get("depth", 10.0))
+                raw_d = obj_copy.get("depth", 10.0)
+            try:
+                obj_copy["depth"] = float(raw_d)
+            except (TypeError, ValueError):
+                self.logger.warning(f"test_threshold_effects: invalid depth for object class={obj_copy.get('class','unknown')} raw={raw_d!r}; defaulting to 10.0")
+                obj_copy["depth"] = 10.0
 
             obj_copy["score"] = self.score_object(obj_copy)
             objs.append(obj_copy)
