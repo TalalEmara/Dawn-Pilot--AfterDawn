@@ -78,16 +78,32 @@ io.on('connection', (socket) => {
     if (experimentVault.isRecording()) experimentVault.logEvent('LITE_MODE', data);
   });
 
-  socket.on('throttle:update', (data) => {
-    socket.broadcast.emit('throttle:changed', data);
+  // THROTTLE SYNC
+  socket.on('throttle:update', (data: { mobileMs: number }) => {
+    // Broadcast to all other clients (especially Mobile)
+    socket.broadcast.emit('throttle:changed', { mobileMs: data.mobileMs });
+    console.log(`Throttle synced: ${data.mobileMs}ms`);
+    
+   
   });
 
-  // =========================================================
+//  COLLISION EVENTS
+  socket.on('experiment:collision', (data: { obstacleId: string }) => {
+    if (experimentVault.isRecording()) {
+      experimentVault.logEvent('COLLISION', data);
+    }
+  });
   // 🧱 WALL COLLISION RELAY (The Fix)
   // =========================================================
   socket.on('walls-transparent:update', (data: { enabled: boolean }) => {
     console.log(`🧱 Walls Transparent Mode: ${data.enabled}`);
     socket.broadcast.emit('walls-transparent:changed', data);
+  });
+
+  socket.on('scenario-loaded', (data: { filename: string }) => {
+    console.log(`🔄 Relay: Scenario Loaded -> ${data.filename}`);
+    // Broadcast to everyone else (Mobile)
+    socket.broadcast.emit('scenario-loaded', data); 
   });
 });
 
