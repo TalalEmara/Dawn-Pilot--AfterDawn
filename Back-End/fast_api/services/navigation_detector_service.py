@@ -114,7 +114,7 @@ class NavigationDetectorService:
         
         # Configurable parameters (can be updated via API)
         self.conf_threshold = 0.5  # YOLO detection confidence threshold
-        self.t_min = 0.3  # Translator minimum score threshold
+        self.t_min = 0.0  # Translator minimum score threshold
         self.k_min = 1    # Translator minimum objects to select
         self.k_max = 5    # Translator maximum objects to select
         
