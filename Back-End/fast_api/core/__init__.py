@@ -1,7 +1,7 @@
 """
 Core Utilities Package
 
-Common utility functions for image processing, depth handling, and file cleanup.
+Common utility functions for image processing and file cleanup.
 """
 
 from .image_utils import (
@@ -13,8 +13,6 @@ from .image_utils import (
     add_frame_id_overlay
 )
 
-from .depth_utils import assign_depth_to_detections
-
 from .cleanup import cleanup_old_files
 
 __all__ = [
@@ -24,6 +22,5 @@ __all__ = [
     "decode_depth_map",
     "save_debug_images",
     "add_frame_id_overlay",
-    "assign_depth_to_detections",
     "cleanup_old_files",
 ]

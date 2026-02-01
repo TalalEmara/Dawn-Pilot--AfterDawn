@@ -276,7 +276,7 @@ class TranslatorService:
                 result.append({
                     "class": obj.get("class", "unknown"),
                     "score": obj.get("score", 0.0),
-                    "distance_m": obj.get("distance_m", obj.get("depth")),
+                    "depth_pixel": obj.get("depth_pixel", obj.get("depth", 128.0)),
                     "bbox": obj.get("bbox", []),
                     "confidence": obj.get("confidence", 1.0)
                 })
