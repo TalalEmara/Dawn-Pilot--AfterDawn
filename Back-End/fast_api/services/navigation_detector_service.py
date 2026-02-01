@@ -114,7 +114,7 @@ class NavigationDetectorService:
         
         # Configurable parameters (can be updated via API)
         self.conf_threshold = 0.5  # YOLO detection confidence threshold
-        self.t_min = 0.3  # Translator minimum score threshold
+        self.t_min = 0.0  # Translator minimum score threshold
         self.k_min = 1    # Translator minimum objects to select
         self.k_max = 5    # Translator maximum objects to select
         
@@ -355,22 +355,22 @@ class NavigationDetectorService:
                 safe_confidence = 0.001
             
             try:
-                dist_val = det.get("distance_m")
+                dist_val = det.get("depth_pixel")
                 if dist_val is not None:
-                    safe_distance = float(dist_val)
+                    safe_depth_pixel = float(dist_val)
                 else:
-                    logger.warning(f"⚠️ [Frame detect] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
-                    safe_distance = 10.0
+                    print(f"⚠️ [Frame detect] depth_pixel is None for {det.get('class', 'unknown')}, using 128.0")
+                    safe_depth_pixel = 128.0
             except (TypeError, ValueError) as e:
-                logger.warning(f"❌ [Frame detect] Error converting distance_m: {e}")
-                safe_distance = 10.0
+                print(f"❌ [Frame detect] Error converting depth_pixel: {e}")
+                safe_depth_pixel = 128.0
             
             standardized_detections.append({
                 "class": str(det.get("class", "unknown")),
                 "confidence": safe_confidence,
                 "bbox": bbox,
                 "centroid_px": [int(cx), int(cy)],
-                "distance_m": safe_distance
+                "depth_pixel": safe_depth_pixel
             })
         
         return standardized_detections
@@ -467,18 +467,20 @@ class NavigationDetectorService:
                 
                 # Use distance as confidence if available
                 confidence = 0.8
-                if det.get("distance_m"):
+                if det.get("depth_pixel"):
                     try:
-                        dist_val = det.get("distance_m")
+                        dist_val = det.get("depth_pixel")
                         if dist_val is not None:
-                            dist = float(dist_val)
+                            depth_px = float(dist_val)
                         else:
-                            print(f"⚠️ [Frame {frame_id}] distance_m is None, using 10.0m")
-                            dist = 10.0
+                            print(f"⚠️ [Frame {frame_id}] depth_pixel is None, using 128.0")
+                            depth_px = 128.0
                     except (TypeError, ValueError) as e:
-                        print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
-                        dist = 10.0
-                    confidence = max(0.5, min(0.95, 1.0 - (dist - 2) / 8 * 0.45))
+                        print(f"❌ [Frame {frame_id}] Error converting depth_pixel: {e}")
+                        depth_px = 128.0
+                    # Adjust confidence based on depth (optional heuristic)
+                    # Higher pixel = nearer = more confident
+                    confidence = max(0.5, min(0.95, (depth_px / 255.0) * 0.45 + 0.5))
                 
                 # Safe float conversions with None handling
                 try:
@@ -493,22 +495,22 @@ class NavigationDetectorService:
                     safe_confidence = 0.001
                 
                 try:
-                    dist_val = det.get("distance_m")
+                    dist_val = det.get("depth_pixel")
                     if dist_val is not None:
-                        safe_distance = float(dist_val)
+                        safe_depth_pixel = float(dist_val)
                     else:
-                        print(f"⚠️ [Frame {frame_id}] distance_m is None for {det.get('class', 'unknown')}, using 10.0m")
-                        safe_distance = 10.0
+                        print(f"⚠️ [Frame {frame_id}] depth_pixel is None for {det.get('class', 'unknown')}, using 128.0")
+                        safe_depth_pixel = 128.0
                 except (TypeError, ValueError) as e:
-                    print(f"❌ [Frame {frame_id}] Error converting distance_m: {e}")
-                    safe_distance = 10.0
+                    print(f"❌ [Frame {frame_id}] Error converting depth_pixel: {e}")
+                    safe_depth_pixel = 128.0
                 
                 standardized_detections.append({
                     "class": str(det.get("class", "unknown")),
                     "confidence": safe_confidence,
                     "bbox": bbox,
                     "centroid_px": [int(cx), int(cy)],
-                    "distance_m": safe_distance
+                    "depth_pixel": safe_depth_pixel
                 })
             
             # Calculate total processing time
@@ -1230,7 +1232,7 @@ class NavigationDetectorService:
                             "confidence": det.get('confidence', 0.8),
                             "bbox": bbox,
                             "centroid_px": det.get('centroid_px', [0, 0]),
-                            "distance_m": det.get('distance_m')
+                            "depth_pixel": det.get('depth_pixel')
                         })
                 
                 # Create detection bundle for translator - exclude freepath for clean canonical shapes

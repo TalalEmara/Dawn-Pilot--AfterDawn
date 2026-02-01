@@ -176,26 +176,24 @@ class ObjectDetector:
             # Use only valid (non-zero) depth pixels
             valid = roi[roi > 0]
             if valid.size > 0:
-                distance_mm = np.median(valid)
-                distance = float(distance_mm) / 1000.0  # convert mm -> meters
+                depth_pixel = float(np.median(valid))  # Raw pixel value (0-255, HIGH=NEAR)
             else:
                 # fallback: try median of entire depth image non-zero pixels
                 all_valid = depth_img[depth_img > 0]
                 if all_valid.size > 0:
-                    distance_mm = np.median(all_valid)
-                    distance = float(distance_mm) / 1000.0
-                    logger.warning(f"Detector: no valid depth in bbox {(x1,y1,x2,y2)}; using image median {distance:.3f} m as fallback")
+                    depth_pixel = float(np.median(all_valid))
+                    print(f"🔍 Detector: no valid depth in bbox {(x1,y1,x2,y2)}; using image median {depth_pixel:.1f} pixels as fallback")
                 else:
-                    # no valid depth anywhere; leave distance as None and log
-                    distance = None
-                    print(f"Detector: no valid depth in image; setting distance=None for bbox {(x1,y1,x2,y2)}")                
+                    # no valid depth anywhere; leave depth_pixel as None and log
+                    depth_pixel = None
+                    print(f"⚠️  Detector: no valid depth in image; setting depth_pixel=None for bbox {(x1,y1,x2,y2)}")
             detections.append({
                 "id": i + 1,
                 "class": self.class_map[str(label)],
                 # "class": self.class_map[int(label)],
                 "shape": None,
                 "bbox": [int(x1), int(y1), int(x2 - x1), int(y2 - y1)],
-                "distance_m": distance,
+                "depth_pixel": depth_pixel,  # Raw pixel value (0-255)
                 "mask_path": None,
                 "velocity": None,
                 "detection_score": float(score),

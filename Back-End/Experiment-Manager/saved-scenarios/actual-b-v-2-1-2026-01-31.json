@@ -1,22 +1,22 @@
 {
-  "name": "Actual_B_Final_Bgd",
-  "createdAt": "2026-01-28T00:28:43.563Z",
-  "entityCount": 14,
+  "name": "Actual_B_v.2.1",
+  "createdAt": "2026-01-31T16:56:11.850Z",
+  "entityCount": 17,
   "camera": {
     "position": {
-      "x": 5.711706220242435,
+      "x": -6.212819819092325,
       "y": 2,
-      "z": 18.15960045729406
+      "z": -12.300217187320714
     },
     "rotation": {
-      "x": -1.4896902673401726,
-      "y": -2.4064227395494573,
+      "x": -1.48969026734014,
+      "y": 80.44327443636769,
       "z": 0
     }
   },
   "entities": [
     {
-      "id": "entity-1769560044161-he4xhokyu",
+      "id": "entity-1769877596101-hh88men2o",
       "Position": {
         "x": 11,
         "y": 0,
@@ -38,10 +38,17 @@
       "Model": {
         "url": "Aframe"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Box"
     },
     {
-      "id": "entity-1769560044164-kzqa774rn",
+      "id": "entity-1769877596115-g50zu52qm",
       "Position": {
         "x": -0.08,
         "y": 0,
@@ -63,10 +70,17 @@
       "Model": {
         "url": "Aframe"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Box"
     },
     {
-      "id": "entity-1769560044167-b2zq567xe",
+      "id": "entity-1769877596386-7iyqiu3n6",
       "Position": {
         "x": -24.493,
         "y": 0,
@@ -88,10 +102,17 @@
       "Model": {
         "url": "Aframe"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Box"
     },
     {
-      "id": "entity-1769560044188-ej9vtza84",
+      "id": "entity-1769877596520-kpd5acjn5",
       "Position": {
         "x": 1.17879,
         "y": 0,
@@ -110,14 +131,21 @@
       "Model": {
         "url": "/car"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Car"
     },
     {
-      "id": "entity-1769560044223-09c5oi7fe",
+      "id": "entity-1769877596964-c44xi29vg",
       "Position": {
-        "x": 8.28946,
+        "x": 0.27822,
         "y": -0.0259,
-        "z": -8.26233
+        "z": -4.62723
       },
       "Rotation": {
         "x": 0,
@@ -132,10 +160,17 @@
       "Model": {
         "url": "/plottedPlant"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769560044225-831ob0iwl",
+      "id": "entity-1769877597147-quyk4m7py",
       "Position": {
         "x": -4.24,
         "y": 0,
@@ -154,10 +189,17 @@
       "Model": {
         "url": "/plottedPlant"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769560044265-viskj1w1t",
+      "id": "entity-1769877597450-j35cwt6ep",
       "Position": {
         "x": -13.02682,
         "y": 0,
@@ -176,10 +218,17 @@
       "Model": {
         "url": "/plottedPlant"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.25,
+          "y": 1,
+          "z": 0.1
+        }
+      },
       "name": "PlottedPlant"
     },
     {
-      "id": "entity-1769560044306-ed3dllze5",
+      "id": "entity-1769877597583-ras0cm2ov",
       "Position": {
         "x": -12.39654,
         "y": 4.62861,
@@ -198,10 +247,17 @@
       "Model": {
         "url": "/tree"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.2,
+          "y": 1,
+          "z": 0.02
+        }
+      },
       "name": "Tree"
     },
     {
-      "id": "entity-1769560044308-0m1bwwejc",
+      "id": "entity-1769877597654-4srlthpy9",
       "Position": {
         "x": -7.53811,
         "y": 4.51092,
@@ -220,10 +276,17 @@
       "Model": {
         "url": "/tree"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.2,
+          "y": 1,
+          "z": 0.02
+        }
+      },
       "name": "Tree"
     },
     {
-      "id": "entity-1769560044345-ihn15rtto",
+      "id": "entity-1769877597804-4pssjvx6w",
       "Position": {
         "x": -3.44228,
         "y": 4.61105,
@@ -242,10 +305,17 @@
       "Model": {
         "url": "/tree"
       },
+      "Collision": {
+        "weight": {
+          "x": 0.2,
+          "y": 1,
+          "z": 0.02
+        }
+      },
       "name": "Tree"
     },
     {
-      "id": "entity-1769560044387-nmdy9en2n",
+      "id": "entity-1769877597877-10in6kyg5",
       "Position": {
         "x": -13,
         "y": 0,
@@ -267,10 +337,17 @@
       "Model": {
         "url": "/crossway"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Crossway"
     },
     {
-      "id": "entity-Target",
+      "id": "entity-1769877597957-sd213dohk",
       "Position": {
         "x": -13,
         "y": 0,
@@ -292,7 +369,46 @@
       "Model": {
         "url": "/Target"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Target"
+    },
+    {
+      "id": "entity-1769877598080-9xzosj3z2",
+      "Position": {
+        "x": -13,
+        "y": 0,
+        "z": -8.24069
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/crossway"
+      },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
+      "name": "Crossway"
     },
     {
       "id": "entity-1769560044389-4nn3g88bb",
@@ -315,37 +431,12 @@
         "z": 0.04
       },
       "Model": {
-        "url": "/crossway"
-      },
-      "name": "Crossway"
-    },
-        {
-      "id": "entity-1769560044389-4nn3g88bb",
-      "Position": {
-        "x": -13,
-        "y": 0,
-        "z": -8.24069
-      },
-      "Rotation": {
-        "x": -90,
-        "y": 0,
-        "z": 0
-      },
-      "Color": {
-        "value": "#FF00FF"
-      },
-      "Scale": {
-        "x": 0.04,
-        "y": 0.04,
-        "z": 0.04
-      },
-      "Model": {
         "url": "/Target"
       },
       "name": "Target"
     },
     {
-      "id": "entity-1769560044391-ujakqrwl4",
+      "id": "entity-1769877598593-3aqb9rti2",
       "Position": {
         "x": -10.84954,
         "y": 0.08385,
@@ -364,10 +455,17 @@
       "Model": {
         "url": "/car"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Car"
     },
     {
-      "id": "entity-1769560044431-wttb3rrva",
+      "id": "entity-1769877598831-plpev4tec",
       "Position": {
         "x": 8.49103,
         "y": 0,
@@ -386,7 +484,65 @@
       "Model": {
         "url": "/pole"
       },
+      "Collision": {
+        "weight": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        }
+      },
       "name": "Pole"
+    },
+    {
+      "id": "entity-1769877654315-ytv6vofqh",
+      "Position": {
+        "x": 6.41816,
+        "y": 0,
+        "z": 0
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 90,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      },
+      "Model": {
+        "url": "/car"
+      },
+      "name": "Car"
+    },
+    {
+      "id": "entity-1769877659937-1smhq2uwb",
+      "Position": {
+        "x": 5.38656,
+        "y": 4.611,
+        "z": -10.99574
+      },
+      "Rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "Scale": {
+        "x": 0.033,
+        "y": 0.033,
+        "z": 0.033
+      },
+      "Model": {
+        "url": "/tree"
+      },
+      "Collision": {
+        "weight": {
+          "x": 0.2,
+          "y": 1,
+          "z": 0.02
+        }
+      },
+      "name": "Tree"
     }
   ]
 }
