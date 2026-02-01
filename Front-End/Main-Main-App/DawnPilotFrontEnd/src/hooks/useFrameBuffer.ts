@@ -84,16 +84,21 @@ export const useFrameBuffer = (options?: {
                       renderer.render(sceneEl.object3D, sceneEl.camera);
                   }
 
-                  // --- 3. READ PIXELS (FAST / ZERO-COPY) ---
-                  // Allocate new buffer for transfer to worker
-                  const pixelBuffer = new Uint8Array(width * height * 4);
-                  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixelBuffer);
+                  // --- 3. READ PIXELS (FULL RESOLUTION FIRST) ---
+                  const fullPixelBuffer = new Uint8Array(width * height * 4);
+                  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, fullPixelBuffer);
 
-                  // --- 4. CAPTURE DEPTH ---
+                  // --- 4. DOWNSAMPLE RGB TO MATCH DEPTH ---
                   const percentage = options?.downsamplePercentage ?? 50;
+                  const step = Math.max(1, Math.floor(100 / percentage));
+                  const downsampledWidth = Math.ceil(width / step);
+                  const downsampledHeight = Math.ceil(height / step);
+                  const pixelBuffer = downsampleRGBA(fullPixelBuffer, width, height, step);
+
+                  // --- 5. CAPTURE DEPTH (ALREADY DOWNSAMPLED INSIDE) ---
                   const depthData = readDepthBuffer(gl, renderer, sceneEl, width, height, percentage);
 
-                  // --- 5. RESTORE HUD ---
+                  // --- 6. RESTORE HUD ---
                   renderer.autoClear = originalAutoClear;
                   toggleHudVisibility(sceneEl.object3D, true, hiddenObjects);
                   
@@ -102,17 +107,17 @@ export const useFrameBuffer = (options?: {
                       renderer.render(sceneEl.object3D, sceneEl.camera);
                   }
 
-                  // --- 6. PROCESS DEPTH (Optional/Legacy) ---
+                  // --- 7. PROCESS DEPTH (Optional/Legacy) ---
                   let depthBlob: Blob | null = null;
                   if (depthData) {
                        const depthRGBA = convertDepthToRGBA(depthData);
                        depthBlob = await pixelsToBlob(depthRGBA, depthData.width, depthData.height);
                   }
 
-                  // --- 7. SEND RAW BUFFER ---
+                  // --- 8. SEND DOWNSAMPLED BUFFERS (RGB + DEPTH SAME SIZE) ---
                   if (options?.onFrame) {
-                    // Critical: Send the raw buffer, NOT a blob
-                    options.onFrame(pixelBuffer, width, height, depthBlob);
+                    // Send downsampled RGB buffer with downsampled dimensions
+                    options.onFrame(pixelBuffer, downsampledWidth, downsampledHeight, depthBlob);
                   }
 
                   if (LOG_PIXEL_DATA) {
@@ -146,6 +151,25 @@ export const useFrameBuffer = (options?: {
 };
 
 // --- HELPERS ---
+
+function downsampleRGBA(fullBuffer: Uint8Array, width: number, height: number, step: number): Uint8Array {
+  const newWidth = Math.ceil(width / step);
+  const newHeight = Math.ceil(height / step);
+  const downsampled = new Uint8Array(newWidth * newHeight * 4);
+  
+  let writeIdx = 0;
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const srcIdx = (y * width + x) * 4;
+      downsampled[writeIdx++] = fullBuffer[srcIdx];     // R
+      downsampled[writeIdx++] = fullBuffer[srcIdx + 1]; // G
+      downsampled[writeIdx++] = fullBuffer[srcIdx + 2]; // B
+      downsampled[writeIdx++] = fullBuffer[srcIdx + 3]; // A
+    }
+  }
+  
+  return downsampled;
+}
 
 function readDepthBuffer(gl: any, renderer: any, sceneEl: any, width: number, height: number, percentage: number) {
   try {
