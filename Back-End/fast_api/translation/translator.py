@@ -146,92 +146,41 @@ class Translator:
     # =====================================================================================
     # OBJECT SCORING AND SELECTION METHODS
     # =====================================================================================
-    
-    def score_object_dynamic(self, obj):
-        """
-        Calculate importance score for an object based on multiple factors.
-        
-        Scoring considers:
-        - Distance: Closer objects are more important for navigation
-        - Semantics: Object class priority (person > car > furniture)
-        - Motion: Moving objects require more attention
-        - Confidence: Higher confidence detections are preferred  
-        - Hazard: Dangerous objects get maximum priority
-        
-        Args:
-            obj (dict): Object data with keys like distance_m, class, velocity, etc.
-            
-        Returns:
-            float: Normalized importance score (0.0 to 1.0+)
-        """
-        weights = self.params.get("weights", {})
-        
-        # Distance scoring: closer objects are more important
-        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
-        score_distance = 1.0 / (1.0 + dist)
-        
-        # Semantic scoring: different object classes have different navigation importance
-        object_class = obj.get("class", "")
-        score_semantic = float(self.params.get("semantic_priority", {}).get(object_class, 0.5))
-        
-        # Motion scoring: moving objects require attention
-        velocity = obj.get("velocity", 0.0)
-        try:
-            score_velocity = float(np.linalg.norm(velocity))  # Handle vector velocity
-        except:
-            score_velocity = float(velocity) if velocity is not None else 0.0
-            
-        # Confidence scoring: trust higher confidence detections
-        score_confidence = float(obj.get("confidence", 1.0))
-        
-        # Hazard scoring: dangerous objects get maximum attention
-        is_hazard = bool(obj.get("hazard", False) or obj.get("is_hazard", False))
-        score_hazard = 1.0 if is_hazard else 0.0
-
-        # Combine weighted scores
-        total_score = (weights.get("dist", 0.4) * score_distance +
-                      weights.get("sem", 0.3) * score_semantic +
-                      weights.get("vel", 0.0) * score_velocity +
-                      weights.get("conf", 0.0) * score_confidence +
-                      weights.get("hazard", 0.0) * score_hazard)
-        
-        return total_score
+    # OBJECT SCORING AND SELECTION METHODS
+    # =====================================================================================
     
     def score_object(self, obj):
         """
-        Calculate importance score for an object based on multiple factors.
+        Calculate importance score based on depth pixel values.
         
-        Scoring considers:
-        - Distance: Closer objects are more important for navigation
+        Scoring logic:
+        - Uses raw depth pixels (0-255)
+        - HIGH pixel value (255) = NEAR object = HIGH score
+        - LOW pixel value (0) = FAR object = LOW score
+        - Normalized to 0-1 range for consistent scoring
         
         Args:
-            obj (dict): Object data with keys like distance_m, class, velocity, etc.
+            obj (dict): Object data with depth_pixel field
             
         Returns:
-            float: Normalized importance score (0.0 to 1.0+)
+            float: Normalized importance score (0.0 to 1.0)
         """
-        weights = self.params.get("weights", {})
-
-        #add logger statements here for debugging the depth values, 
-        #         
-        # Distance scoring: closer objects are more important
-        raw_dist = obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0)))
+        # Get raw depth pixel value (0-255, HIGH=NEAR)
+        raw_depth = obj.get("depth_pixel", obj.get("depth", 128))
         try:
-            dist = float(raw_dist)
+            depth_pixel = float(raw_depth)
         except (TypeError, ValueError):
-            self.logger.error(f"score_object: invalid depth value for object class={obj.get('class','unknown')} raw={raw_dist!r}; defaulting to 10.0")
-            dist = 10.0
-        self.logger.debug(f"Scoring object: class={obj.get('class','unknown')} raw_depth={raw_dist!r} used_depth={dist}")
-
-        #for far objects of depth > specific threshold get a score distance of 0
-        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
-        # if dist < depth_gate:
-        #     return 0.0  
+            print(f"⚠️  score_object: invalid depth pixel for {obj.get('class','unknown')} raw={raw_depth!r}; defaulting to 128")
+            depth_pixel = 128.0
         
-        score_distance = (dist) #near objects get higher score
-        total_score = (weights.get("dist", 1) * score_distance)
+        # Normalize to 0-1 range (divide by 255)
+        # Since HIGH pixel = NEAR, higher normalized value = closer object = higher score
+        score = depth_pixel / 255.0
         
-        return total_score
+        # DEBUG: Print scoring details
+        print(f"📊 Scoring: {obj.get('class','unknown'):>10s} | depth_pixel={depth_pixel:>6.1f} → score={score:.3f} (HIGH pixel=NEAR)")
+        
+        return score
 
     def select_objects(self):
         """
@@ -274,22 +223,19 @@ class Translator:
                 if "centroid_px" not in o:
                     o["centroid_px"] = [int((self.input_width / 2) * scale_x), int((self.input_height / 2) * scale_y)]
 
-            # ensure distance field available (safe conversion with logging)
-            raw_distance = None
-            if "distance_m" in o:
-                raw_distance = o.get("distance_m")
-            elif "depth_z" in o:
-                raw_distance = o.get("depth_z")
+            # ensure depth field available (safe conversion with logging)
+            raw_depth = None
+            if "depth_pixel" in o:
+                raw_depth = o.get("depth_pixel")
+            elif "depth" in o:
+                raw_depth = o.get("depth")
             else:
-                raw_distance = o.get("depth", 10.0)
+                raw_depth = 128.0  # Default to mid-range if missing
             try:
-                o["depth"] = float(raw_distance)
+                o["depth"] = float(raw_depth)
             except (TypeError, ValueError):
-                self.logger.warning(f"select_objects: invalid depth value for object class={o.get('class','unknown')} bbox={bbox!r} raw={raw_distance!r}; defaulting to 10.0")
-                o["depth"] = 10.0
-
-            # Log depth and key metadata for debugging
-            self.logger.debug(f"select_objects: class={o.get('class','unknown')} distance_m={o.get('distance_m')!r} depth_z={o.get('depth_z')!r} used_depth={o['depth']}")
+                print(f"⚠️  select_objects: invalid depth pixel for {o.get('class','unknown')} bbox={bbox!r} raw={raw_depth!r}; defaulting to 128.0")
+                o["depth"] = 128.0
 
             o["score"] = self.score_object(o)
             objs.append(o)
@@ -300,15 +246,22 @@ class Translator:
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
         
-        # print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")  # Reduced logging
-        # for obj in objs[:5]:  # Show first 5
-        #     print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")  # Reduced logging
+        # DEBUG: Print selection details
+        print(f"\n{'='*70}")
+        print(f"OBJECT SELECTION - Total: {len(objs)} | T_min={Tmin} | K_min={Kmin} | K_max={Kmax}")
+        print(f"{'='*70}")
+        for i, obj in enumerate(objs[:10], 1):  # Show top 10
+            depth_px = obj.get('depth', obj.get('depth_pixel', 0))
+            print(f"  [{i:>2}] {obj.get('class','unknown'):>10s}: score={obj.get('score', 0):.3f} | depth_pixel={depth_px:>6.1f}")
+        print(f"{'='*70}\n")
 
         selected = [o for o in objs if o["score"] > Tmin]
         if len(selected) > Kmax:
             selected = selected[:Kmax]
         if len(selected) < Kmin:
             selected = objs[:Kmin]
+        
+        print(f"✅ Selected {len(selected)} objects after filtering\n")
         return selected
 
     # ---------------- projection / sizing ----------------

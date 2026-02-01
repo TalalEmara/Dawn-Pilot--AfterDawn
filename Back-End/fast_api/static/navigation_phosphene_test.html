@@ -676,8 +676,11 @@
                     if (det.score_breakdown && Object.keys(det.score_breakdown).length > 0) {
                         const breakdown = det.score_breakdown;
                         breakdownHtml = `<div style="font-size: 0.75rem; color: #6c757d; margin-top: 3px;">
-                            Distance: ${breakdown.distance_m?.toFixed(2) || 'N/A'}m → Score: ${breakdown.distance_score?.toFixed(3) || 'N/A'}
+                            Depth Pixel: ${breakdown.depth_pixel?.toFixed(1) || 'N/A'} (255=NEAR) → Score: ${breakdown.depth_score?.toFixed(3) || 'N/A'}
                         </div>`;
+                        
+                        // Console log depth details for debugging
+                        console.log(`🔍 Detection ${det.class}: depth_pixel=${breakdown.depth_pixel}, score=${breakdown.depth_score}`);
                     }
                     
                     return `
