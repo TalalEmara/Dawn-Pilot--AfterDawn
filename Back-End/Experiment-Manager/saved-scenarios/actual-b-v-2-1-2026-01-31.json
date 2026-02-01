@@ -411,6 +411,31 @@
       "name": "Crossway"
     },
     {
+      "id": "entity-1769560044389-4nn3g88bb",
+      "Position": {
+        "x": -13,
+        "y": 0,
+        "z": -8.24069
+      },
+      "Rotation": {
+        "x": -90,
+        "y": 0,
+        "z": 0
+      },
+      "Color": {
+        "value": "#FF00FF"
+      },
+      "Scale": {
+        "x": 0.04,
+        "y": 0.04,
+        "z": 0.04
+      },
+      "Model": {
+        "url": "/Target"
+      },
+      "name": "Target"
+    },
+    {
       "id": "entity-1769877598593-3aqb9rti2",
       "Position": {
         "x": -10.84954,
