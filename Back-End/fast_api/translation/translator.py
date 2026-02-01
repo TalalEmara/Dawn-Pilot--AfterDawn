@@ -146,9 +146,6 @@ class Translator:
     # =====================================================================================
     # OBJECT SCORING AND SELECTION METHODS
     # =====================================================================================
-    # OBJECT SCORING AND SELECTION METHODS
-    # =====================================================================================
-    
     def score_object(self, obj):
         """
         Calculate importance score based on depth pixel values.

@@ -131,110 +131,173 @@ class ObjectDetector:
             with open(self.class_map_path, "r") as f:
                 return json.load(f)
         return {i: f"class_{i}" for i in range(1, 30)}  # fallback dummy map
-    
-    def detect_per_frame(self, rgb_img, depth_img, conf_thresh=0.5):
-        # Ensure consistent device and memory management
-        if self.model_name == "faster_rcnn":
-            # Convert to tensor and move to device efficiently
-            tensor = to_tensor(rgb_img).to(self.device, non_blocking=True)
-            with torch.no_grad():
-                outputs = self.model([tensor])[0]
-            # Move to CPU efficiently
-            boxes = outputs['boxes'].detach().cpu().numpy()
-            scores = outputs['scores'].detach().cpu().numpy()
-            labels = outputs['labels'].detach().cpu().numpy()
-        else:
-            # YOLO processing with optimized memory management
-            rgb_np = np.array(rgb_img)
-            with torch.no_grad():
-                outputs = self.model(rgb_np, verbose=False)[0]  # Disable verbose output
-            detections = outputs.boxes
-            # Efficient CPU transfer
-            boxes = detections.xyxy.detach().cpu().numpy()
-            scores = detections.conf.detach().cpu().numpy()
-            labels = detections.cls.detach().cpu().numpy().astype(int)
 
-        # Filter detections efficiently
+
+
+    def detect_per_frame(self, rgb_img, depth_img, conf_thresh=0.5):
+        """
+        Run object detection on an RGB frame and attach depth information.
+
+        IMPORTANT COORDINATE RULE:
+        --------------------------
+        - Detection happens in RGB space
+        - Depth lookup happens in DEPTH space
+        - NEVER overwrite RGB bbox with depth bbox
+        """
+
+        # ==============================================================
+        # 1. MODEL INFERENCE (RGB SPACE)
+        # ==============================================================
+
+        with torch.no_grad():
+            if self.model_name == "faster_rcnn":
+                tensor = to_tensor(rgb_img).to(self.device, non_blocking=True)
+                outputs = self.model([tensor])[0]
+
+                boxes = outputs["boxes"].detach().cpu().numpy()   # RGB coords
+                scores = outputs["scores"].detach().cpu().numpy()
+                labels = outputs["labels"].detach().cpu().numpy()
+            else:
+                rgb_np = np.asarray(rgb_img)
+                outputs = self.model(rgb_np, verbose=False)[0]
+
+                boxes = outputs.boxes.xyxy.detach().cpu().numpy()  # RGB coords
+                scores = outputs.boxes.conf.detach().cpu().numpy()
+                labels = outputs.boxes.cls.detach().cpu().numpy().astype(int)
+
+        # ==============================================================
+        # 2. CONFIDENCE FILTERING
+        # ==============================================================
+
         keep = scores >= conf_thresh
         boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+        # ==============================================================
+        # 3. PREPARE RGB → DEPTH COORDINATE MAPPING
+        # ==============================================================
+
+        rgb_h, rgb_w = rgb_img.shape[:2]
+        depth_h, depth_w = depth_img.shape[:2]
+
+        # Scale factors between coordinate spaces
+        sx = depth_w / rgb_w
+        sy = depth_h / rgb_h
+
+        if (rgb_h, rgb_w) != (depth_h, depth_w):
+            self.logger.info(
+                "RGB/Depth resolution mismatch: RGB=%s Depth=%s Scale=(%.3f, %.3f)",
+                (rgb_h, rgb_w),
+                (depth_h, depth_w),
+                sx, sy
+            )
 
         detections = []
+
+        # ==============================================================
+        # 4. PER-OBJECT PROCESSING
+        # ==============================================================
+
         for i, (box, score, label) in enumerate(zip(boxes, scores, labels)):
+
+            # ----------------------------------------------------------
+            # A. RGB BBOX (DO NOT MODIFY)
+            # ----------------------------------------------------------
             x1, y1, x2, y2 = map(int, box)
-            # print(F"CHECK: {self.class_map[label]}")
-            # print(F"CHECK 2: {self.class_map[label].dtype}")
-            # Fetch Depth of Detected Object
-            x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-            # Clamp bbox coordinates to image boundaries to avoid empty ROI
-            # img_h, img_w = depth_img.shape[:2]
-            # x1 = max(0, min(x1, img_w - 1))
-            # x2 = max(0, min(x2, img_w))
-            # y1 = max(0, min(y1, img_h - 1))
-            # y2 = max(0, min(y2, img_h))
 
-            # If box has no area after clamping, log and use whole-image fallback
-            if x2 <= x1 or y2 <= y1:
-                self.logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
-                roi = depth_img
-            else:
-                roi = depth_img[y1:y2, x1:x2]
-            # # If box has no area after clamping, log and use whole-image fallback
-            import logging
-            logger = logging.getLogger(__name__)
-            # if x2 <= x1 or y2 <= y1:
-            #     logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
-            #     roi = depth_img
-            # else:
-            roi = depth_img[y1:y2, x1:x2]
+            # ----------------------------------------------------------
+            # B. MAP RGB BBOX → DEPTH SPACE (FOR DEPTH LOOKUP ONLY)
+            # ----------------------------------------------------------
+            dx1 = int(x1 * sx)
+            dx2 = int(x2 * sx)
+            dy1 = int(y1 * sy)
+            dy2 = int(y2 * sy)
 
-            # Use only valid (non-zero) depth pixels
-            valid = roi[roi > 0]
-            if valid.size > 0:
-                depth_pixel = float(np.median(valid))  # Raw pixel value (0-255, HIGH=NEAR)
+            # Clamp ONLY in depth space to avoid invalid slicing
+            dx1 = max(0, min(dx1, depth_w - 1))
+            dx2 = max(0, min(dx2, depth_w))
+            dy1 = max(0, min(dy1, depth_h - 1))
+            dy2 = max(0, min(dy2, depth_h))
+
+            if dx2 <= dx1 or dy2 <= dy1:
+                self.logger.warning(
+                    "Empty depth ROI after scaling: RGB=%s DEPTH=%s",
+                    (x1, y1, x2, y2),
+                    (dx1, dy1, dx2, dy2)
+                )
+                roi = None
             else:
-                # fallback: try median of entire depth image non-zero pixels
+                roi = depth_img[dy1:dy2, dx1:dx2]
+
+            # ----------------------------------------------------------
+            # C. DEPTH EXTRACTION
+            # ----------------------------------------------------------
+            depth_pixel = None
+            reason = None
+
+            if roi is None or roi.size == 0:
+                reason = "empty_roi"
+            else:
+                # IMPORTANT:
+                # depth_img contains NO None values
+                # BUT depth sensors encode INVALID depth as 0
+                valid = roi[roi > 0]
+
+                if valid.size > 0:
+                    depth_pixel = float(np.median(valid))
+                else:
+                    reason = "all_zero_roi"
+
+            # ----------------------------------------------------------
+            # D. FALLBACK LOGIC (EXPECTED IN REAL DEPTH DATA)
+            # ----------------------------------------------------------
+            if depth_pixel is None:
                 all_valid = depth_img[depth_img > 0]
+
                 if all_valid.size > 0:
                     depth_pixel = float(np.median(all_valid))
-                    print(f"🔍 Detector: no valid depth in bbox {(x1,y1,x2,y2)}; using image median {depth_pixel:.1f} pixels as fallback")
+                    self.logger.warning(
+                        "Depth fallback (%s): RGB=%s DEPTH=%s fallback=%.1f",
+                        reason,
+                        (x1, y1, x2, y2),
+                        (dx1, dy1, dx2, dy2),
+                        depth_pixel
+                    )
                 else:
-                    # no valid depth anywhere; leave depth_pixel as None and log
-                    depth_pixel = None
-                    print(f"⚠️  Detector: no valid depth in image; setting depth_pixel=None for bbox {(x1,y1,x2,y2)}")
-            
-            # DEBUG: Print depth stats for first detection
-            if i == 0 and valid.size > 0:
-                print(f"\n{'='*70}")
-                print(f"DEPTH DEBUG - Frame Detection #{i+1}")
-                print(f"{'='*70}")
-                print(f"Depth Image Stats:")
-                print(f"  Shape: {depth_img.shape}")
-                print(f"  Dtype: {depth_img.dtype}")
-                print(f"  Min: {depth_img[depth_img > 0].min() if depth_img[depth_img > 0].size > 0 else 0:.1f}")
-                print(f"  Max: {depth_img.max():.1f}")
-                print(f"  Mean: {depth_img[depth_img > 0].mean() if depth_img[depth_img > 0].size > 0 else 0:.1f}")
-                print(f"  Median: {np.median(depth_img[depth_img > 0]) if depth_img[depth_img > 0].size > 0 else 0:.1f}")
-                print(f"\nObject ROI Stats:")
-                print(f"  Class: {self.class_map[str(label)]}")
-                print(f"  Bbox: [{x1}, {y1}, {x2-x1}, {y2-y1}]")
-                print(f"  ROI valid pixels: {valid.size} / {roi.size}")
-                print(f"  ROI depth - min: {valid.min():.1f}, max: {valid.max():.1f}, median: {depth_pixel:.1f}")
-                print(f"  Note: Depth pixel value (0-255)")
-                print(f"{'='*70}\n")                
+                    self.logger.error(
+                        "No valid depth in entire frame! RGB=%s",
+                        (x1, y1, x2, y2)
+                    )
+
+            # ----------------------------------------------------------
+            # E. DEBUG (FIRST OBJECT ONLY)
+            # ROI: shape of the region of interest in depth space
+            # valid: number of non-zero (valid) depth pixels in the ROI
+            # total: total number of pixels in the ROI
+            # ----------------------------------------------------------
+            if i == 0:
+                self.logger.debug("Depth stats: ROI=%s valid=%d/%d",
+                    None if roi is None else roi.shape,
+                    0 if roi is None else np.count_nonzero(roi),
+                    0 if roi is None else roi.size
+                )
+
+            # ----------------------------------------------------------
+            # F. RETURN RGB BBOX (NOT DEPTH BBOX!)
+            # ----------------------------------------------------------
             detections.append({
                 "id": i + 1,
                 "class": self.class_map[str(label)],
-                # "class": self.class_map[int(label)],
+                "bbox": [x1, y1, x2 - x1, y2 - y1],  # RGB SPACE
+                "depth_pixel": depth_pixel,          # DEPTH INFO
+                "detection_score": float(score),
                 "shape": None,
-                "bbox": [int(x1), int(y1), int(x2 - x1), int(y2 - y1)],
-                "depth_pixel": depth_pixel,  # Raw pixel value (0-255)
                 "mask_path": None,
                 "velocity": None,
-                "detection_score": float(score),
                 "hazard": None
             })
 
         return detections
+
+
 
     # def save_json_output(self, detections, rgb_img, frame_id, file_path, output_dir=r"pipeline1\outputs\detections_json", intrinsics=None):
     #     os.makedirs(output_dir, exist_ok=True)
