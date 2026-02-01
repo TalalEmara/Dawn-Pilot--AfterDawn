@@ -12,8 +12,6 @@ from .image_utils import (
     save_debug_images
 )
 
-from .depth_utils import assign_depth_to_detections
-
 from .cleanup import cleanup_old_files
 
 __all__ = [
@@ -22,6 +20,5 @@ __all__ = [
     "encode_ndarray_to_base64",
     "decode_depth_map",
     "save_debug_images",
-    "assign_depth_to_detections",
     "cleanup_old_files",
 ]

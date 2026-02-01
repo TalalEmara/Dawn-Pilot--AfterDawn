@@ -142,82 +142,39 @@ class Translator:
     # OBJECT SCORING AND SELECTION METHODS
     # =====================================================================================
     
-    def score_object_dynamic(self, obj):
-        """
-        Calculate importance score for an object based on multiple factors.
-        
-        Scoring considers:
-        - Distance: Closer objects are more important for navigation
-        - Semantics: Object class priority (person > car > furniture)
-        - Motion: Moving objects require more attention
-        - Confidence: Higher confidence detections are preferred  
-        - Hazard: Dangerous objects get maximum priority
-        
-        Args:
-            obj (dict): Object data with keys like distance_m, class, velocity, etc.
-            
-        Returns:
-            float: Normalized importance score (0.0 to 1.0+)
-        """
-        weights = self.params.get("weights", {})
-        
-        # Distance scoring: closer objects are more important
-        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
-        score_distance = 1.0 / (1.0 + dist)
-        
-        # Semantic scoring: different object classes have different navigation importance
-        object_class = obj.get("class", "")
-        score_semantic = float(self.params.get("semantic_priority", {}).get(object_class, 0.5))
-        
-        # Motion scoring: moving objects require attention
-        velocity = obj.get("velocity", 0.0)
-        try:
-            score_velocity = float(np.linalg.norm(velocity))  # Handle vector velocity
-        except:
-            score_velocity = float(velocity) if velocity is not None else 0.0
-            
-        # Confidence scoring: trust higher confidence detections
-        score_confidence = float(obj.get("confidence", 1.0))
-        
-        # Hazard scoring: dangerous objects get maximum attention
-        is_hazard = bool(obj.get("hazard", False) or obj.get("is_hazard", False))
-        score_hazard = 1.0 if is_hazard else 0.0
 
-        # Combine weighted scores
-        total_score = (weights.get("dist", 0.4) * score_distance +
-                      weights.get("sem", 0.3) * score_semantic +
-                      weights.get("vel", 0.0) * score_velocity +
-                      weights.get("conf", 0.0) * score_confidence +
-                      weights.get("hazard", 0.0) * score_hazard)
-        
-        return total_score
-    
     def score_object(self, obj):
         """
-        Calculate importance score for an object based on multiple factors.
+        Calculate importance score based on depth pixel values.
         
-        Scoring considers:
-        - Distance: Closer objects are more important for navigation
+        Scoring logic:
+        - Uses raw depth pixels (0-255)
+        - HIGH pixel value (255) = NEAR object = HIGH score
+        - LOW pixel value (0) = FAR object = LOW score
+        - Normalized to 0-1 range for consistent scoring
         
         Args:
-            obj (dict): Object data with keys like distance_m, class, velocity, etc.
+            obj (dict): Object data with depth_pixel field
             
         Returns:
-            float: Normalized importance score (0.0 to 1.0+)
+            float: Normalized importance score (0.0 to 1.0)
         """
-        weights = self.params.get("weights", {})
+        # Get raw depth pixel value (0-255, HIGH=NEAR)
+        raw_depth = obj.get("depth_pixel", obj.get("depth", 128))
+        try:
+            depth_pixel = float(raw_depth)
+        except (TypeError, ValueError):
+            print(f"⚠️  score_object: invalid depth pixel for {obj.get('class','unknown')} raw={raw_depth!r}; defaulting to 128")
+            depth_pixel = 128.0
         
-        # Distance scoring: closer objects are more important
-        dist = float(obj.get("distance_m", obj.get("depth", obj.get("depth_z", 10.0))))
-        #for far objects of depth > specific threshold get a score distance of 0
-        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
-        # if dist < depth_gate:
-        #     return 0.0  
+        # Normalize to 0-1 range (divide by 255)
+        # Since HIGH pixel = NEAR, higher normalized value = closer object = higher score
+        score = depth_pixel / 255.0
         
-        score_distance = 0.01*(dist) #near objects get higher score
-        total_score = (weights.get("dist", 1) * score_distance)
+        # DEBUG: Print scoring details
+        print(f"📊 Scoring: {obj.get('class','unknown'):>10s} | depth_pixel={depth_pixel:>6.1f} → score={score:.3f} (HIGH pixel=NEAR)")
         
-        return total_score
+        return score
 
     def select_objects(self):
         """
@@ -260,32 +217,19 @@ class Translator:
                 if "centroid_px" not in o:
                     o["centroid_px"] = [int((self.input_width / 2) * scale_x), int((self.input_height / 2) * scale_y)]
 
-            # ensure distance field available with None protection
+            # ensure depth field available (safe conversion with logging)
+            raw_depth = None
+            if "depth_pixel" in o:
+                raw_depth = o.get("depth_pixel")
+            elif "depth" in o:
+                raw_depth = o.get("depth")
+            else:
+                raw_depth = 128.0  # Default to mid-range if missing
             try:
-                if "distance_m" in o:
-                    distance_val = o["distance_m"]
-                    if distance_val is not None:
-                        o["depth"] = float(distance_val)
-                    else:
-                        print(f"⚠️ [Translator.select_objects] distance_m is None for {o.get('class', 'unknown')}, using 10.0m")
-                        o["depth"] = 10.0
-                elif "depth_z" in o:
-                    depth_z_val = o["depth_z"]
-                    if depth_z_val is not None:
-                        o["depth"] = float(depth_z_val)
-                    else:
-                        print(f"⚠️ [Translator.select_objects] depth_z is None for {o.get('class', 'unknown')}, using 10.0m")
-                        o["depth"] = 10.0
-                else:
-                    depth_val = o.get("depth", 10.0)
-                    if depth_val is not None:
-                        o["depth"] = float(depth_val)
-                    else:
-                        print(f"⚠️ [Translator.select_objects] depth is None for {o.get('class', 'unknown')}, using 10.0m")
-                        o["depth"] = 10.0
-            except (TypeError, ValueError) as e:
-                print(f"❌ [Translator.select_objects] Error converting depth value: {e}, using 10.0m")
-                o["depth"] = 10.0
+                o["depth"] = float(raw_depth)
+            except (TypeError, ValueError):
+                print(f"⚠️  select_objects: invalid depth pixel for {o.get('class','unknown')} bbox={bbox!r} raw={raw_depth!r}; defaulting to 128.0")
+                o["depth"] = 128.0
 
             o["score"] = self.score_object(o)
             objs.append(o)
@@ -295,7 +239,7 @@ class Translator:
         Kmin = int(self.params.get("K_min", 1))
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
-        
+  
         # print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")  # Reduced logging
         # for obj in objs[:5]:  # Show first 5
         #     print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")  # Reduced logging
