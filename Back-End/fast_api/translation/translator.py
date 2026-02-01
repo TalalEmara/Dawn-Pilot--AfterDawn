@@ -224,14 +224,11 @@ class Translator:
         self.logger.debug(f"Scoring object: class={obj.get('class','unknown')} raw_depth={raw_dist!r} used_depth={dist}")
 
         #for far objects of depth > specific threshold get a score distance of 0
-        # depth_gate = 128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
+        # depth_gate = 0.128 #taken to be 50th percentile of depth values (depth is encoded in jpg from 0-255)
         # if dist < depth_gate:
-        #     return 0.0  
-        
-        score_distance = (dist) #near objects get higher score
-        total_score = (weights.get("dist", 1) * score_distance)
-        
-        return total_score
+        #     return 0.0   
+        score_distance = (dist) #near objects get higher score        
+        return score_distance
 
     def select_objects(self):
         """

@@ -10,6 +10,12 @@ from torchvision.transforms.functional import to_tensor
 import matplotlib.pyplot as plt
 import numpy as np
 from ultralytics import YOLO
+import sys
+import os as os_module
+
+# Add parent directories to path to import logger_config
+sys.path.insert(0, os_module.path.join(os_module.path.dirname(__file__), '../../translation'))
+from logger_config import get_depth_logger
 
 
 class ObjectDetector:
@@ -18,6 +24,8 @@ class ObjectDetector:
         self.class_map_path = class_map_path
         self.class_map = self.load_class_map()
         self.model_name = model_name
+        # Initialize depth logger (writes to depth_debug.log)
+        self.logger = get_depth_logger()
         if self.model_name == "faster_rcnn":
             self.model, self.device = self.load_faster_rcnn_model(weights_path=self.model_path)
         else:
@@ -165,10 +173,8 @@ class ObjectDetector:
             y2 = max(0, min(y2, img_h))
 
             # If box has no area after clamping, log and use whole-image fallback
-            import logging
-            logger = logging.getLogger(__name__)
             if x2 <= x1 or y2 <= y1:
-                logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
+                self.logger.warning(f"Detector: bbox empty/invalid after clamping: {(x1,y1,x2,y2)} image_shape={(img_w,img_h)}; using whole-image fallback")
                 roi = depth_img
             else:
                 roi = depth_img[y1:y2, x1:x2]
@@ -177,18 +183,21 @@ class ObjectDetector:
             valid = roi[roi > 0]
             if valid.size > 0:
                 distance_mm = np.median(valid)
+                #add this distance to the logger file
+                self.logger.info(f"Detector: distance for bbox {(x1,y1,x2,y2)} is {distance_mm} mm")
                 distance = float(distance_mm) / 1000.0  # convert mm -> meters
+                self.logger.info(f"Detector: distance for bbox {(x1,y1,x2,y2)} is {distance} meters")
             else:
                 # fallback: try median of entire depth image non-zero pixels
                 all_valid = depth_img[depth_img > 0]
                 if all_valid.size > 0:
                     distance_mm = np.median(all_valid)
                     distance = float(distance_mm) / 1000.0
-                    logger.warning(f"Detector: no valid depth in bbox {(x1,y1,x2,y2)}; using image median {distance:.3f} m as fallback")
+                    self.logger.warning(f"Detector: no valid depth in bbox {(x1,y1,x2,y2)}; using image median {distance:.3f} m as fallback")
                 else:
                     # no valid depth anywhere; leave distance as None and log
                     distance = None
-                    logger.warning(f"Detector: no valid depth in image; setting distance=None for bbox {(x1,y1,x2,y2)}")                
+                    self.logger.warning(f"Detector: no valid depth in image; setting distance=None for bbox {(x1,y1,x2,y2)}")                
             detections.append({
                 "id": i + 1,
                 "class": self.class_map[str(label)],
