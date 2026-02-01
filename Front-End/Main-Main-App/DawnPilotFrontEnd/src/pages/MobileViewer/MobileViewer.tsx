@@ -86,6 +86,7 @@ function MobileView() {
   const [liteMode, setLiteMode] = useState(false);
   const [mobileThrottle, setMobileThrottle] = useState(() => parseInt(localStorage.getItem("throttle_mobile") || "33"));
   const [alertStatus, setAlertStatus] = useState<"DANGER" | "SAFE">("SAFE");
+  const [worldDimensions, setWorldDimensions] = useState({ width: 40, depth: 30, zShift: 2, xShift: 0 });
 
   // X-RAY STATE
   const [collisionActive, setCollisionActive] = useState(false);
@@ -126,7 +127,17 @@ function MobileView() {
     socket.on("eye-control:changed", (d) => setEyeControl(d.control));
     socket.on("lite-mode:changed", (d) => setLiteMode(d.enabled));
     socket.on("throttle:changed", (d) => { setMobileThrottle(d.mobileMs); localStorage.setItem("throttle_mobile", d.mobileMs.toString()); });
-    return () => { socket.off("vision-mode:changed"); socket.off("eye-control:changed"); socket.off("lite-mode:changed"); socket.off("throttle:changed"); };
+    socket.on("world-dimensions:changed", (d) => {
+      console.log("📱 World dimensions updated:", d);
+      setWorldDimensions({ width: d.width, depth: d.depth, zShift: d.zShift, xShift: d.xShift });
+    });
+    return () => { 
+      socket.off("vision-mode:changed"); 
+      socket.off("eye-control:changed"); 
+      socket.off("lite-mode:changed"); 
+      socket.off("throttle:changed");
+      socket.off("world-dimensions:changed");
+    };
   }, [socket]);
 
   // Alert Handler (unchanged)
@@ -213,7 +224,16 @@ function MobileView() {
         📱 Mobile Viewer
       </div>
 
-      <WorldScene entities={world.entities} isMobile={true} isLiteMode={liteMode}  areWallsTransparent={wallsTransparent}>
+      <WorldScene 
+        entities={world.entities} 
+        isMobile={true} 
+        isLiteMode={liteMode} 
+        areWallsTransparent={wallsTransparent}
+        worldWidth={worldDimensions.width}
+        worldDepth={worldDimensions.depth}
+        groundZShift={worldDimensions.zShift}
+        groundXShift={worldDimensions.xShift}
+      >
         <Entity ref={rigRef} animation__follow={{ property: "position", dur: 200, easing: "easeOutQuad", startEvents: "follow-target", autoplay: false }}>
           <Entity ref={cameraRef} primitive="a-entity" camera="active: true" look-controls="enabled: true; touchEnabled: true; magicWindowTrackingEnabled: false;" position="0 0 0">
             

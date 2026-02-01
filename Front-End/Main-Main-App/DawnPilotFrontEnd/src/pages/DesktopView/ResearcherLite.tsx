@@ -265,6 +265,17 @@ function ResearcherLite() {
     }
   }, [throttleSettings.mobileMs, socket]);
 
+  useEffect(() => {
+    if (socket && socket.connected) {
+      socket.emit('world-dimensions:update', { 
+        width: worldSettings.width,
+        depth: worldSettings.depth,
+        zShift: worldSettings.zShift,
+        xShift: worldSettings.xShift
+      });
+    }
+  }, [worldSettings, socket]);
+
 
   
   // Set initial camera position ONCE (prevent re-render from resetting position)

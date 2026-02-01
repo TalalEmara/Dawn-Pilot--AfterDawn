@@ -73,7 +73,7 @@ const {
   socket: aiWebSocket, 
   canvasRef: aiHudCanvasRef,
   isConnected: aiConnected,
-  receivedFrameId
+  
 } = useAiStream({ 
   reconnectDependency: visionMode 
 });
@@ -368,8 +368,6 @@ useEffect(() => {
   collisionLog={collisionLog}
   onOpenLoadDialog={handleOpenLoadDialog}
   saveLoadLoading={saveLoadLoading}
-  sentFrameId={sentFrameId}
-  receivedFrameId={receivedFrameId}
 />
 
       {/* --- 3D VIEWPORT WITH ASPECT RATIO FIX --- */}
