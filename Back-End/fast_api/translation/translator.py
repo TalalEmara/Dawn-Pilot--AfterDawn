@@ -173,7 +173,8 @@ class Translator:
         # Normalize to 0-1 range (divide by 255)
         # Since HIGH pixel = NEAR, higher normalized value = closer object = higher score
         score = depth_pixel / 255.0
-        
+        if score < 0.5:
+            score = -1.0  # Zero out scores for FAR objects (below mid-range)
         # DEBUG: Print scoring details
         print(f"📊 Scoring: {obj.get('class','unknown'):>10s} | depth_pixel={depth_pixel:>6.1f} → score={score:.3f} (HIGH pixel=NEAR)")
         

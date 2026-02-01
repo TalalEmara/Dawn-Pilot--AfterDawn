@@ -114,7 +114,7 @@ class NavigationDetectorService:
         
         # Configurable parameters (can be updated via API)
         self.conf_threshold = 0.5  # YOLO detection confidence threshold
-        self.t_min = 0.0  # Translator minimum score threshold
+        self.t_min = 0.000001  # Translator minimum score threshold
         self.k_min = 1    # Translator minimum objects to select
         self.k_max = 5    # Translator maximum objects to select
         
@@ -1302,37 +1302,38 @@ class NavigationDetectorService:
                 }
             
             # Add translator scores to original detections
-            for det in detections:
-                det_class = det.get('class', 'unknown')
-                det_bbox = det.get('bbox', [])
-                key = f"{det_class}_{det_bbox}"
-                
+            # for det in detections:
+            #     det_class = det.get('class', 'unknown')
+            #     det_bbox = det.get('bbox', [])
+            #     key = f"{det_class}_{det_bbox}"    
                 # Calculate actual score for ALL objects (not just selected ones)
-                depth_px = det.get('depth_pixel', det.get('distance_m', 128.0))
-                if depth_px is None:
-                    depth_px = 128.0  # Fallback for missing depth
-                actual_score = depth_px / 255.0
+                # depth_px = det.get('depth_pixel', det.get('distance_m', 128.0))
+                # if depth_px is None:
+                #     depth_px = 128.0  # Fallback for missing depth
+                # actual_score = depth_px / 255.0
+                # if actual_score < 0.5:
+                #     actual_score = -1.0
                 
-                if key in selected_lookup:
-                    # Object was selected by translator
-                    sel_data = selected_lookup[key]
-                    det['translator_score'] = round(sel_data['score'], 3)
-                    det['selected'] = True
-                    det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
-                    # Score breakdown (depth pixel based, HIGH=NEAR)
-                    det['score_breakdown'] = {
-                        'depth_pixel': round(depth_px, 1),
-                        'depth_score': round(actual_score, 3)
-                    }
-                else:
-                    # Object was rejected by translator - show actual score (not 0)
-                    det['translator_score'] = round(actual_score, 3)
-                    det['selected'] = False
-                    det['selection_reason'] = f"Score {det['translator_score']:.3f} ≤ T_min ({self.t_min}) or beyond K_max ({self.k_max})"
-                    det['score_breakdown'] = {
-                        'depth_pixel': round(depth_px, 1),
-                        'depth_score': round(actual_score, 3)
-                    }
+                # if key in selected_lookup:
+                #     # Object was selected by translator
+                #     sel_data = selected_lookup[key]
+                #     det['translator_score'] = round(sel_data['score'], 3)
+                #     det['selected'] = True
+                #     det['selection_reason'] = f"Score {det['translator_score']:.3f} > T_min ({self.t_min})"
+                #     # Score breakdown (depth pixel based, HIGH=NEAR)
+                #     det['score_breakdown'] = {
+                #         'depth_pixel': round(depth_px, 1),
+                #         'depth_score': round(actual_score, 3)
+                #     }
+                # else:
+                #     # Object was rejected by translator - show actual score (not 0)
+                #     det['translator_score'] = round(actual_score, 3)
+                #     det['selected'] = False
+                #     det['selection_reason'] = f"Score {det['translator_score']:.3f} ≤ T_min ({self.t_min}) or beyond K_max ({self.k_max})"
+                #     det['score_breakdown'] = {
+                #         'depth_pixel': round(depth_px, 1),
+                #         'depth_score': round(actual_score, 3)
+                #     }
             
             # End of translator lock - state is now safe, other frames can proceed
             
