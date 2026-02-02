@@ -83,8 +83,12 @@ io.on('connection', (socket) => {
     // Broadcast to all other clients (especially Mobile)
     socket.broadcast.emit('throttle:changed', { mobileMs: data.mobileMs });
     console.log(`Throttle synced: ${data.mobileMs}ms`);
-    
-   
+  });
+
+  // WORLD DIMENSIONS SYNC
+  socket.on('world-dimensions:update', (data: { width: number; depth: number; zShift: number; xShift: number }) => {
+    socket.broadcast.emit('world-dimensions:changed', data);
+    console.log(`🌍 World dimensions synced: ${data.width}x${data.depth}, Z:${data.zShift}, X:${data.xShift}`);
   });
 
 //  COLLISION EVENTS
