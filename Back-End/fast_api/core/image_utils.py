@@ -5,7 +5,6 @@ Helper functions for image encoding/decoding and processing.
 
 COLOR SPACE CONVENTIONS:
 - decode_base64_to_rgb(): Returns RGB format (for ML models)
-- decode_base64_image(): Returns BGR format (for OpenCV operations, legacy)
 - encode_ndarray_to_base64(): Accepts RGB or BGR, specify color_space parameter
 """
 
@@ -16,43 +15,6 @@ import numpy as np
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
-
-
-def decode_base64_image(base64_string: str) -> np.ndarray:
-    """
-    Decode base64 string to OpenCV image (BGR format, legacy compatibility)
-    
-    Args:
-        base64_string: Base64 encoded image data
-        
-    Returns:
-        np.ndarray: BGR image (H, W, 3) in uint8 format (OpenCV default)
-        
-    Notes:
-        - Returns BGR format for backward compatibility
-        - Consider using decode_base64_to_rgb() for ML pipelines
-    """
-    try:
-        # Remove data URL prefix if present
-        if ',' in base64_string:
-            base64_string = base64_string.split(',')[1]
-        
-        # Decode base64
-        img_data = base64.b64decode(base64_string)
-        
-        # Convert to numpy array
-        nparr = np.frombuffer(img_data, np.uint8)
-        
-        # Decode image (returns BGR)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if img is None:
-            raise ValueError("Failed to decode image")
-        
-        return img
-    
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
 
 
 def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
@@ -67,7 +29,6 @@ def decode_base64_to_rgb(base64_string: str) -> np.ndarray:
         
     Notes:
         - Returns RGB format (not BGR) for direct use with ML models
-        - Faster than decode_base64_image() + color conversion
         - Applies Y-flip to correct WebGL coordinate system
     """
     try:

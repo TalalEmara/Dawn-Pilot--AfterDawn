@@ -144,8 +144,6 @@ class NavigationDetectorService:
         # Only recalculated when image dimensions change - eliminates per-frame overhead
         self._cached_image_dims = None  # (width, height)
         self._cached_intrinsics = None  # (fx, fy, cx, cy)
-        self._cached_image_dims = None  # (width, height)
-        self._cached_intrinsics = None  # (fx, fy, cx, cy)
         
         # Load from config if exists
         if os.path.exists(config_path):

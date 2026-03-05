@@ -16,8 +16,6 @@ import uvicorn
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-# from fastapi.staticfiles import StaticFiles
 import os
 import torch
 
@@ -53,7 +51,6 @@ else:
     print("⚠️  CUDA not available, running on CPU")
 
 from api import router, set_navigation_service, handle_navigation_phosphene_websocket
-from api.nav_phosphene_ws import navigation_detector_service as nav_detector_module
 from services import NavigationDetectorService
 
 # Configure logging
@@ -134,19 +131,6 @@ async def navigation_phosphene_websocket_endpoint(websocket: WebSocket):
     - Stage-by-stage processing for testing
     """
     await handle_navigation_phosphene_websocket(websocket)
-
-# Legacy endpoints removed - see old_experiments/legacy_websockets.py if needed
-
-
-# Serve main test page
-@app.get("/test", response_class=HTMLResponse)
-async def test_page():
-    """Serve navigation phosphene test page"""
-    test_file = os.path.join(os.path.dirname(__file__), "static", "navigation_phosphene_test.html")
-    if os.path.exists(test_file):
-        with open(test_file, 'r') as f:
-            return f.read()
-    return "<h1>Test page not found</h1><p>Create static/navigation_phosphene_test.html</p>"
 
 
 # Health check endpoint (simplified)
