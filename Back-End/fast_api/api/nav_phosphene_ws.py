@@ -179,7 +179,9 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                 depth=depth,  # Can be None for passthrough/edge_mode
                 stop_at=payload["stage"],
                 debug_mode=payload["debug_mode"],
-                cropping_config=payload.get("cropping_config")
+                cropping_config=payload.get("cropping_config"),
+                depth_threshold=payload.get("depth_threshold", 0.0),
+                depth_threshold_mode=payload.get("depth_threshold_mode", "fallback")
             )
             
             return {"success": True, "result": result}
@@ -205,6 +207,8 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                         stage = message.get("stage", "phosphene")
                         debug_mode = message.get("debug", False)
                         cropping_config = message.get("cropping_config")
+                        depth_threshold = message.get("depth_threshold", 0.0)
+                        depth_threshold_mode = message.get("depth_threshold_mode", "fallback")
                         
                         valid_stages = ["passthrough", "edge_mode", "detector", "translator", "pre_phosphene", "phosphene"]
                         if stage not in valid_stages:
@@ -243,6 +247,8 @@ async def handle_navigation_phosphene_websocket(websocket: WebSocket):
                             "stage": stage,
                             "debug_mode": debug_mode,
                             "cropping_config": cropping_config,
+                            "depth_threshold": depth_threshold,
+                            "depth_threshold_mode": depth_threshold_mode,
                             "rgb": rgb_b64,
                             "depth": depth_b64
                         }

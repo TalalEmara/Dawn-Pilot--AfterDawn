@@ -35,7 +35,8 @@ class Translator:
     intelligent fallback rendering for unknown object classes.
     """
     
-    def __init__(self, bundle_path, shapes_path, params_path, calib_path=None, output_dir="output"):
+    def __init__(self, bundle_path, shapes_path, params_path, calib_path=None, output_dir="output",
+                 depth_threshold=0.0, depth_threshold_mode="fallback"):
         """
         Initialize the Navigation Translator with configuration files.
         
@@ -45,6 +46,11 @@ class Translator:
             params_path (str): Path to selection parameters JSON
             calib_path (str, optional): DEPRECATED - no longer used
             output_dir (str): Directory for saving output images
+            depth_threshold (float): Minimum normalized depth for object selection (0.0-1.0)
+                                    0.0 = all distances, 1.0 = only nearest objects
+                                    HIGH pixel value (255) = NEAR = 1.0 normalized
+            depth_threshold_mode (str): "fallback" = keep K_min closest if filtered out,
+                                       "strict" = allow empty scene
             
         Raises:
             FileNotFoundError: If any required configuration file is missing
@@ -63,6 +69,10 @@ class Translator:
         # Create output directory if it doesn't exist
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
+        
+        # Depth filtering configuration
+        self.depth_threshold = depth_threshold  # 0.0-1.0 (0=all, 1=only nearest)
+        self.depth_threshold_mode = depth_threshold_mode  # "fallback" or "strict"
 
         # Detect obstacles key format (handles different bundle schemas)
         if "obstacles" in self.bundle:
@@ -160,11 +170,11 @@ class Translator:
             float: Normalized importance score (0.0 to 1.0)
         """
         # Get raw depth pixel value (0-255, HIGH=NEAR)
-        raw_depth = obj.get("depth_pixel", obj.get("depth", 128))
+        raw_depth = obj.get("depth_pixel", 128)
         try:
             depth_pixel = float(raw_depth)
         except (TypeError, ValueError):
-            print(f"⚠️  score_object: invalid depth pixel for {obj.get('class','unknown')} raw={raw_depth!r}; defaulting to 128")
+            print(f"⚠️  score_object: invalid depth_pixel for {obj.get('class','unknown')} raw={raw_depth!r}; defaulting to 128")
             depth_pixel = 128.0
         
         # Normalize to 0-1 range (divide by 255)
@@ -217,19 +227,13 @@ class Translator:
                 if "centroid_px" not in o:
                     o["centroid_px"] = [int((self.input_width / 2) * scale_x), int((self.input_height / 2) * scale_y)]
 
-            # ensure depth field available (safe conversion with logging)
-            raw_depth = None
-            if "depth_pixel" in o:
-                raw_depth = o.get("depth_pixel")
-            elif "depth" in o:
-                raw_depth = o.get("depth")
-            else:
-                raw_depth = 128.0  # Default to mid-range if missing
+            # ensure depth_pixel field available (safe conversion with logging)
+            raw_depth = o.get("depth_pixel", 128.0)  # Default to mid-range if missing
             try:
-                o["depth"] = float(raw_depth)
+                o["depth_pixel"] = float(raw_depth)
             except (TypeError, ValueError):
-                print(f"⚠️  select_objects: invalid depth pixel for {o.get('class','unknown')} bbox={bbox!r} raw={raw_depth!r}; defaulting to 128.0")
-                o["depth"] = 128.0
+                print(f"⚠️  select_objects: invalid depth_pixel for {o.get('class','unknown')} bbox={bbox!r} raw={raw_depth!r}; defaulting to 128.0")
+                o["depth_pixel"] = 128.0
 
             o["score"] = self.score_object(o)
             objs.append(o)
@@ -239,16 +243,36 @@ class Translator:
         Kmin = int(self.params.get("K_min", 1))
         Kmax = int(self.params.get("K_max", max(1, Kmin)))
         Tmin = float(self.params.get("T_min", 0.0))
+        
+        # ============================================================
+        # DEPTH THRESHOLD FILTERING (Pre-filter before T_min)
+        # ============================================================
+        if self.depth_threshold > 0.0:
+            # Step 1: Hard cutoff - filter objects by depth_pixel
+            objs_within_depth = [o for o in objs if o["depth_pixel"] / 255.0 >= self.depth_threshold]
+            
+            # Step 2: Fallback mode - ensure we have K_min objects
+            if len(objs_within_depth) < Kmin and self.depth_threshold_mode == "fallback":
+                # Not enough objects after filtering, keep K_min closest regardless
+                print(f"⚠️  Depth threshold {self.depth_threshold:.2f} filtered too many objects ")
+                print(f"   ({len(objs_within_depth)}/{len(objs)}). Keeping {Kmin} closest objects (fallback mode).")
+                objs = objs[:Kmin]  # Keep K_min closest objects
+            else:
+                # Use filtered list
+                objs = objs_within_depth
+                if self.depth_threshold_mode == "strict" and len(objs) == 0:
+                    print(f"⚠️  Depth threshold {self.depth_threshold:.2f} filtered ALL objects (strict mode).")
   
         # print(f"[Translator] Total objects: {len(objs)}, Kmin={Kmin}, Kmax={Kmax}, Tmin={Tmin}")  # Reduced logging
         # for obj in objs[:5]:  # Show first 5
         #     print(f"  - {obj.get('class')}: score={obj.get('score', 0):.3f}")  # Reduced logging
 
+        # Apply T_min threshold and K_min/K_max limits
         selected = [o for o in objs if o["score"] > Tmin]
         if len(selected) > Kmax:
             selected = selected[:Kmax]
         if len(selected) < Kmin:
-            selected = objs[:Kmin]
+            selected = objs[:Kmin] if objs else []  # Handle empty objs list
         return selected
 
     # ---------------- projection / sizing ----------------
@@ -557,16 +581,22 @@ class Translator:
 
     def debug_object_scores(self):
         """Print detailed scoring information for each object."""
-        # Debug method - disabled to reduce console output
-        # Re-enable if detailed scoring analysis is needed
-        pass
+        print("\n" + "="*60)
+        print("OBJECT SCORING DEBUG")
+        print("="*60)
+        
+        for obj in self.bundle[self.obstacles_key]:
+            obj_class = obj.get('class', 'unknown')
+            depth_pixel = obj.get('depth_pixel', 128)
+            score = self.score_object(obj)
+            bbox = obj.get('bbox', [0,0,0,0])
+            
+            print(f"Class: {obj_class:>15s} | Depth Pixel: {depth_pixel:>6.1f} | Score: {score:.3f} | BBox: {bbox}")
+        
+        print("="*60 + "\n")
 
     def test_threshold_effects(self, threshold_values=[0.0, 0.2, 0.4, 0.6, 0.8]):
         """Test different T_min values to see how object selection changes."""
-        # Debug method - disabled to reduce console output
-        # Re-enable if threshold testing is needed
-        return
-        
         original_tmin = self.params.get("T_min", 0.0)
         
         # Get all objects with scores
@@ -583,12 +613,9 @@ class Translator:
                 if "centroid_px" not in obj_copy:
                     obj_copy["centroid_px"] = [self.input_width // 2, self.input_height // 2]
 
-            if "distance_m" in obj_copy:
-                obj_copy["depth"] = float(obj_copy["distance_m"])
-            elif "depth_z" in obj_copy:
-                obj_copy["depth"] = float(obj_copy["depth_z"])
-            else:
-                obj_copy["depth"] = float(obj_copy.get("depth", 10.0))
+            # Standardize to depth_pixel (0-255, HIGH=NEAR)
+            if "depth_pixel" not in obj_copy:
+                obj_copy["depth_pixel"] = 128.0  # Default to mid-range
 
             obj_copy["score"] = self.score_object(obj_copy)
             objs.append(obj_copy)
@@ -618,6 +645,103 @@ class Translator:
         # Restore original threshold
         self.params["T_min"] = original_tmin
         print("="*60 + "\n")
+    
+    def test_depth_thresholds(self, threshold_values=[0.0, 0.3, 0.5, 0.7, 0.9], save_visualizations=True):
+        """
+        Test different depth threshold values to analyze distance-based filtering.
+        
+        This method helps determine optimal depth threshold for your use case by:
+        - Testing multiple threshold values
+        - Showing which objects are selected at each threshold
+        - Generating visualization images for comparison
+        - Providing statistics on depth ranges
+        
+        Args:
+            threshold_values (list): List of depth thresholds to test (0.0-1.0)
+                                    0.0 = all distances, 1.0 = only nearest objects
+            save_visualizations (bool): Save output images for each threshold
+            
+        Returns:
+            dict: Results including object counts, classes, and depth statistics
+                  Format: {threshold: {"objects_selected": int, "classes": [...], "depth_range": {...}}}
+        """
+        print("\n" + "="*60)
+        print("🧪 DEPTH THRESHOLD TEST")
+        print("="*60)
+        print(f"Testing {len(threshold_values)} threshold values: {threshold_values}")
+        print(f"Mode: {self.depth_threshold_mode}")
+        print()
+        
+        # Save original settings
+        original_threshold = self.depth_threshold
+        original_mode = self.depth_threshold_mode
+        
+        results = {}
+        
+        for threshold in threshold_values:
+            print(f"\n{'='*60}")
+            print(f"📊 Testing depth_threshold = {threshold:.2f}")
+            print(f"{'='*60}")
+            
+            # Apply threshold
+            self.depth_threshold = threshold
+            
+            # Select objects with this threshold
+            selected = self.select_objects()
+            
+            # Collect statistics
+            if selected:
+                depths_normalized = [o["depth_pixel"] / 255.0 for o in selected]
+                depth_stats = {
+                    "min": min(depths_normalized),
+                    "max": max(depths_normalized),
+                    "avg": sum(depths_normalized) / len(depths_normalized)
+                }
+            else:
+                depth_stats = {"min": 0, "max": 0, "avg": 0}
+            
+            results[threshold] = {
+                "threshold": threshold,
+                "objects_selected": len(selected),
+                "classes": [o["class"] for o in selected],
+                "depth_range": depth_stats
+            }
+            
+            # Print results
+            print(f"\n✅ Selected {len(selected)} objects:")
+            if selected:
+                for obj in selected:
+                    depth_norm = obj["depth_pixel"] / 255.0
+                    print(f"  - {obj.get('class', 'unknown'):>15s} | depth_pixel={obj['depth_pixel']:>6.1f} | normalized={depth_norm:.3f} | score={obj['score']:.3f}")
+                print(f"\n📈 Depth range: min={depth_stats['min']:.3f}, max={depth_stats['max']:.3f}, avg={depth_stats['avg']:.3f}")
+            else:
+                print("  (No objects selected)")
+            
+            # Generate visualization
+            if save_visualizations:
+                W, H = self.canvas_size
+                canvas = np.zeros((H, W, 3), dtype=np.uint8)
+                self.draw_freepath(canvas)
+                for obj in selected:
+                    self.draw_shape(canvas, obj, target_canvas_size=(W, H))
+                
+                out_path = os.path.join(self.output_dir, f"depth_threshold_test_{threshold:.2f}.png")
+                cv2.imwrite(out_path, canvas)
+                print(f"\n💾 Saved visualization: {out_path}")
+        
+        # Restore original settings
+        self.depth_threshold = original_threshold
+        self.depth_threshold_mode = original_mode
+        
+        print("\n" + "="*60)
+        print("✅ DEPTH THRESHOLD TEST COMPLETE")
+        print("="*60)
+        print("\n📊 SUMMARY:")
+        for threshold, result in results.items():
+            print(f"  threshold={threshold:.2f}: {result['objects_selected']} objects selected")
+        print()
+        
+        return results
 
     # =====================================================================================
     # MAIN RENDERING PIPELINE

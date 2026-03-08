@@ -101,6 +101,8 @@ class TranslatorService:
         t_min: float = 0.3,
         k_min: int = 1,
         k_max: int = 5,
+        depth_threshold: float = 0.0,
+        depth_threshold_mode: str = "fallback",
         save_debug_images: bool = False,
         return_bytes: bool = False
     ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
@@ -114,6 +116,8 @@ class TranslatorService:
             t_min: Minimum score threshold
             k_min: Minimum number of objects to select
             k_max: Maximum number of objects to select
+            depth_threshold: Minimum normalized depth for object selection (0.0-1.0)
+            depth_threshold_mode: "fallback" or "strict" mode for depth filtering
             save_debug_images: If True, save intermediate images to disk for debugging
             return_bytes: If True, return phosphene image as bytes instead of base64 string
         
@@ -147,7 +151,9 @@ class TranslatorService:
                     self.shapes_path,
                     self.params_path,
                     None,
-                    self.output_dir
+                    self.output_dir,
+                    depth_threshold=depth_threshold,
+                    depth_threshold_mode=depth_threshold_mode
                 )
                 
                 # Ensure canvas_size matches input image (no scaling needed)
@@ -167,6 +173,8 @@ class TranslatorService:
                 
                 logger.debug(f"📐 Translator dimensions updated: input={image_width}x{image_height}, canvas_size={self.translator.params['canvas_size']}")
             
+            self.translator.depth_threshold = depth_threshold
+            self.translator.depth_threshold_mode = depth_threshold_mode
             # Update threshold parameters
             self.translator.params['T_min'] = t_min
             self.translator.params['K_min'] = k_min
@@ -276,7 +284,7 @@ class TranslatorService:
                 result.append({
                     "class": obj.get("class", "unknown"),
                     "score": obj.get("score", 0.0),
-                    "depth_pixel": obj.get("depth_pixel", obj.get("depth", 128.0)),
+                    "depth_pixel": obj.get("depth_pixel", 128.0),
                     "bbox": obj.get("bbox", []),
                     "confidence": obj.get("confidence", 1.0)
                 })

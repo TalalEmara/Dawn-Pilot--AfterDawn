@@ -8,7 +8,9 @@
     "output_dir": "api_output",
     "debug_mode": false,
     "parallel_processing": true,
-    "gpu_memory_optimization": true
+    "gpu_memory_optimization": true,
+    "depth_threshold": 0.0,
+    "depth_threshold_mode": "fallback"
   },
   "cropping": {
     "type": "fov_based",

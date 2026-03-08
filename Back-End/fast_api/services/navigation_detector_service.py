@@ -995,7 +995,9 @@ class NavigationDetectorService:
         depth: Optional[np.ndarray] = None,
         stop_at: str = "phosphene",
         debug_mode: bool = False,
-        cropping_config: Optional[Dict[str, Any]] = None
+        cropping_config: Optional[Dict[str, Any]] = None,
+        depth_threshold: float = 0.0,
+        depth_threshold_mode: str = "fallback"
     ) -> Dict[str, Any]:
         """
         Process frame through full modular pipeline with stop points (optimized)
@@ -1015,6 +1017,8 @@ class NavigationDetectorService:
             stop_at: Stage to stop at ('passthrough', 'edge_mode', 'detector', 'translator', 'pre_phosphene', 'phosphene')
             debug_mode: If True, save intermediate outputs (default False for speed)
             cropping_config: Override cropping configuration (optional)
+            depth_threshold: Minimum normalized depth for object selection (0.0-1.0, default 0.0=all distances)
+            depth_threshold_mode: "fallback" or "strict" for depth filtering
             
         Returns:
             dict: Results with output_image (base64), stage info, detections, timing
@@ -1273,6 +1277,8 @@ class NavigationDetectorService:
                 
                 # Update configurable translator parameters
                 translator.params['T_min'] = self.t_min
+                translator.depth_threshold = depth_threshold
+                translator.depth_threshold_mode = depth_threshold_mode
                 translator.params['K_min'] = self.k_min
                 translator.params['K_max'] = self.k_max
             
@@ -1296,7 +1302,7 @@ class NavigationDetectorService:
             #     key = f"{obj_class}_{obj_bbox}"
             #     selected_lookup[key] = {
             #         'score': sel_obj.get('score', 0.0),
-            #         'distance_m': sel_obj.get('distance_m', sel_obj.get('depth', 0.0))
+            #         'depth_pixel': sel_obj.get('depth_pixel', 128.0)
             #     }
             
             # # Add translator scores to original detections
