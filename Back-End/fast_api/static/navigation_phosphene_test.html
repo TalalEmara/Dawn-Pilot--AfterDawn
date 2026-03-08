@@ -421,6 +421,40 @@
                         </div>
                     </div>
                     
+                    <!-- Depth Threshold Configuration -->
+                    <div class="depth-threshold-config" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                        <h4 style="color: #495057; margin-bottom: 15px; font-size: 1rem;">📏 Depth Threshold Configuration</h4>
+                        
+                        <div style="background: #fff3cd; border: 2px solid #ffeaa7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                            <div style="font-size: 0.85rem; color: #856404; line-height: 1.5;">
+                                <strong>💡 Tip:</strong> Depth threshold filters objects by distance.<br>
+                                • <strong>0.0</strong> = All objects (near + far)<br>
+                                • <strong>0.5</strong> = Medium distance cutoff<br>
+                                • <strong>1.0</strong> = Only nearest objects<br>
+                                <em>High pixel value (255) = Near = 1.0 normalized</em>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label for="depthThreshold" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">Depth Threshold (0.0 = all, 1.0 = nearest only):</label>
+                            <input type="range" id="depthThreshold" min="0" max="1" step="0.05" value="0.0" 
+                                   style="width: 100%; margin-bottom: 5px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6c757d;">
+                                <span>All Distances (0.0)</span>
+                                <span id="depthThresholdValue" style="font-weight: 600; color: #667eea;">0.00</span>
+                                <span>Nearest Only (1.0)</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label for="depthThresholdMode" style="display: block; margin-bottom: 5px; color: #495057; font-weight: 500;">Filter Mode:</label>
+                            <select id="depthThresholdMode" style="width: 100%; padding: 8px; border: 2px solid #ced4da; border-radius: 4px;">
+                                <option value="fallback" selected>Fallback Mode (keep K_min closest if filtered)</option>
+                                <option value="strict">Strict Mode (allow empty scene)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     <div class="stats-grid" id="statsGrid">
                         <div class="stat-card">
                             <div class="stat-label">Frames Sent</div>
@@ -620,15 +654,20 @@
                 croppingConfig.fov_degrees = parseFloat(document.getElementById('fovDegrees').value);
             }
             
+            // Get depth threshold configuration
+            const depthThreshold = parseFloat(document.getElementById('depthThreshold').value);
+            const depthThresholdMode = document.getElementById('depthThresholdMode').value;
+            
             updateStatus('Processing...', 'processing');
             
             const message = {
                 type: 'frame',
-                frame_id: String(framesSent + 1).padStart(3, '0'),
                 rgb: rgbImage,
                 stage: stage,
-                debug_mode: true,  // Disable debug logging
-                cropping_config: croppingConfig
+                debug_mode: false,  // Disable debug logging
+                cropping_config: croppingConfig,
+                depth_threshold: depthThreshold,
+                depth_threshold_mode: depthThresholdMode
             };
             
             // Only include depth if available
@@ -727,6 +766,12 @@
             } else {
                 display.textContent = value.toFixed(2);
             }
+        });
+        
+        // Add event listener for depth threshold slider
+        document.getElementById('depthThreshold').addEventListener('input', function(e) {
+            const value = parseFloat(e.target.value);
+            document.getElementById('depthThresholdValue').textContent = value.toFixed(2);
         });
         
         // Add event listener for crop type selection
