@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Phosphene WebRTC Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #111; color: #eee; padding: 24px; }
+    h1 { color: #7df; margin-bottom: 20px; font-size: 1.3rem; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 900px; }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h2 { font-size: 0.85rem; color: #aaa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+    .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.9rem; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #444; flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .dot.ok  { background: #4f4; }
+    .dot.err { background: #f44; }
+    .dot.busy { background: #fa4; animation: pulse 0.8s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .metric { font-size: 1.6rem; font-weight: bold; color: #7df; }
+    .metric-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
+
+    .metrics-row { display: flex; gap: 24px; flex-wrap: wrap; }
+
+    button {
+      background: #7df; color: #000; border: none; border-radius: 6px;
+      padding: 10px 20px; font-family: monospace; font-size: 0.95rem;
+      cursor: pointer; margin-right: 8px; margin-top: 8px;
+      font-weight: bold;
+    }
+    button:disabled { background: #334; color: #666; cursor: not-allowed; }
+
+    #log {
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 6px;
+      padding: 12px;
+      height: 260px;
+      overflow-y: auto;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      grid-column: 1 / -1;
+    }
+    .log-ts { color: #555; }
+    .log-ok  { color: #4f4; }
+    .log-err { color: #f66; }
+    .log-info { color: #7df; }
+    .log-send { color: #fb7; }
+
+    .note { font-size: 0.75rem; color: #666; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>Phosphene Generator — WebRTC Test</h1>
+
+<div class="grid">
+
+  <!-- Status card -->
+  <div class="card">
+    <h2>Connection Status</h2>
+    <div class="status-row"><div class="dot" id="dot-ws"></div>   WebSocket Signaling</div>
+    <div class="status-row"><div class="dot" id="dot-rtc"></div>  RTCPeerConnection</div>
+    <div class="status-row"><div class="dot" id="dot-dc"></div>   Data Channel Open</div>
+    <div class="status-row"><div class="dot" id="dot-frame"></div>Frame Sent</div>
+  </div>
+
+  <!-- Latency / metrics card -->
+  <div class="card">
+    <h2>Latency &amp; Throughput</h2>
+    <div class="metrics-row">
+      <div>
+        <div class="metric" id="m-signal">—</div>
+        <div class="metric-label">Signaling RTT (ms)</div>
+      </div>
+      <div>
+        <div class="metric" id="m-dcopen">—</div>
+        <div class="metric-label">DC Open latency (ms)</div>
+      </div>
+      <div>
+        <div class="metric" id="m-sendbw">—</div>
+        <div class="metric-label">Frame send time (ms)</div>
+      </div>
+      <div>
+        <div class="metric" id="m-framesize">—</div>
+        <div class="metric-label">Frame size (KB)</div>
+      </div>
+    </div>
+    <p class="note">Server URL: <span id="srv-url">ws://localhost:8000/ws/signaling</span></p>
+  </div>
+
+  <!-- Controls -->
+  <div class="card" style="grid-column:1/-1">
+    <h2>Controls</h2>
+
+    <label style="font-size:0.85rem;color:#aaa;">Server URL</label><br>
+    <input id="url-input" type="text" value="ws://localhost:8000/ws/signaling"
+      style="background:#0a0a0a;border:1px solid #444;color:#eee;padding:6px 10px;
+             border-radius:4px;font-family:monospace;width:340px;margin:6px 0 12px;">
+
+    <br>
+    <button id="btn-connect" onclick="startTest()">Connect &amp; Test</button>
+    <button id="btn-probe" onclick="sendProbe()" disabled>Send 1 KB probe</button>
+    <button id="btn-send" onclick="sendFrame()" disabled>Send Frame</button>
+    <button id="btn-stress" onclick="startStress()" disabled>Stress (10 frames)</button>
+    <button onclick="resetAll()" style="background:#f44;color:#fff">Reset</button>
+
+    <p class="note">Frame size: 720×1280 RGBA + 720×1280 Float32 depth ≈ 7.2 MB — matches server expectations.</p>
+  </div>
+
+  <!-- Log -->
+  <div id="log"></div>
+
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const W = 480, H = 270;
+const RGB_BYTES  = W * H * 4;          // uint8  RGBA
+const DEPTH_BYTES = W * H * 4;         // float32
+const FRAME_BYTES = 4 + RGB_BYTES + DEPTH_BYTES;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let ws   = null;
+let pc   = null;
+let dc   = null;
+let t_ws_start   = 0;
+let t_offer_sent = 0;
+let t_dc_start   = 0;
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, cls = '') {
+  const el   = document.getElementById('log');
+  const now  = new Date().toISOString().slice(11, 23);
+  const line = document.createElement('div');
+  line.innerHTML = `<span class="log-ts">[${now}]</span> <span class="${cls}">${msg}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setDot(id, state) {   // state: 'ok' | 'err' | 'busy' | ''
+  const d = document.getElementById('dot-' + id);
+  d.className = 'dot ' + state;
+}
+
+function setMetric(id, val) {
+  document.getElementById('m-' + id).textContent = val;
+}
+
+// ── Build a fake frame buffer (filled with noise / zeros for speed) ───────────
+function buildFrame() {
+  const buf = new ArrayBuffer(FRAME_BYTES);
+
+  // Header: rgb_size as little-endian uint32
+  const view = new DataView(buf);
+  view.setUint32(0, RGB_BYTES, /*littleEndian=*/true);
+
+  // RGB: random noise is slow to fill; use a repeating pattern instead
+  const rgb = new Uint8Array(buf, 4, RGB_BYTES);
+  for (let i = 0; i < RGB_BYTES; i += 4) {
+    rgb[i]   = (i >> 2) & 0xff;  // R
+    rgb[i+1] = 0x80;              // G
+    rgb[i+2] = 0x40;              // B
+    rgb[i+3] = 0xff;              // A
+  }
+
+  // Depth: linear gradient 0→1
+  const depth = new Float32Array(buf, 4 + RGB_BYTES, W * H);
+  const total = W * H;
+  for (let i = 0; i < total; i++) depth[i] = i / total;
+
+  return buf;
+}
+
+// ── Main test flow ─────────────────────────────────────────────────────────────
+async function startTest() {
+  document.getElementById('btn-connect').disabled = true;
+  const url = document.getElementById('url-input').value.trim();
+  document.getElementById('srv-url').textContent = url;
+
+  log(`Connecting to ${url} …`, 'log-info');
+  setDot('ws', 'busy');
+
+  try {
+    // 1. WebSocket
+    t_ws_start = performance.now();
+    ws = new WebSocket(url);
+
+    ws.onopen = async () => {
+      setDot('ws', 'ok');
+      log('WebSocket connected.', 'log-ok');
+
+      // 2. RTCPeerConnection
+      setDot('rtc', 'busy');
+      pc = new RTCPeerConnection();
+
+      pc.oniceconnectionstatechange = () =>
+        log(`ICE state → ${pc.iceConnectionState}`);
+      pc.onconnectionstatechange = () =>
+        log(`PC state  → ${pc.connectionState}`);
+
+      // 3. Data Channel (created by frontend — matches server's @user.on("datachannel"))
+      dc = pc.createDataChannel('phosphene-data', { ordered: true });
+      dc.binaryType = 'arraybuffer';
+      t_dc_start = performance.now();
+
+      dc.onopen = () => {
+        const latency = (performance.now() - t_dc_start).toFixed(1);
+        setDot('dc', 'ok');
+        setMetric('dcopen', latency);
+        log(`Data channel OPEN  (${latency} ms after offer sent)`, 'log-ok');
+        document.getElementById('btn-send').disabled   = false;
+        document.getElementById('btn-stress').disabled = false;
+        document.getElementById('btn-probe').disabled  = false;
+      };
+
+      dc.onclose   = () => { setDot('dc', 'err'); log('Data channel closed.', 'log-err'); };
+      dc.onerror   = (e) => {
+        setDot('dc', 'err');
+        const err = e.error || {};
+        log(`DC error ▶ detail=${err.errorDetail || '?'}  sctp=${err.sctpCauseCode ?? '?'}  msg="${err.message || ''}"`, 'log-err');
+      };
+
+      // 4. SDP Offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      t_offer_sent = performance.now();
+      log('SDP offer created — waiting for ICE gathering …');
+
+      // Wait for ICE gathering to complete before sending
+      await new Promise(resolve => {
+        if (pc.iceGatheringState === 'complete') { resolve(); return; }
+        pc.addEventListener('icegatheringstatechange', () => {
+          if (pc.iceGatheringState === 'complete') resolve();
+        });
+      });
+
+      const signalT0 = performance.now();
+      ws.send(JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }));
+      log('SDP offer sent via WebSocket.');
+      setDot('rtc', 'ok');
+
+      ws.onmessage = async (evt) => {
+        const rtt = (performance.now() - signalT0).toFixed(1);
+        setMetric('signal', rtt);
+        log(`SDP answer received  (signaling RTT: ${rtt} ms)`, 'log-ok');
+
+        const answer = JSON.parse(evt.data);
+        // ── Diagnostic: show max-message-size from server SDP ──
+        const mmsMatch = answer.sdp.match(/a=max-message-size:(\d+)/i);
+        const mms = mmsMatch ? parseInt(mmsMatch[1]).toLocaleString() : 'NOT FOUND (=65536 default!)';
+        log(`SDP max-message-size from server: ${mms} bytes`, mmsMatch ? 'log-ok' : 'log-err');
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        log('Remote description set — WebRTC negotiation complete.', 'log-ok');
+      };
+    };
+
+    ws.onerror = (e) => { setDot('ws', 'err'); log('WebSocket error — is the server running?', 'log-err'); };
+    ws.onclose = ()  => { setDot('ws', 'err'); log('WebSocket closed.', 'log-err'); };
+
+  } catch (err) {
+    log(`Error: ${err.message}`, 'log-err');
+    document.getElementById('btn-connect').disabled = false;
+  }
+}
+
+// ── 1 KB probe — confirms basic DC works before sending large frames ─────────
+function sendProbe() {
+  if (!dc || dc.readyState !== 'open') { log('Data channel not open!', 'log-err'); return; }
+  const buf = new ArrayBuffer(1024);
+  new Uint8Array(buf).fill(0xAB);
+  try {
+    dc.send(buf);
+    log(`Probe sent (1 KB)  buffered: ${dc.bufferedAmount} B`, 'log-ok');
+  } catch(e) { log(`Probe send threw: ${e.message}`, 'log-err'); }
+}
+
+// ── Send a single frame ───────────────────────────────────────────────────────
+function sendFrame() {
+  if (!dc || dc.readyState !== 'open') {
+    log('Data channel not open!', 'log-err');
+    return;
+  }
+
+  log(`Building frame  (${(FRAME_BYTES / 1024).toFixed(0)} KB) …`);
+  const t0  = performance.now();
+  const buf = buildFrame();
+  const t1  = performance.now();
+
+  dc.send(buf);
+  const t2 = performance.now();
+
+  const buildMs = (t1 - t0).toFixed(1);
+  const sendMs  = (t2 - t1).toFixed(1);
+  setMetric('sendbw',    sendMs);
+  setMetric('framesize', (FRAME_BYTES / 1024).toFixed(0));
+  setDot('frame', 'ok');
+
+  log(`Frame sent  — build: ${buildMs} ms  |  send call: ${sendMs} ms  |  DC buffered: ${dc.bufferedAmount} B`, 'log-send');
+}
+
+// ── Stress: send 10 frames back-to-back ────────────────────────────────────────
+async function startStress() {
+  if (!dc || dc.readyState !== 'open') { log('Data channel not open!', 'log-err'); return; }
+
+  const N = 10;
+  log(`=== Stress test: ${N} frames ===`, 'log-info');
+  document.getElementById('btn-stress').disabled = true;
+
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) {
+    const buf = buildFrame();
+    dc.send(buf);
+    log(`  frame ${i + 1}/${N} queued  (buffered: ${(dc.bufferedAmount / 1024).toFixed(0)} KB)`, 'log-send');
+    // Yield so the browser can flush the send buffer
+    await new Promise(r => setTimeout(r, 50));
+  }
+
+  const elapsed = (performance.now() - t0).toFixed(0);
+  const fps     = (N / (elapsed / 1000)).toFixed(1);
+  log(`=== Done — ${N} frames in ${elapsed} ms  (~${fps} fps) ===`, 'log-ok');
+  document.getElementById('btn-stress').disabled = false;
+}
+
+// ── Reset ──────────────────────────────────────────────────────────────────────
+function resetAll() {
+  if (dc)  { try { dc.close();  } catch(_){} dc  = null; }
+  if (pc)  { try { pc.close();  } catch(_){} pc  = null; }
+  if (ws)  { try { ws.close();  } catch(_){} ws  = null; }
+
+  ['ws','rtc','dc','frame'].forEach(id => setDot(id, ''));
+  ['signal','dcopen','sendbw','framesize'].forEach(id => setMetric(id, '—'));
+  document.getElementById('btn-connect').disabled = false;
+  document.getElementById('btn-send').disabled    = true;
+  document.getElementById('btn-stress').disabled  = true;
+  document.getElementById('btn-probe').disabled   = true;
+  document.getElementById('log').innerHTML        = '';
+  log('Reset.', 'log-info');
+}
+</script>
+</body>
+</html>

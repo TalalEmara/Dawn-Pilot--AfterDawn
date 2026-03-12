@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Canvas → Binary WebSocket Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #111; color: #eee; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+    h1 { color: #7df; font-size: 1.3rem; }
+
+    .controls {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .controls label { font-size: 0.85rem; color: #aaa; }
+
+    button {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid #555;
+      background: #222; color: #eee; cursor: pointer; font-family: monospace;
+    }
+    button:hover { background: #333; }
+    button.active { background: #135; border-color: #7df; color: #7df; }
+
+    .status-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #444; flex-shrink: 0; transition: background 0.3s; }
+    .dot.ok   { background: #4f4; }
+    .dot.err  { background: #f44; }
+    .dot.busy { background: #fa4; animation: pulse 0.8s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .canvas-wrapper {
+      position: relative;
+      display: inline-block;
+      border: 2px solid #333;
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: crosshair;
+      transition: border-color 0.05s, box-shadow 0.05s;
+    }
+    .canvas-wrapper.sending {
+      border-color: #4f4;
+      box-shadow: 0 0 12px #4f48;
+    }
+    /* Display canvas is scaled down visually; the hidden one is full 1280×720 */
+    #display-canvas { display: block; width: 960px; height: 540px; }
+
+    /* Depth preview + packet anatomy */
+    .side-panel {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .preview-box {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 10px;
+    }
+    .preview-box h3 { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    #depth-preview { display: block; width: 240px; height: 135px; border-radius: 4px; }
+
+    /* Packet anatomy bar */
+    .anatomy { display: flex; height: 20px; border-radius: 4px; overflow: hidden; font-size: 0.7rem; }
+    .anatomy-hdr  { background: #a74; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .anatomy-rgb  { background: #47a; flex: 1;        display: flex; align-items: center; justify-content: center; color: #fff; }
+    .anatomy-dep  { background: #4a7; flex: 1;        display: flex; align-items: center; justify-content: center; color: #fff; }
+    .anatomy-labels { display: flex; font-size: 0.72rem; margin-top: 4px; gap: 4px; flex-wrap: wrap; }
+    .anatomy-labels span { padding: 1px 6px; border-radius: 3px; }
+    .lbl-hdr { background:#a74;color:#fff; }
+    .lbl-rgb { background:#47a;color:#fff; }
+    .lbl-dep { background:#4a7;color:#fff; }
+
+    /* Buffered warning */
+    #buf-warning { font-size: 0.8rem; padding: 4px 10px; border-radius: 4px; display: none; }
+    #buf-warning.show { display: inline-block; background: #421; border: 1px solid #f84; color: #f84; }
+
+    .info { font-size: 0.8rem; color: #666; }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(6, auto); gap: 0 24px;
+      font-size: 0.85rem; width: fit-content;
+    }
+    .stats .key  { color: #888; }
+    .stats .val  { color: #7df; font-weight: bold; }
+
+    #log {
+      background: #0a0a0a; border: 1px solid #222; border-radius: 6px;
+      padding: 10px; height: 120px; overflow-y: auto;
+      font-size: 0.78rem; color: #8a8;
+    }
+    #log .err { color: #f88; }
+    #log .inf { color: #8af; }
+  </style>
+</head>
+<body>
+
+<h1>Canvas → Binary WebSocket Test</h1>
+
+<!-- Connection controls -->
+<div class="controls">
+  <div class="status-row">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Disconnected</span>
+  </div>
+  <label>ws://</label>
+  <input id="ws-host" value="localhost" style="width:120px;background:#1a1a1a;color:#eee;border:1px solid #444;padding:4px 8px;border-radius:4px;font-family:monospace"/>
+  <label>:</label>
+  <input id="ws-port" value="8000" style="width:70px;background:#1a1a1a;color:#eee;border:1px solid #444;padding:4px 8px;border-radius:4px;font-family:monospace"/>
+  <label>/ws/frames</label>
+  <button id="btn-connect">Connect</button>
+</div>
+
+<!-- Drawing controls -->
+<div class="controls">
+  <label>Brush size:</label>
+  <input id="brush-size" type="range" min="2" max="60" value="18" style="width:100px"/>
+  <span id="brush-size-val">18</span>
+
+  <label>Color:</label>
+  <input id="brush-color" type="color" value="#ffffff" style="width:40px;height:28px;border:none;background:none;cursor:pointer"/>
+
+  <button id="btn-clear">Clear Canvas</button>
+
+  <label>FPS:</label>
+  <input id="target-fps" type="range" min="1" max="60" value="15" style="width:80px"/>
+  <span id="target-fps-val">15</span>
+</div>
+
+<!-- Resolution control -->
+<div class="controls">
+  <label>Resolution:</label>
+  <input id="kp-input" type="number" min="10" max="2000" value="922"
+    style="width:70px;background:#1a1a1a;color:#eee;border:1px solid #444;padding:4px 8px;border-radius:4px;font-family:monospace"/>
+  <label>kp</label>
+  <button id="kp-apply">Apply</button>
+  <span id="res-wh" style="color:#7df;font-size:0.85rem">1280×720</span>
+  <span style="font-size:0.75rem;color:#555">(16:9, rounds to nearest 2px)</span>
+</div>
+
+<!-- Canvas + side panel -->
+<div style="display:flex;gap:16px;align-items:flex-start">
+
+  <div class="canvas-wrapper" id="canvas-wrapper">
+    <!-- This is the VISIBLE canvas (960×540, CSS-scaled from 1280×720) -->
+    <canvas id="display-canvas" width="1280" height="720"></canvas>
+  </div>
+
+  <div class="side-panel">
+
+    <!-- depth preview -->
+    <div class="preview-box">
+      <h3>Depth Preview</h3>
+      <canvas id="depth-preview" width="320" height="180"></canvas>
+      <div style="font-size:0.7rem;color:#555;margin-top:4px">depth = RGB copy (test mode)</div>
+    </div>
+
+    <!-- server echo -->
+    <div class="preview-box">
+      <h3>Server Echo ↩</h3>
+      <canvas id="echo-preview" width="320" height="180" style="border-radius:4px"></canvas>
+      <div style="font-size:0.75rem;color:#888;margin-top:4px">
+        Frames rx: <span id="stat-rx" style="color:#7df;font-weight:bold">0</span>
+        &nbsp;|&nbsp; RTT: <span id="stat-rtt" style="color:#7df;font-weight:bold">—</span> ms
+      </div>
+    </div>
+
+    <!-- packet anatomy -->
+    <div class="preview-box">
+      <h3>Packet Anatomy</h3>
+      <div class="anatomy">
+        <div class="anatomy-hdr" id="anat-hdr" style="width:4px" title="Header">H</div>
+        <div class="anatomy-rgb" id="anat-rgb" title="RGBA">RGBA</div>
+        <div class="anatomy-dep" id="anat-dep" title="Depth">Depth</div>
+      </div>
+      <div class="anatomy-labels">
+        <span class="lbl-hdr">Hdr 12 B</span>
+        <span class="lbl-rgb" id="lbl-rgb">RGB — KB</span>
+        <span class="lbl-dep" id="lbl-dep">Depth — KB</span>
+      </div>
+    </div>
+
+    <!-- send feedback -->
+    <div class="preview-box">
+      <h3>Send Feedback</h3>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="status-row">
+          <div class="dot" id="send-dot"></div>
+          <span id="send-label" style="font-size:0.85rem">Idle</span>
+        </div>
+        <div style="font-size:0.8rem;color:#888">Last sent: <span id="last-sent" style="color:#adf">—</span></div>
+        <div style="font-size:0.8rem;color:#888">WS buffered: <span id="stat-buf" style="color:#adf">0 B</span></div>
+        <div id="buf-warning">⚠ Buffer backing up — slow down!</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="info">Draw on the canvas. Each frame is sent as: [4B rgb_size LE] [RGBA 1280×720] [Depth float32 1280×720]</div>
+
+<!-- Live stats -->
+<div class="stats">
+  <span class="key">Frames sent:</span><span class="val" id="stat-frames">0</span>
+  <span class="key">Bytes/frame:</span><span class="val" id="stat-bytes">—</span>
+  <span class="key">Actual FPS:</span><span class="val" id="stat-fps">—</span>
+  <span class="key">WS state:</span><span class="val" id="stat-ws">—</span>
+  <span class="key">Total sent:</span><span class="val" id="stat-total">0 B</span>
+  <span class="key">Dropped:</span><span class="val" id="stat-dropped">0</span>
+</div>
+
+<!-- Log -->
+<div id="log"></div>
+
+<!-- Hidden canvas used for depth generation -->
+<canvas id="depth-canvas" width="1280" height="720" style="display:none"></canvas>
+
+<script>
+  // ─── Elements ────────────────────────────────────────────────────────────────
+  const displayCanvas  = document.getElementById('display-canvas');
+  const depthCanvas    = document.getElementById('depth-canvas');
+  const depthPreview   = document.getElementById('depth-preview');
+  const echoPreview    = document.getElementById('echo-preview');
+  const canvasWrapper  = document.getElementById('canvas-wrapper');
+  const ctx  = displayCanvas.getContext('2d', { willReadFrequently: true });
+  const dctx = depthCanvas.getContext('2d',   { willReadFrequently: true });
+  const pctx = depthPreview.getContext('2d');
+  const ectx = echoPreview.getContext('2d');
+
+  // Off-screen canvas for full-res echo rendering before thumbnail scale
+  const echoFull = document.createElement('canvas');
+  const efctx    = echoFull.getContext('2d');
+
+  let W = 1280, H = 720;
+  let totalBytesSent = 0;
+  let droppedFrames  = 0;
+  let flashTimer     = null;
+
+  function setResolution(kp) {
+    W = Math.round(Math.sqrt(kp * 1000 * 16 / 9) / 2) * 2;
+    H = Math.round(W * 9 / 16 / 2) * 2;
+    displayCanvas.width  = W;
+    displayCanvas.height = H;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    document.getElementById('res-wh').textContent = `${W}×${H}`;
+    document.getElementById('kp-input').value = Math.round(W * H / 1000);
+    log(`Resolution → ${W}×${H}  (${Math.round(W*H/1000)} kp)`, 'inf');
+  }
+
+  // Initial fill
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // ─── Brush controls ─────────────────────────────────────────────────────────
+  const brushSizeInput = document.getElementById('brush-size');
+  const brushSizeVal   = document.getElementById('brush-size-val');
+  const brushColorInput= document.getElementById('brush-color');
+  const targetFpsInput = document.getElementById('target-fps');
+  const targetFpsVal   = document.getElementById('target-fps-val');
+
+  brushSizeInput.addEventListener('input', () => brushSizeVal.textContent = brushSizeInput.value);
+  targetFpsInput.addEventListener('input', () => { targetFpsVal.textContent = targetFpsInput.value; restartLoop(); });
+
+  document.getElementById('kp-apply').addEventListener('click', () => {
+    const kp = +document.getElementById('kp-input').value;
+    if (kp >= 10 && kp <= 2000) { stopLoop(); setResolution(kp); restartLoop(); }
+    else log('kp out of range (10–2000)', 'err');
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    log('Canvas cleared', 'inf');
+  });
+
+  // ─── Drawing logic ───────────────────────────────────────────────────────────
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+
+  // Mouse coords in canvas-space (display canvas is CSS-scaled 960→1280)
+  function canvasCoords(e) {
+    const rect = displayCanvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    return [(e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY];
+  }
+
+  displayCanvas.addEventListener('mousedown', e => {
+    drawing = true;
+    [lastX, lastY] = canvasCoords(e);
+    // Draw a dot on click
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, +brushSizeInput.value / 2, 0, Math.PI * 2);
+    ctx.fillStyle = brushColorInput.value;
+    ctx.fill();
+  });
+
+  displayCanvas.addEventListener('mousemove', e => {
+    if (!drawing) return;
+    const [x, y] = canvasCoords(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = brushColorInput.value;
+    ctx.lineWidth   = +brushSizeInput.value;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.stroke();
+    [lastX, lastY] = [x, y];
+  });
+
+  window.addEventListener('mouseup', () => { drawing = false; });
+
+  // ─── WebSocket (send) ────────────────────────────────────────────────────────
+  let ws = null;
+
+  document.getElementById('btn-connect').addEventListener('click', () => {
+    if (ws && ws.readyState <= 1) {
+      ws.close();
+      wsOutput && wsOutput.close();
+      return;
+    }
+    const host = document.getElementById('ws-host').value.trim();
+    const port = document.getElementById('ws-port').value.trim();
+    connect(host, port);
+  });
+
+  function connect(host, port) {
+    const url = `ws://${host}:${port}/ws/frames`;
+    log(`Connecting to ${url} …`, 'inf');
+    setDot('busy', 'Connecting…');
+
+    ws = new WebSocket(url);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen  = () => { setDot('ok', 'Connected'); log(`Connected to ${url}`, 'inf'); document.getElementById('btn-connect').textContent = 'Disconnect'; setSendDot('busy', 'Sending…'); restartLoop(); connectOutput(host, port); };
+    ws.onclose = () => { setDot('err', 'Disconnected'); log('WebSocket closed', 'err'); document.getElementById('btn-connect').textContent = 'Connect'; setSendDot('', 'Idle'); stopLoop(); };
+    ws.onerror = e  => { log(`WebSocket error: ${e.type}`, 'err'); };
+
+    document.getElementById('stat-ws').textContent = 'connecting';
+    ws.addEventListener('open',  () => document.getElementById('stat-ws').textContent = 'open');
+    ws.addEventListener('close', () => document.getElementById('stat-ws').textContent = 'closed');
+  }
+
+  // ─── Output WebSocket (receive processed frames from output_queue) ────────────
+  let wsOutput = null;
+  let rxCount  = 0;
+
+  function connectOutput(host, port) {
+    const url = `ws://${host}:${port}/ws/output`;
+    log(`Connecting output stream → ${url}`, 'inf');
+    wsOutput = new WebSocket(url);
+    wsOutput.binaryType = 'arraybuffer';
+
+    wsOutput.onopen  = () => log('Output stream connected', 'inf');
+    wsOutput.onclose = () => log('Output stream closed', 'err');
+    wsOutput.onerror = e => log(`Output stream error: ${e.type}`, 'err');
+
+    wsOutput.onmessage = (e) => {
+      const buf = e.data;
+      if (!(buf instanceof ArrayBuffer) || buf.byteLength < 8) return;
+      const dv = new DataView(buf);
+      const fw = dv.getUint32(0, true);
+      const fh = dv.getUint32(4, true);
+      const expectedBytes = fw * fh * 4;
+      if (buf.byteLength < 8 + expectedBytes) return;
+      const rgba = new Uint8ClampedArray(buf, 8, expectedBytes);
+      if (echoFull.width !== fw || echoFull.height !== fh) {
+        echoFull.width = fw; echoFull.height = fh;
+      }
+      efctx.putImageData(new ImageData(rgba, fw, fh), 0, 0);
+      ectx.drawImage(echoFull, 0, 0, echoPreview.width, echoPreview.height);
+      rxCount++;
+      document.getElementById('stat-rx').textContent = rxCount;
+      if (lastSentTs) {
+        document.getElementById('stat-rtt').textContent = (performance.now() - lastSentTs).toFixed(1);
+      }
+    };
+  }
+
+  // ─── Frame sender loop ───────────────────────────────────────────────────────
+  let loopTimer = null;
+  let frameCount = 0;
+  let lastFpsTime = performance.now();
+  let lastBytesSent = 0;
+  let lastSentTs = 0;
+
+  function restartLoop() {
+    stopLoop();
+    if (ws && ws.readyState === WebSocket.OPEN) startLoop();
+  }
+
+  function startLoop() {
+    const fps = +targetFpsInput.value;
+    loopTimer = setInterval(sendFrame, 1000 / fps);
+  }
+
+  function stopLoop() {
+    if (loopTimer !== null) { clearInterval(loopTimer); loopTimer = null; }
+  }
+
+  function sendFrame() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    // ── 1. Get RGBA pixel data from the drawing canvas ──────────────────────
+    const imgData = ctx.getImageData(0, 0, W, H);   // Uint8ClampedArray, RGBA
+
+    // ── 2. Depth = same RGBA bytes (RGB copy — no real depth sensor) ────────────
+    const rgbaBytes  = new Uint8Array(imgData.data.buffer);   // W*H*4 bytes
+    const depthBytes = rgbaBytes;                              // reuse same RGBA
+
+    const rgbSize    = rgbaBytes.byteLength;                   // W*H*4
+    const totalBytes = 12 + rgbSize + depthBytes.byteLength;  // 12-byte header
+
+    const packet = new Uint8Array(totalBytes);
+
+    // Header: [4B rgb_size][4B width][4B height] — all little-endian
+    const header = new DataView(packet.buffer, 0, 12);
+    header.setUint32(0, rgbSize, true);
+    header.setUint32(4, W,       true);
+    header.setUint32(8, H,       true);
+
+    // RGB data
+    packet.set(rgbaBytes, 12);
+
+    // Depth data (same RGBA)
+    packet.set(depthBytes, 12 + rgbSize);
+
+    // ── 4. Check for buffer backpressure before sending ──────────────────────
+    if (ws.bufferedAmount > 500_000) {
+      droppedFrames++;
+      document.getElementById('stat-dropped').textContent = droppedFrames;
+      document.getElementById('buf-warning').classList.add('show');
+      return; // skip this frame — server can't keep up
+    }
+    document.getElementById('buf-warning').classList.remove('show');
+
+    lastSentTs = performance.now();
+    ws.send(packet.buffer);
+
+    // ── 5. Canvas flash feedback ───────────────────────────────────────────────
+    canvasWrapper.classList.add('sending');
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => canvasWrapper.classList.remove('sending'), 80);
+
+    // ── 6. Update depth preview (scaled copy of RGB canvas) ──────────────────
+    pctx.drawImage(displayCanvas, 0, 0, depthPreview.width, depthPreview.height);
+
+    // ── 7. Stats ──────────────────────────────────────────────────────────────
+    frameCount++;
+    totalBytesSent += totalBytes;
+    lastBytesSent   = totalBytes;
+
+    const rgbKB   = (rgbSize / 1024).toFixed(0);
+    const depthKB = (depthBytes.byteLength / 1024).toFixed(0);
+    document.getElementById('stat-frames').textContent = frameCount;
+    document.getElementById('stat-bytes').textContent  = (totalBytes / 1024).toFixed(1) + ' KB';
+    document.getElementById('stat-total').textContent  = totalBytesSent >= 1_048_576
+      ? (totalBytesSent / 1_048_576).toFixed(2) + ' MB'
+      : (totalBytesSent / 1024).toFixed(1) + ' KB';
+    document.getElementById('stat-buf').textContent    = ws.bufferedAmount + ' B';
+    document.getElementById('last-sent').textContent   = new Date().toLocaleTimeString();
+    document.getElementById('lbl-rgb').textContent     = `RGB ${rgbKB} KB`;
+    document.getElementById('lbl-dep').textContent     = `Depth ${depthKB} KB`;
+
+    const now = performance.now();
+    if (now - lastFpsTime >= 1000) {
+      document.getElementById('stat-fps').textContent = frameCount + ' fps';
+      setSendDot('ok', `Sending @ ${frameCount} fps`);
+      frameCount  = 0;
+      lastFpsTime = now;
+    }
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+  function setDot(state, text) {
+    const dot  = document.getElementById('dot');
+    const span = document.getElementById('status-text');
+    dot.className = 'dot ' + state;
+    span.textContent = text;
+  }
+
+  function setSendDot(state, text) {
+    const dot  = document.getElementById('send-dot');
+    const span = document.getElementById('send-label');
+    dot.className = 'dot ' + state;
+    span.textContent = text;
+  }
+
+  function log(msg, cls = '') {
+    const el  = document.getElementById('log');
+    const row = document.createElement('div');
+    if (cls) row.className = cls;
+    row.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    el.appendChild(row);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  log('Ready. Connect to the server then draw on the canvas.', 'inf');
+</script>
+</body>
+</html>

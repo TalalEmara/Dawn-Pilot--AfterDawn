@@ -65,7 +65,7 @@ class ConnectionManager:
         
         for connection in connections:
             try:
-                await connection.send_json(message)
+                await connection.send_fjson(message)
             except Exception as e:
                 logger.error(f"Failed to send to {connection.client}: {e}")
                 failed_connections.append(connection)

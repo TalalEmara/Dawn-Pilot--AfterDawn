@@ -16,7 +16,7 @@ import torch
 from typing import List, Dict, Any, Optional, Tuple
 from PIL import Image
 
-# Add object_path_detection to path
+# Add object_path_detection to  path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'object_path_detection'))
 
 from preprocessing.detector import ObjectDetector
