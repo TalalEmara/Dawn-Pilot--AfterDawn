@@ -1,0 +1,5 @@
+{
+    "yolo_path": "AiModels/yolo_our_data_50.pt",
+    "deeplab_path": "AiModels/final_deeplabv3_footpath.pth",
+    "yolo_class_map": "AiModels/yolo_class_mapping.json"
+}

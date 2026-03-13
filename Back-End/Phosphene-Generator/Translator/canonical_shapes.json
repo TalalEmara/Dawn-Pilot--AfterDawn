@@ -1,0 +1,65 @@
+{
+  "person": {
+    "shape": "oval",
+    "real_size_m": [0.5, 1.75, 0.5],
+    "render_style": "filled",
+    "min_px": 6,
+    "max_px": 500
+  },
+  "car": {
+    "shape": "box",
+    "real_size_m": [1.8, 1.5, 4.0],
+    "render_style": "filled",
+    "min_px": 8,
+    "max_px": 600
+  },
+  "bicycle": {
+    "shape": "box",
+    "real_size_m": [1.0, 1.0, 2.0],
+    "render_style": "filled",
+    "min_px": 6,
+    "max_px": 300
+  },
+  "pole": {
+    "shape": "thin_rect",
+    "real_size_m": [0.1, 1.8, 0.1],
+    "render_style": "filled",
+    "min_px": 4,
+    "max_px": 800
+  },
+  "stairs": {
+    "shape": "wedge",
+    "real_size_m": [1.0, 0.5, 0.5],
+    "render_style": "filled",
+    "min_px": 8,
+    "max_px": 60
+  },
+  "curb": {
+    "shape": "thin_rect",
+    "real_size_m": [0.2, 0.2, 0.05],
+    "render_style": "filled",
+    "min_px": 4,
+    "max_px": 20
+  },
+  "doorway": {
+    "shape": "box",
+    "real_size_m": [1.0, 2.0, 0.1],
+    "render_style": "outline",
+    "min_px": 8,
+    "max_px": 80
+  },
+  "door": {
+    "shape": "box",
+    "real_size_m": [1.0, 2.0, 0.1],
+    "render_style": "outline",
+    "min_px": 8,
+    "max_px": 200
+  },
+  "free-path": {
+    "shape": "disk",
+    "real_size_m": [1.0, 1.0, 0.1],
+    "render_style": "filled",
+    "min_px": 10,
+    "max_px": 100
+  }
+}

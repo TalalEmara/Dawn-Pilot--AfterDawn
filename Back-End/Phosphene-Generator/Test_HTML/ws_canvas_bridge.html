@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket Canvas Bridge</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Segoe UI, Tahoma, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        .wrap {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 16px;
+        }
+        .top {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            align-items: center;
+        }
+        .panel {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 10px;
+            padding: 12px;
+        }
+        button, input, select {
+            background: #1f2937;
+            color: #e2e8f0;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+        button { cursor: pointer; }
+        .ok { color: #10b981; }
+        .bad { color: #ef4444; }
+        .muted { color: #94a3b8; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 980px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+        .canvas-box {
+            background: #0b1220;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .canvas-title {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+        canvas {
+            width: 100%;
+            height: auto;
+            border: 1px solid #334155;
+            background: #ffffff;
+            border-radius: 8px;
+            touch-action: none;
+        }
+        .stats {
+            margin-top: 10px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .tag {
+            font-size: 12px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid #334155;
+            background: #0b1220;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="panel top">
+            <div class="row">
+                <span class="tag">Input WS</span>
+                <span id="inState" class="bad">disconnected</span>
+                <span class="tag">Output WS</span>
+                <span id="outState" class="bad">disconnected</span>
+            </div>
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <span class="muted" id="statusText">Ready</span>
+        </div>
+
+        <div class="panel top">
+            <div class="row">
+                <label>Brush</label>
+                <input id="brushSize" type="range" min="1" max="40" value="6" />
+                <span id="brushValue">6px</span>
+            </div>
+            <div class="row">
+                <label>Color</label>
+                <input id="brushColor" type="color" value="#000000" />
+            </div>
+            <button id="clearBtn">Clear Paint</button>
+            <button id="sendOnceBtn">Send Once</button>
+            <button id="streamBtn">Start Stream</button>
+            <label>FPS <input id="fps" type="number" min="1" max="30" value="10" style="width:70px" /></label>
+        </div>
+
+        <div class="grid">
+            <div class="canvas-box">
+                <h3 class="canvas-title">Paint Canvas (sent to /ws/frames)</h3>
+                <canvas id="paintCanvas" width="640" height="480"></canvas>
+                <div class="stats">
+                    <div>Outgoing frame format: [rgb_size(4B), width(4B), height(4B), RGBA, depthRGBA]</div>
+                    <div>Sent frames: <span id="sentCount">0</span></div>
+                </div>
+            </div>
+
+            <div class="canvas-box">
+                <h3 class="canvas-title">Server Output Preview (from /ws/output)</h3>
+                <canvas id="previewCanvas" width="640" height="480"></canvas>
+                <div class="stats">
+                    <div>Incoming frame format: [width(4B), height(4B), RGBA]</div>
+                    <div>Received frames: <span id="recvCount">0</span></div>
+                    <div>Preview FPS: <span id="recvFps">0.0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const paintCanvas = document.getElementById('paintCanvas');
+        const paintCtx = paintCanvas.getContext('2d');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        const inState = document.getElementById('inState');
+        const outState = document.getElementById('outState');
+        const statusText = document.getElementById('statusText');
+        const sentCountEl = document.getElementById('sentCount');
+        const recvCountEl = document.getElementById('recvCount');
+        const recvFpsEl = document.getElementById('recvFps');
+        const brushSizeEl = document.getElementById('brushSize');
+        const brushValueEl = document.getElementById('brushValue');
+        const brushColorEl = document.getElementById('brushColor');
+        const fpsEl = document.getElementById('fps');
+
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const sendOnceBtn = document.getElementById('sendOnceBtn');
+        const streamBtn = document.getElementById('streamBtn');
+
+        let inputWs = null;
+        let outputWs = null;
+        let isDrawing = false;
+        let isStreaming = false;
+        let streamTimer = null;
+        let sentCount = 0;
+        let recvCount = 0;
+        let recvBaseTs = performance.now();
+
+        function setStatus(text) {
+            statusText.textContent = text;
+        }
+
+        function setWsState(el, open) {
+            el.textContent = open ? 'connected' : 'disconnected';
+            el.className = open ? 'ok' : 'bad';
+        }
+
+        function wsUrl(path) {
+            const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+            const host = location.hostname || 'localhost';
+            const port = '8000';
+            return scheme + '://' + host + ':' + port + path;
+        }
+
+        function connectSockets() {
+            disconnectSockets();
+
+            inputWs = new WebSocket(wsUrl('/ws/frames'));
+            outputWs = new WebSocket(wsUrl('/ws/output'));
+            outputWs.binaryType = 'arraybuffer';
+
+            inputWs.onopen = () => {
+                setWsState(inState, true);
+                setStatus('Input socket connected');
+                refreshButtons();
+            };
+            inputWs.onclose = () => {
+                setWsState(inState, false);
+                stopStreaming();
+                refreshButtons();
+            };
+            inputWs.onerror = () => setStatus('Input socket error');
+
+            outputWs.onopen = () => {
+                setWsState(outState, true);
+                setStatus('Output socket connected');
+                refreshButtons();
+            };
+            outputWs.onclose = () => {
+                setWsState(outState, false);
+                refreshButtons();
+            };
+            outputWs.onerror = () => setStatus('Output socket error');
+            outputWs.onmessage = (evt) => {
+                if (!(evt.data instanceof ArrayBuffer)) {
+                    return;
+                }
+                drawOutputPacket(evt.data);
+            };
+        }
+
+        function disconnectSockets() {
+            if (inputWs) {
+                try { inputWs.close(); } catch {}
+                inputWs = null;
+            }
+            if (outputWs) {
+                try { outputWs.close(); } catch {}
+                outputWs = null;
+            }
+            setWsState(inState, false);
+            setWsState(outState, false);
+            stopStreaming();
+            refreshButtons();
+        }
+
+        function refreshButtons() {
+            const inOpen = inputWs && inputWs.readyState === WebSocket.OPEN;
+            const outOpen = outputWs && outputWs.readyState === WebSocket.OPEN;
+            connectBtn.disabled = inOpen || outOpen;
+            disconnectBtn.disabled = !(inOpen || outOpen);
+            streamBtn.disabled = !inOpen;
+            sendOnceBtn.disabled = !inOpen;
+        }
+
+        function pointerPos(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            return { x, y };
+        }
+
+        function startDraw(e) {
+            isDrawing = true;
+            const p = pointerPos(paintCanvas, e);
+            paintCtx.beginPath();
+            paintCtx.moveTo(p.x, p.y);
+            e.preventDefault();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const p = pointerPos(paintCanvas, e);
+            paintCtx.lineTo(p.x, p.y);
+            paintCtx.strokeStyle = brushColorEl.value;
+            paintCtx.lineWidth = Number(brushSizeEl.value);
+            paintCtx.lineCap = 'round';
+            paintCtx.lineJoin = 'round';
+            paintCtx.stroke();
+            e.preventDefault();
+        }
+
+        function endDraw() {
+            isDrawing = false;
+            paintCtx.closePath();
+        }
+
+        function clearPaint() {
+            paintCtx.fillStyle = '#ffffff';
+            paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+        }
+
+        function buildInputPacketFromCanvas() {
+            const w = paintCanvas.width;
+            const h = paintCanvas.height;
+            const imageData = paintCtx.getImageData(0, 0, w, h);
+            const rgba = new Uint8Array(imageData.data.buffer.slice(0));
+            const depth = rgba; // Test mode depth mirror to satisfy parser format
+            const rgbSize = rgba.byteLength;
+
+            const out = new Uint8Array(12 + rgbSize + depth.byteLength);
+            const view = new DataView(out.buffer);
+            view.setUint32(0, rgbSize, true);
+            view.setUint32(4, w, true);
+            view.setUint32(8, h, true);
+            out.set(rgba, 12);
+            out.set(depth, 12 + rgbSize);
+            return out.buffer;
+        }
+
+        function sendOneFrame() {
+            if (!inputWs || inputWs.readyState !== WebSocket.OPEN) {
+                setStatus('Input socket is not connected');
+                return;
+            }
+            const packet = buildInputPacketFromCanvas();
+            inputWs.send(packet);
+            sentCount += 1;
+            sentCountEl.textContent = String(sentCount);
+        }
+
+        function startStreaming() {
+            if (isStreaming) return;
+            if (!inputWs || inputWs.readyState !== WebSocket.OPEN) {
+                setStatus('Connect input socket first');
+                return;
+            }
+            const fps = Math.max(1, Math.min(30, Number(fpsEl.value) || 10));
+            const interval = Math.round(1000 / fps);
+            isStreaming = true;
+            streamBtn.textContent = 'Stop Stream';
+            setStatus('Streaming at ' + fps + ' FPS');
+            streamTimer = setInterval(sendOneFrame, interval);
+        }
+
+        function stopStreaming() {
+            if (!isStreaming) return;
+            isStreaming = false;
+            streamBtn.textContent = 'Start Stream';
+            setStatus('Streaming stopped');
+            if (streamTimer) {
+                clearInterval(streamTimer);
+                streamTimer = null;
+            }
+        }
+
+        function toggleStreaming() {
+            if (isStreaming) stopStreaming();
+            else startStreaming();
+        }
+
+        function drawOutputPacket(buf) {
+            if (buf.byteLength < 8) return;
+            const view = new DataView(buf);
+            const w = view.getUint32(0, true);
+            const h = view.getUint32(4, true);
+            const rgba = new Uint8ClampedArray(buf, 8);
+            if (rgba.byteLength < w * h * 4) return;
+
+            if (previewCanvas.width !== w || previewCanvas.height !== h) {
+                previewCanvas.width = w;
+                previewCanvas.height = h;
+            }
+
+            const img = new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w * h * 4), w, h);
+            previewCtx.putImageData(img, 0, 0);
+
+            recvCount += 1;
+            recvCountEl.textContent = String(recvCount);
+            const now = performance.now();
+            const fps = recvCount / ((now - recvBaseTs) / 1000);
+            recvFpsEl.textContent = fps.toFixed(1);
+        }
+
+        brushSizeEl.addEventListener('input', () => {
+            brushValueEl.textContent = brushSizeEl.value + 'px';
+        });
+
+        paintCanvas.addEventListener('pointerdown', startDraw);
+        paintCanvas.addEventListener('pointermove', draw);
+        window.addEventListener('pointerup', endDraw);
+
+        connectBtn.addEventListener('click', connectSockets);
+        disconnectBtn.addEventListener('click', disconnectSockets);
+        clearBtn.addEventListener('click', clearPaint);
+        sendOnceBtn.addEventListener('click', sendOneFrame);
+        streamBtn.addEventListener('click', toggleStreaming);
+
+        clearPaint();
+        refreshButtons();
+        setStatus('Paint on left canvas, connect sockets, then send frames');
+    </script>
+</body>
+</html>

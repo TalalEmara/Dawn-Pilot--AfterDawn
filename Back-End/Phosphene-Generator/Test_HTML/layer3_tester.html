@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layer 3 Vision Engine - Test Console</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .input-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="file"],
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        input[type="file"] {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            flex: 1;
+            border: 2px solid #e0e0e0;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+            padding: 10px 25px;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #webcamCanvas {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            border-radius: 8px;
+            background: #000;
+            margin-bottom: 15px;
+        }
+
+        #videoFeed {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            border-radius: 8px;
+            background: #000;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .controls button {
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .status.idle {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.loading {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .timing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .timing-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .timing-label {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .timing-value {
+            font-size: 1.4em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .results-section {
+            margin-top: 15px;
+        }
+
+        .results-title {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .detection-item {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .detection-class {
+            font-weight: bold;
+            color: #764ba2;
+        }
+
+        .detection-bbox {
+            color: #666;
+            margin-top: 3px;
+            font-size: 0.85em;
+        }
+
+        .centerline-info {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid #764ba2;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .scroll-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 1000px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 4px solid #1976d2;
+        }
+
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Phosphene Vision Engine</h1>
+            <p class="subtitle">Layer 3: Object Detection & Freepath Segmentation Tester</p>
+        </header>
+
+        <div class="grid">
+            <!-- Input Section -->
+            <div class="card">
+                <h2>📹 Input</h2>
+                
+                <div class="info-box">
+                    <strong>Connection:</strong>
+                    WebSocket /ws/input (send frames) | /ws/output (receive results)
+                </div>
+
+                <div class="input-section">
+                    <input type="file" id="imageInput" accept="image/*" />
+                    <button onclick="processImage()">Process Image</button>
+                </div>
+
+                <div class="controls">
+                    <button onclick="startWebcam()">📷 Start Webcam</button>
+                    <button onclick="stopWebcam()" id="stopBtn" disabled>⏹ Stop</button>
+                    <button onclick="captureFrame()" id="captureBtn" disabled>📸 Capture Once</button>
+                </div>
+
+                <div style="margin-top: 15px; padding: 12px; background: #f0f0f0; border-radius: 6px;">
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">
+                            📹 Continuous Processing
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            FPS: <input type="range" id="fpsSlider" min="1" max="30" value="10" 
+                                   style="flex: 1; min-width: 100px;" oninput="updateFpsLabel()">
+                            <span id="fpsLabel" style="min-width: 40px;">10 fps</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="startContinuousProcessing()" id="startContinuousBtn" style="flex: 1;">▶ Start</button>
+                        <button onclick="stopContinuousProcessing()" id="stopContinuousBtn" disabled style="flex: 1;">⏹ Stop</button>
+                    </div>
+                    <div id="processingStatus" style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                        Idle
+                    </div>
+                </div>
+
+                <video id="videoFeed"></video>
+                <canvas id="webcamCanvas" width="500" height="400"></canvas>
+
+                <div id="status" class="status idle">Ready</div>
+                <div id="warning" class="warning" style="display: none;"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card">
+                <h2>📊 AI Engine Results</h2>
+                
+                <div class="timing-grid">
+                    <div class="timing-box">
+                        <div class="timing-label">Prepare</div>
+                        <div class="timing-value" id="timingPrep">-</div>
+                        <div style="font-size: 0.75em;">ms</div>
+                    </div>
+                    <div class="timing-box">
+                        <div class="timing-label">YOLO</div>
+                        <div class="timing-value" id="timingYolo">-</div>
+                        <div style="font-size: 0.75em;">ms</div>
+                    </div>
+                    <div class="timing-box">
+                        <div class="timing-label">DeepLab</div>
+                        <div class="timing-value" id="timingFreepath">-</div>
+                        <div style="font-size: 0.75em;">ms</div>
+                    </div>
+                    <div class="timing-box">
+                        <div class="timing-label">Parallel</div>
+                        <div class="timing-value" id="timingParallel">-</div>
+                        <div style="font-size: 0.75em;">ms</div>
+                    </div>
+                    <div class="timing-box" style="grid-column: 1 / -1;">
+                        <div class="timing-label">Total Time</div>
+                        <div class="timing-value" id="timingTotal">-</div>
+                        <div style="font-size: 0.75em;">ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detections -->
+            <div class="card">
+                <h2>🎯 Object Detections</h2>
+                <div class="scroll-container">
+                    <div id="detections">
+                        <div style="color: #999; text-align: center; padding: 20px;">
+                            No detections yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Freepath -->
+            <div class="card">
+                <h2>🛤️ Freepath Centerline</h2>
+                <div class="scroll-container">
+                    <div id="centerline">
+                        <div style="color: #999; text-align: center; padding: 20px;">
+                            No centerline yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Raw JSON Output -->
+            <div class="card full-width">
+                <h2>📄 Raw JSON Output</h2>
+                <div class="scroll-container" style="max-height: 200px;">
+                    <pre id="rawOutput" style="font-size: 0.85em; white-space: pre-wrap; word-break: break-all;">
+{
+  "detections": [],
+  "centerline": [],
+  "timings": {},
+  "image_shape": []
+}
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webcamCanvas');
+        const ctx = canvas.getContext('2d');
+        const videoFeed = document.getElementById('videoFeed');
+        const statusDiv = document.getElementById('status');
+        const warningDiv = document.getElementById('warning');
+        
+        let stream = null;
+        let inputWs = null;
+        let outputWs = null;
+
+        function setStatus(message, type = 'idle') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        async function startWebcam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                videoFeed.srcObject = stream;
+                videoFeed.style.display = 'block';
+                canvas.style.display = 'none';
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('captureBtn').disabled = false;
+                document.getElementById('imageInput').disabled = true;
+                setStatus('Webcam started', 'success');
+                warningDiv.style.display = 'none';
+            } catch (err) {
+                setStatus('Webcam access denied', 'error');
+                warningDiv.textContent = `Error: ${err.message}`;
+                warningDiv.style.display = 'block';
+            }
+        }
+
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            videoFeed.style.display = 'none';
+            canvas.style.display = 'block';
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('captureBtn').disabled = true;
+            document.getElementById('imageInput').disabled = false;
+            setStatus('Webcam stopped', 'idle');
+        }
+
+        function captureFrame() {
+            if (videoFeed.readyState !== videoFeed.HAVE_ENOUGH_DATA) return;
+            
+            canvas.width = videoFeed.videoWidth;
+            canvas.height = videoFeed.videoHeight;
+            ctx.drawImage(videoFeed, 0, 0);
+            
+            sendFrameViaWebSocket();
+        }
+
+        function processImage() {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                setStatus('Please select an image', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    sendFrameViaWebSocket();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function sendFrameViaWebSocket() {
+            canvas.toBlob(blob => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const arrayBuffer = reader.result;
+                    if (inputWs && inputWs.readyState === WebSocket.OPEN) {
+                        inputWs.send(arrayBuffer);
+                        setStatus('Frame sent via WebSocket', 'loading');
+                    } else {
+                        setStatus('WebSocket not connected', 'error');
+                        warningDiv.textContent = 'Connect to WebSocket first';
+                        warningDiv.style.display = 'block';
+                    }
+                };
+                reader.readAsArrayBuffer(blob);
+            }, 'image/jpeg', 0.9);
+        }
+
+        function connectWebSockets() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.port || (protocol === 'wss:' ? '443' : '80');
+            
+            // Connect to input WebSocket (send frames)
+            inputWs = new WebSocket(`${protocol}//${host}:8000/ws/input`);
+            inputWs.onopen = () => {
+                setStatus('Input WebSocket connected', 'success');
+                console.log('Input WS connected');
+            };
+            inputWs.onerror = (err) => {
+                setStatus('Input WebSocket error', 'error');
+                console.error('Input WS error:', err);
+            };
+            inputWs.onclose = () => {
+                setStatus('Input WebSocket disconnected', 'error');
+                console.log('Input WS closed');
+            };
+
+            // Connect to output WebSocket (receive results)
+            outputWs = new WebSocket(`${protocol}//${host}:8000/ws/output`);
+            outputWs.onopen = () => {
+                console.log('Output WS connected');
+            };
+            outputWs.onerror = (err) => {
+                console.error('Output WS error:', err);
+            };
+            outputWs.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    displayResults(data);
+                } catch (e) {
+                    console.log('Non-JSON message or binary data received');
+                }
+            };
+            outputWs.onclose = () => {
+                console.log('Output WS closed');
+            };
+        }
+
+        function displayResults(data) {
+            // Update timings
+            document.getElementById('timingPrep').textContent = data.timings?.prep_ms || '-';
+            document.getElementById('timingYolo').textContent = data.timings?.yolo_ms || '-';
+            document.getElementById('timingFreepath').textContent = data.timings?.freepath_ms || '-';
+            document.getElementById('timingParallel').textContent = data.timings?.parallel_ms || '-';
+            document.getElementById('timingTotal').textContent = data.timings?.total_ms || '-';
+
+            // Display detections
+            const detectionDiv = document.getElementById('detections');
+            if (data.detections && data.detections.length > 0) {
+                detectionDiv.innerHTML = data.detections.map((det, i) => `
+                    <div class="detection-item">
+                        <div class="detection-class">#${i + 1}: ${det.class}</div>
+                        <div class="detection-bbox">
+                            Position: (${det.bbox[0]}, ${det.bbox[1]})<br>
+                            Size: ${det.bbox[2]}×${det.bbox[3]}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                detectionDiv.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No objects detected</div>';
+            }
+
+            // Display centerline
+            const centerlineDiv = document.getElementById('centerline');
+            if (data.centerline && data.centerline.length > 0) {
+                const pointsStr = data.centerline.slice(0, 10).map(p => `[${p[0]}, ${p[1]}]`).join(', ');
+                const ellipsis = data.centerline.length > 10 ? `... (+${data.centerline.length - 10} more)` : '';
+                centerlineDiv.innerHTML = `
+                    <div class="centerline-info">
+                        <strong>Points:</strong> ${data.centerline.length}<br>
+                        ${pointsStr}${ellipsis}
+                    </div>
+                `;
+            } else {
+                centerlineDiv.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No centerline detected</div>';
+            }
+
+            // Raw output
+            document.getElementById('rawOutput').textContent = JSON.stringify(data, null, 2);
+            setStatus('Results received!', 'success');
+        }
+
+        // ============================================================================
+        // Continuous Processing from Canvas
+        // ============================================================================
+        let continuousProcessing = false;
+        let continuousInterval = null;
+        let frameCount = 0;
+        let lastTimestampMs = Date.now();
+
+        function updateFpsLabel() {
+            const fps = document.getElementById('fpsSlider').value;
+            document.getElementById('fpsLabel').textContent = fps + ' fps';
+        }
+
+        function startContinuousProcessing() {
+            if (!inputWs || inputWs.readyState !== WebSocket.OPEN) {
+                setStatus('WebSocket not connected', 'error');
+                return;
+            }
+            
+            if (continuousProcessing) return;
+            
+            continuousProcessing = true;
+            frameCount = 0;
+            lastTimestampMs = Date.now();
+            document.getElementById('startContinuousBtn').disabled = true;
+            document.getElementById('stopContinuousBtn').disabled = false;
+            setStatus('Continuous processing started', 'success');
+            
+            const fps = Number(document.getElementById('fpsSlider').value);
+            const intervalMs = Math.round(1000 / fps);
+            
+            continuousInterval = setInterval(() => {
+                if (!continuousProcessing) {
+                    clearInterval(continuousInterval);
+                    return;
+                }
+                
+                canvas.toBlob(blob => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        if (inputWs && inputWs.readyState === WebSocket.OPEN) {
+                            frameCount++;
+                            const now = Date.now();
+                            const actualFps = (frameCount / ((now - lastTimestampMs) / 1000)).toFixed(1);
+                            document.getElementById('processingStatus').textContent = 
+                                `Frame #${frameCount} | ${actualFps} fps actual`;
+                            
+                            inputWs.send(reader.result);
+                        }
+                    };
+                    reader.readAsArrayBuffer(blob);
+                }, 'image/jpeg', 0.85);
+            }, intervalMs);
+        }
+
+        function stopContinuousProcessing() {
+            continuousProcessing = false;
+            if (continuousInterval) {
+                clearInterval(continuousInterval);
+                continuousInterval = null;
+            }
+            document.getElementById('startContinuousBtn').disabled = false;
+            document.getElementById('stopContinuousBtn').disabled = true;
+            setStatus('Continuous processing stopped', 'idle');
+            document.getElementById('processingStatus').textContent = 
+                `Processed ${frameCount} frames`;
+        }
+
+        // Initialize
+        connectWebSockets();
+        setStatus('Connecting to WebSocket...', 'loading');
+    </script>
+</body>
+</html>
