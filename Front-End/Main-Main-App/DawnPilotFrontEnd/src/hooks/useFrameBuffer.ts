@@ -31,19 +31,36 @@ export const useFrameBuffer = (options?: {
   logInterval?: number;
   logPixelData?: boolean;
   downsamplePercentage?: number;
+  includeDepthCapture?: boolean;
+  includeDepthBlob?: boolean;
   // UPDATE: Accepts raw buffer
-  onFrame?: (pixelBuffer: Uint8Array, width: number, height: number, depthBlob: Blob | null) => void;
+  onFrame?: (
+    pixelBuffer: Uint8Array,
+    width: number,
+    height: number,
+    depthBlob: Blob | null,
+    depthBuffer: Uint8Array | null,
+  ) => void;
 }) => {
   const frameIdRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
   const cleanupFnsRef = useRef<Array<() => void>>([]);
+  const enabled = options?.enabled;
+  const logInterval = options?.logInterval ?? 100;
+  const logPixelData = options?.logPixelData ?? false;
+  const downsamplePercentage = options?.downsamplePercentage ?? 50;
+  const includeDepthCapture = options?.includeDepthCapture ?? true;
+  const includeDepthBlob = options?.includeDepthBlob ?? true;
+  const onFrame = options?.onFrame;
 
   useEffect(() => {
-    if (options?.enabled === false) return;
+    if (enabled === false) return;
 
-    const LOG_INTERVAL = options?.logInterval ?? 100;
-    const LOG_PIXEL_DATA = options?.logPixelData ?? false;
-    const SHOULD_CAPTURE = LOG_PIXEL_DATA || !!options?.onFrame;
+    const LOG_INTERVAL = logInterval;
+    const LOG_PIXEL_DATA = logPixelData;
+    const INCLUDE_DEPTH_CAPTURE = includeDepthCapture;
+    const INCLUDE_DEPTH_BLOB = includeDepthBlob;
+    const SHOULD_CAPTURE = LOG_PIXEL_DATA || !!onFrame;
 
     const setupDebug = () => {
       if (isInitializedRef.current) return;
@@ -89,14 +106,16 @@ export const useFrameBuffer = (options?: {
                   gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, fullPixelBuffer);
 
                   // --- 4. DOWNSAMPLE RGB TO MATCH DEPTH ---
-                  const percentage = options?.downsamplePercentage ?? 50;
+                  const percentage = downsamplePercentage;
                   const step = Math.max(1, Math.floor(100 / percentage));
                   const downsampledWidth = Math.ceil(width / step);
                   const downsampledHeight = Math.ceil(height / step);
                   const pixelBuffer = downsampleRGBA(fullPixelBuffer, width, height, step);
 
-                  // --- 5. CAPTURE DEPTH (ALREADY DOWNSAMPLED INSIDE) ---
-                  const depthData = readDepthBuffer(gl, renderer, sceneEl, width, height, percentage);
+                  // --- 5. CAPTURE DEPTH (optional, already downsampled inside) ---
+                  const depthData = INCLUDE_DEPTH_CAPTURE
+                    ? readDepthBuffer(gl, renderer, sceneEl, width, height, percentage)
+                    : null;
 
                   // --- 6. RESTORE HUD ---
                   renderer.autoClear = originalAutoClear;
@@ -109,15 +128,18 @@ export const useFrameBuffer = (options?: {
 
                   // --- 7. PROCESS DEPTH (Optional/Legacy) ---
                   let depthBlob: Blob | null = null;
-                  if (depthData) {
-                       const depthRGBA = convertDepthToRGBA(depthData);
+                  let depthRGBA: Uint8Array | null = null;
+                  if (INCLUDE_DEPTH_CAPTURE && depthData) {
+                       depthRGBA = convertDepthToRGBA(depthData);
+                    if (INCLUDE_DEPTH_BLOB) {
                        depthBlob = await pixelsToBlob(depthRGBA, depthData.width, depthData.height);
+                    }
                   }
 
                   // --- 8. SEND DOWNSAMPLED BUFFERS (RGB + DEPTH SAME SIZE) ---
-                  if (options?.onFrame) {
+                  if (onFrame) {
                     // Send downsampled RGB buffer with downsampled dimensions
-                    options.onFrame(pixelBuffer, downsampledWidth, downsampledHeight, depthBlob);
+                    onFrame(pixelBuffer, downsampledWidth, downsampledHeight, depthBlob, depthRGBA);
                   }
 
                   if (LOG_PIXEL_DATA) {
@@ -147,7 +169,7 @@ export const useFrameBuffer = (options?: {
       cleanupFnsRef.current.forEach(fn => fn());
       cleanupFnsRef.current = [];
     };
-  }, [options?.enabled, options?.logInterval, options?.onFrame]);
+  }, [enabled, includeDepthBlob, includeDepthCapture, logInterval, logPixelData, downsamplePercentage, onFrame]);
 };
 
 // --- HELPERS ---

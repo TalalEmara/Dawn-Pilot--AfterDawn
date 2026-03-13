@@ -12,7 +12,6 @@ import { useCameraSync } from "../../hooks/useCameraSync";
 import { useFrameBuffer } from "../../hooks/useFrameBuffer";
 import { useScenarioSaveLoad } from "../../hooks/useScenarioSaveLoad";
 import ScenarioLoadDialog from "../../components/level-1/ScenarioLoadDialog/ScenarioLoadDialog";
-import FrameEncoderWorker from "../../workers/frameEncoder.worker?worker";
 
 // --- WALL COLLISION VISIBILITY: Show walls only when colliding (like alert system) ---
 if (typeof AFRAME !== "undefined" && !AFRAME.components["wall-collision-visibility"]) {
@@ -86,26 +85,12 @@ if (typeof AFRAME !== "undefined" && !AFRAME.components["wall-collision-visibili
   });
 }
 
-const getStageFromVisionMode = (mode: string): string => {
-  switch (mode) {
-    case "normal":
-      return "passthrough";
-    case "prosthetic":
-      return "phosphene";
-    case "low_res":
-      return "edge_mode";
-    default:
-      return "phosphene";
-  }
-};
 function ResearcherLite() {
   const cameraRef = useRef<any>(null);
   const hitboxRef = useRef<any>(null);
   const cameraInitialized = useRef<boolean>(false);
   const [currentScenarioId, setCurrentScenarioId] = useState("default_world");
   const [mobileId, setMobileId] = useState<string>("");
-  const frameIdRef = useRef<number>(0);
-  const workerRef = useRef<Worker | null>(null);
   const [wallsTransparent, setWallsTransparent] = useState(true);
   
   
@@ -162,6 +147,7 @@ function ResearcherLite() {
     isConnected: aiConnected,
   } = useAiStream({
     reconnectDependency: visionMode,
+    transport: "phosphene-binary",
   });
 
   const { isConnected, updateCamera, setOnCameraUpdate, socket } =
@@ -186,51 +172,36 @@ function ResearcherLite() {
     );
   }, [loadWorld]);
 
-
-  // sending to AI
-  useEffect(() => {
-    // 1. Initialize the worker
-    workerRef.current = new FrameEncoderWorker();
-
-    // 2. Handle messages coming BACK from the worker
-    workerRef.current.onmessage = (e) => {
-      // If the worker successfully created the string, send it to the socket
-      if (e.data.success && aiWebSocket?.readyState === WebSocket.OPEN) {
-        aiWebSocket.send(e.data.payload);
-      }
-    };
-
-    // 3. Cleanup when component unmounts
-    return () => {
-      workerRef.current?.terminate();
-    };
-  }, [aiWebSocket]);
-
   useFrameBuffer({
     downsamplePercentage: frameBufferSettings.downsamplePercentage,
+    includeDepthCapture: true,
+    includeDepthBlob: false,
     enabled: aiWebSocket?.readyState === WebSocket.OPEN,
     logInterval: 1000 / frameBufferSettings.frequency,
-    // UPDATE CALLBACK
-    onFrame: async (pixelBuffer, width, height, depthBlob) => {
+    onFrame: async (pixelBuffer, width, height, _depthBlob, depthBuffer) => {
       if (aiWebSocket?.readyState !== WebSocket.OPEN) return;
 
       try {
         if (visionMode === "normal") { return; } // No processing for normal mode
-        
-        const needsDepth = visionMode === "prosthetic";
-        frameIdRef.current++;
 
-        workerRef.current?.postMessage(
-          {
-            pixelBuffer: pixelBuffer.buffer, // Send the internal buffer
-            depthBlob: needsDepth ? depthBlob : null,
-            frameId: frameIdRef.current,
-            stage: getStageFromVisionMode(visionMode),
-            width: width,
-            height: height,
-          },
-          [pixelBuffer.buffer], // <--- CRITICAL: Transfer Ownership (Zero Copy)
-        );
+        // Packet v2: [4B rgb_size][4B width][4B height][4B depth_size][RGBA][DEPTH_RGBA]
+        const rgbSize = pixelBuffer.byteLength;
+        const depthBytes = depthBuffer && depthBuffer.byteLength > 0 ? depthBuffer : pixelBuffer;
+        const depthSize = depthBytes.byteLength;
+        const totalBytes = 16 + rgbSize + depthSize;
+        const packet = new Uint8Array(totalBytes);
+
+        const header = new DataView(packet.buffer, 0, 16);
+        header.setUint32(0, rgbSize, true);
+        header.setUint32(4, width, true);
+        header.setUint32(8, height, true);
+        header.setUint32(12, depthSize, true);
+
+        packet.set(pixelBuffer, 16);
+        packet.set(depthBytes, 16 + rgbSize);
+
+        if (aiWebSocket.bufferedAmount > 500_000) return;
+        aiWebSocket.send(packet.buffer);
       } catch (error) {
         console.error("❌ Error sending frame:", error);
       }
@@ -335,7 +306,7 @@ function ResearcherLite() {
       if (result.scenario.camera && cameraRef.current) {
         setTimeout(() => {
           const cam = cameraRef.current?.el;
-          const { position, rotation } = result.scenario.camera;
+          const { position } = result.scenario.camera;
           cam.setAttribute(
             "position",
             `${position.x} ${position.y} ${position.z}`

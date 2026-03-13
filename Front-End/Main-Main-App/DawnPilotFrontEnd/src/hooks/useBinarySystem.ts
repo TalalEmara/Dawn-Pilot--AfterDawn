@@ -1,61 +1,107 @@
 import { useEffect, useRef } from 'react';
-// Import the worker (Vite/Webpack syntax usually looks like this)
-import DecoderWorker from '../workers/frameDecoder.worker?worker'; 
 
-export function useBinaryStream(ws: WebSocket | null) {
+type BinaryStreamMode = 'legacy-json' | 'phosphene-binary';
+type CanvasWithNeedsUpdate = HTMLCanvasElement & { needsUpdate?: boolean };
+
+interface UseBinaryStreamOptions {
+  mode?: BinaryStreamMode;
+}
+
+export function useBinaryStream(
+  ws: WebSocket | null,
+  options: UseBinaryStreamOptions = {},
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastProcessedFrameRef = useRef(0);
-  const workerRef = useRef<Worker | null>(null);
-
-  useEffect(() => {
-    // Initialize the Decoder Worker
-    workerRef.current = new DecoderWorker();
-
-    // Handle decoded frames coming FROM the worker
-    workerRef.current.onmessage = (e) => {
-      const { success, bitmap, frameId } = e.data;
-
-      if (success && canvasRef.current && bitmap) {
-        // Update safeguard
-        lastProcessedFrameRef.current = frameId;
-
-        const ctx = canvasRef.current.getContext('2d');
-        
-        // DRAW INSTANTLY: No decoding, just a GPU texture upload
-        ctx?.drawImage(bitmap, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        
-        // Close the bitmap to free GPU memory immediately
-        bitmap.close(); 
-        // Signal A-Frame (custom property)
-        (canvasRef.current as any).needsUpdate = true;
-      }
-    };
-
-    return () => {
-      workerRef.current?.terminate();
-    };
-  }, []);
+  const mode = options.mode ?? 'legacy-json';
 
   useEffect(() => {
     if (!ws) return;
 
-    const handleMessage = (event: MessageEvent) => {
-      // ⚡ OPTIMIZATION: Don't parse here. 
-      // Just pass the raw string to the worker.
-      if (workerRef.current) {
-        workerRef.current.postMessage({
-          jsonString: event.data,
-          lastFrameId: lastProcessedFrameRef.current
+    const drawToCanvas = (width: number, height: number, rgba: Uint8Array) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: false });
+      if (!ctx) return;
+
+      const imageData = new ImageData(width, height);
+      imageData.data.set(rgba);
+      ctx.putImageData(imageData, 0, 0);
+      (canvas as CanvasWithNeedsUpdate).needsUpdate = true;
+    };
+
+    const handleBinaryMessage = (event: MessageEvent) => {
+      if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 8) return;
+
+      const view = new DataView(event.data);
+      const width = view.getUint32(0, true);
+      const height = view.getUint32(4, true);
+      const rgbaSize = width * height * 4;
+
+      if (event.data.byteLength < 8 + rgbaSize) return;
+
+      const rgba = new Uint8Array(event.data, 8, rgbaSize);
+      drawToCanvas(width, height, rgba);
+    };
+
+    const handleLegacyMessage = async (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return;
+
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== 'result' || !data.data?.output_image) return;
+
+        const frameId = parseInt(data.data.frame_id, 10) || 0;
+        if (frameId < lastProcessedFrameRef.current) return;
+
+        lastProcessedFrameRef.current = frameId;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        await new Promise<void>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => {
+            if (canvas.width !== image.width || canvas.height !== image.height) {
+              canvas.width = image.width;
+              canvas.height = image.height;
+            }
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve();
+              return;
+            }
+
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            resolve();
+          };
+          image.onerror = () => reject(new Error('Failed to decode legacy frame image'));
+          image.src = `data:image/jpeg;base64,${data.data.output_image}`;
         });
+
+        (canvas as CanvasWithNeedsUpdate).needsUpdate = true;
+      } catch (err) {
+        console.error('[BinaryStream] Legacy decode error', err);
       }
     };
 
-    ws.addEventListener('message', handleMessage);
-
-    return () => {
-      ws.removeEventListener('message', handleMessage);
+    const handleMessage = (event: MessageEvent) => {
+      if (mode === 'phosphene-binary') {
+        handleBinaryMessage(event);
+        return;
+      }
+      void handleLegacyMessage(event);
     };
-  }, [ws]);
+
+    ws.addEventListener('message', handleMessage);
+    return () => ws.removeEventListener('message', handleMessage);
+  }, [ws, mode]);
 
   return canvasRef;
 }

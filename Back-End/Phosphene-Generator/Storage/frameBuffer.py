@@ -41,7 +41,6 @@ class FrameBufferManager:
                 dropped_frame = self._input_queue.get_nowait()
                 print("⚠️ Buffer Layer: Dropped old frame due to backpressure")
                 del dropped_frame  # Help with memory cleanup
-                return False 
             except asyncio.QueueEmpty:
                 pass
         
@@ -88,7 +87,6 @@ class FrameBufferManager:
                 dropped_frame = self._output_queue.get_nowait()
                 print("⚠️ Buffer Layer: Dropped old processed frame")
                 del dropped_frame
-                return False
             except asyncio.QueueEmpty:
                 pass
         
