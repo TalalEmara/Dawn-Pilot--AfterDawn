@@ -1,0 +1,3 @@
+blockExoticSubdeps: false
+allowBuilds:
+  esbuild: false

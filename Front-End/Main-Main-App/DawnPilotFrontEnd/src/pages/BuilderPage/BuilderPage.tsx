@@ -313,21 +313,16 @@ const BuilderPage = () => {
     return () => {
       console.log("🧹 Cleaning up A-Frame scene and GPU resources (Builder)...");
       
-      // 1. Force A-Frame to release the renderer
       const scene = document.querySelector('a-scene');
       if (scene) {
         const sceneEl = scene as any;
-        
-        // Dispose of the Three.js renderer to free GPU memory
-        if (sceneEl.renderer) {
-          sceneEl.renderer.dispose();
-          console.log("✅ Builder: Renderer disposed");
-        }
-        
-        // Remove the scene from DOM to free DOM memory
-        if (scene.parentNode) {
-          scene.parentNode.removeChild(scene);
-          console.log("✅ Builder: Scene removed from DOM");
+        try {
+          if (sceneEl.renderer && typeof sceneEl.renderer.dispose === 'function') {
+            sceneEl.renderer.dispose();
+            console.log("✅ Builder: Renderer disposed");
+          }
+        } catch (e) {
+          console.warn("Builder: Renderer disposal notice:", e);
         }
       }
     };

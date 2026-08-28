@@ -207,6 +207,7 @@ export function useAFrameSync(
     };
 
     const runSetup = () => {
+       if (!scene) return;
        if (scene.hasLoaded) {
          setupListeners();
        } else {
@@ -214,7 +215,9 @@ export function useAFrameSync(
        }
     };
 
-    runSetup();
+    if (scene) {
+      runSetup();
+    }
 
     // Cleanup function
     return () => {

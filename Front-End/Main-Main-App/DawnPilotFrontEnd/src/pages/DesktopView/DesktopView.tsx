@@ -178,21 +178,16 @@ function DesktopViewer() {
     return () => {
       console.log("🧹 Cleaning up A-Frame scene and GPU resources (Desktop)...");
       
-      // 1. Force A-Frame to release the renderer
       const scene = document.querySelector('a-scene');
       if (scene) {
         const sceneEl = scene as any;
-        
-        // Dispose of the Three.js renderer to free GPU memory
-        if (sceneEl.renderer) {
-          sceneEl.renderer.dispose();
-          console.log("✅ Desktop: Renderer disposed");
-        }
-        
-        // Remove the scene from DOM to free DOM memory
-        if (scene.parentNode) {
-          scene.parentNode.removeChild(scene);
-          console.log("✅ Desktop: Scene removed from DOM");
+        try {
+          if (sceneEl.renderer && typeof sceneEl.renderer.dispose === 'function') {
+            sceneEl.renderer.dispose();
+            console.log("✅ Desktop: Renderer disposed");
+          }
+        } catch (e) {
+          console.warn("Desktop: Renderer disposal notice:", e);
         }
       }
     };

@@ -41,8 +41,8 @@ interface ResearcherSidePanelProps {
   saveLoadLoading: boolean;
   
   // Frame ID tracking
-  sentFrameId: number;
-  receivedFrameId: number;
+  sentFrameId?: number;
+  receivedFrameId?: number;
 }
 
 const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
@@ -52,8 +52,8 @@ const ResearcherSidePanel: React.FC<ResearcherSidePanelProps> = ({
   aiConnected,
   visionMode,
   setVisionMode,
-  sentFrameId,
-  receivedFrameId,
+  sentFrameId = 0,
+  receivedFrameId = 0,
   currentScenarioId,
   socket,
   setCollisionCount,
