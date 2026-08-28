@@ -6,13 +6,77 @@ A comprehensive web platform for building and managing **VR experiments for bion
 
 ## 📋 Table of Contents
 
-1. [Overview](#-overview)
-2. [Architecture](#-architecture)
-3. [System Components](#-system-components)
-4. [Getting Started](#-getting-started)
-5. [Naming Conventions](#-naming-conventions)
-6. [Development Guide](#-development-guide)
-7. [API Documentation](#-api-documentation)
+1. [⚡ Experiment Run & Execution Protocol](#-experiment-run--execution-protocol)
+2. [Overview](#-overview)
+3. [Architecture](#-architecture)
+4. [System Components](#-system-components)
+5. [Getting Started](#-getting-started)
+6. [Naming Conventions](#-naming-conventions)
+7. [Development Guide](#-development-guide)
+8. [API Documentation](#-api-documentation)
+
+---
+
+## ⚡ Experiment Run & Execution Protocol
+
+> [!IMPORTANT]
+> Follow these exact steps prior to conducting any live VR experiment trial.
+
+### 1. Network & System Preparation
+- **Shared Network**: Connect both the laptop and the phone to the **same Wi-Fi** or connect the phone directly to the **laptop's mobile hotspot**.
+- **System Optimization**:
+  - Close background applications and unused browser tabs on the laptop.
+  - Put the mobile phone on **Do Not Disturb** mode.
+  - Open the browser in **Incognito mode** to avoid cache/extension interference.
+
+### 2. Launch Backend Servers
+- **AI Vision & Phosphene Backend** (FastAPI - Port 8000):
+  - Ensure the latest **YOLO Model** (`object_path_detection/models/yolo_our_data_50.pt`) and **Freepath Model** (`object_path_detection/models/final_deeplabv3_footpath.pth`) are in place.
+  - Confirm `"debug_mode": false` in `config/navigation_config.json`.
+  ```powershell
+  cd Back-End\fast_api
+  ..\..\.venv\Scripts\Activate.ps1
+  python main.py
+  ```
+- **Experiment Manager Backend** (Node/Express - Port 5000):
+  ```powershell
+  cd Back-End\Experiment-Manager
+  pnpm dev
+  ```
+
+### 3. Build & Launch Frontend
+For best runtime performance during live trials, run the production preview:
+1. Build the frontend:
+   ```powershell
+   cd Front-End\Main-Main-App\DawnPilotFrontEnd
+   pnpm build
+   ```
+2. Ensure static 3D models are available in the build (`copy public/models to dist/models` if not bundled).
+3. Start the hosted preview server:
+   ```powershell
+   pnpm preview --host
+   ```
+   *(Alternatively, for active development, run `pnpm dev --host`)*
+
+### 4. Connect Phone (Mobile VR) & Laptop Dashboard
+1. **Network IP URL**: Note the LAN IP output from the server (e.g., `https://192.168.x.x:5173` — **do not use `localhost` on the phone**).
+2. **Pairing**:
+   - On Laptop: Open `https://localhost:5173/connect` to display the QR code.
+   - On Phone: Scan the QR code (or navigate to `https://192.168.x.x:5173/mobile`) to open the **Mobile VR Viewer**.
+3. **Researcher Dashboard**:
+   - On Laptop: Open `https://localhost:5173/lite` (**Researcher Lite** view for minimal overhead).
+4. **Verification & Setup**:
+   - Verify camera pose & state synchronization between phone and laptop.
+   - Adjust experiment parameters in the **S Tab** (Settings) on the left sidebar of the Researcher View.
+   - Center the phone inside the VR headset (align the center screen division line with the headset lenses).
+
+### 5. VR Controller / Gamepad Setup
+- **Controller Test**: Open `Front-End/gamepad_test.html` in browser to confirm button/joystick mapping.
+- **Windows Game Controller Check**: Press `Win + R` → type `joy.cpl` → press Enter to check controller detection.
+- **Troubleshooting**:
+  - If unresponsive: Unpair and re-pair Bluetooth device in Windows settings.
+  - If input is not captured in Chrome: Restart the browser.
+  - If using keyboard mapping bridge: Run `python Back-End\gamepad_to_keyboard.py`.
 
 ---
 
